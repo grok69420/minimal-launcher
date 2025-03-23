@@ -1,0 +1,9 @@
+{
+  "name": "MinimalLauncher",
+  "displayName": "Minimal Launcher",
+  "extra": {
+    "eas": {
+      "projectId": "5fc4426b-9eeb-4f4a-88b2-4067f2ac3780"
+    }
+  }
+}
