@@ -1,42 +1,22 @@
-import React from 'react';
-import {
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React, {useState} from 'react';
+import {StyleSheet, View} from 'react-native';
+import HomeScreen from './src/screens/HomeScreen';
+import AppDrawerScreen from './src/screens/AppDrawerScreen';
+import BlockedAppsScreen from './src/screens/BlockedAppsScreen';
 
-function App() {
+export default function App() {
+  const [screen, setScreen] = useState('home');
+  const navigate = s => setScreen(s);
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Minimal Launcher</Text>
-        <Text style={styles.subtitle}>Welcome to your new app!</Text>
-      </View>
-    </SafeAreaView>
+    <View style={styles.root}>
+      {screen === 'home' && <HomeScreen navigate={navigate} />}
+      {screen === 'drawer' && <AppDrawerScreen navigate={navigate} />}
+      {screen === 'blocked' && <BlockedAppsScreen navigate={navigate} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
+  root: {flex: 1, backgroundColor: '#000'},
 });
-
-export default App;
