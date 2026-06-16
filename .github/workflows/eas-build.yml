@@ -1,7 +1,7 @@
 name: EAS Build — Android APK
 
 on:
-  workflow_dispatch: # manual trigger from GitHub Actions tab
+  workflow_dispatch:
   push:
     branches: [claude/festive-knuth-hdck3r]
 
@@ -20,14 +20,13 @@ jobs:
           node-version: 18
           cache: npm
 
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas build --platform android --profile preview --non-interactive
