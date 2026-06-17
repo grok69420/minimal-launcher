@@ -7,7 +7,13 @@ import {
   StyleSheet,
   AppState,
 } from 'react-native';
-import {getBlockedApps} from '../utils/nativeApi';
+import {
+  getBlockedApps,
+  isBlockingEnabled,
+  getPermissionStatus,
+  startBlockerService,
+} from '../utils/nativeApi';
+import {colors, radius} from '../theme';
 
 function Clock() {
   const [now, setNow] = useState(new Date());
@@ -28,7 +34,9 @@ function Clock() {
   return (
     <View style={styles.clockWrap}>
       <Text style={styles.clock}>
-        {h}:{m}
+        {h}
+        <Text style={styles.colon}>:</Text>
+        {m}
       </Text>
       <Text style={styles.date}>{dateStr}</Text>
     </View>
@@ -37,10 +45,22 @@ function Clock() {
 
 export default function HomeScreen({navigate}) {
   const [blockedCount, setBlockedCount] = useState(0);
+  const [enabled, setEnabled] = useState(true);
+  const [coreReady, setCoreReady] = useState(true);
 
   const refresh = useCallback(() => {
     getBlockedApps()
       .then(list => setBlockedCount(list.length))
+      .catch(() => {});
+    isBlockingEnabled()
+      .then(setEnabled)
+      .catch(() => {});
+    getPermissionStatus()
+      .then(s => {
+        const ready = !!(s.usageStats && s.overlay);
+        setCoreReady(ready);
+        if (ready) startBlockerService().catch(() => {});
+      })
       .catch(() => {});
   }, []);
 
@@ -62,25 +82,61 @@ export default function HomeScreen({navigate}) {
     }),
   ).current;
 
+  const active = enabled && coreReady;
+
   return (
     <View style={styles.container} {...pan.panHandlers}>
+      <View style={styles.topBar}>
+        <View
+          style={[
+            styles.statusPill,
+            active ? styles.pillActive : styles.pillIdle,
+          ]}>
+          <View
+            style={[styles.statusDot, active ? styles.dotActive : styles.dotIdle]}
+          />
+          <Text style={styles.statusText}>
+            {active
+              ? `Focus on · ${blockedCount} blocked`
+              : enabled
+              ? 'Setup needed'
+              : 'Blocking paused'}
+          </Text>
+        </View>
+      </View>
+
       <Clock />
 
-      <Text style={styles.swipeHint}>swipe up for apps</Text>
+      {!coreReady ? (
+        <TouchableOpacity
+          style={styles.warnBanner}
+          onPress={() => navigate('permissions')}>
+          <Text style={styles.warnEmoji}>⚠️</Text>
+          <Text style={styles.warnText}>
+            Blocking is inactive. Tap to finish setup.
+          </Text>
+          <Text style={styles.warnChevron}>›</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.swipeHint}>swipe up for apps</Text>
+      )}
 
       <View style={styles.bottomRow}>
-        <TouchableOpacity
-          style={styles.btn}
-          onPress={() => navigate('blocked')}>
-          <Text style={styles.btnIcon}>🚫</Text>
-          <Text style={styles.btnLabel}>
-            {blockedCount > 0 ? `${blockedCount} Blocked` : 'Block Apps'}
-          </Text>
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.btn} onPress={() => navigate('drawer')}>
           <Text style={styles.btnIcon}>⊞</Text>
-          <Text style={styles.btnLabel}>All Apps</Text>
+          <Text style={styles.btnLabel}>Apps</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.btn} onPress={() => navigate('blocked')}>
+          <Text style={styles.btnIcon}>🛡️</Text>
+          <Text style={styles.btnLabel}>Blocklist</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={() => navigate('permissions')}>
+          <Text style={styles.btnIcon}>⚙️</Text>
+          <Text style={styles.btnLabel}>Setup</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -90,51 +146,57 @@ export default function HomeScreen({navigate}) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.bg,
     paddingHorizontal: 28,
+    paddingTop: 56,
   },
-  clockWrap: {
-    flex: 1,
-    justifyContent: 'center',
+  topBar: {alignItems: 'center'},
+  statusPill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: 1,
   },
-  clock: {
-    fontSize: 88,
-    fontWeight: '100',
-    color: '#fff',
-    letterSpacing: -4,
-  },
-  date: {
-    fontSize: 15,
-    color: '#555',
-    marginTop: 10,
-    letterSpacing: 0.5,
-  },
+  pillActive: {backgroundColor: colors.accentDim, borderColor: colors.accent},
+  pillIdle: {backgroundColor: colors.card, borderColor: colors.border},
+  statusDot: {width: 7, height: 7, borderRadius: 4, marginRight: 8},
+  dotActive: {backgroundColor: colors.accent},
+  dotIdle: {backgroundColor: colors.textFaint},
+  statusText: {color: colors.text, fontSize: 12.5, fontWeight: '600'},
+  clockWrap: {flex: 1, justifyContent: 'center', alignItems: 'center'},
+  clock: {fontSize: 92, fontWeight: '200', color: colors.text, letterSpacing: -4},
+  colon: {color: colors.accent, fontWeight: '200'},
+  date: {fontSize: 15, color: colors.textDim, marginTop: 8, letterSpacing: 0.5},
   swipeHint: {
-    color: '#222',
+    color: colors.textFaint,
     fontSize: 11,
     textAlign: 'center',
     letterSpacing: 2,
     textTransform: 'uppercase',
     paddingBottom: 28,
   },
+  warnBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1F1A0A',
+    borderColor: colors.warn,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 24,
+  },
+  warnEmoji: {fontSize: 16, marginRight: 10},
+  warnText: {color: colors.text, fontSize: 13.5, flex: 1},
+  warnChevron: {color: colors.warn, fontSize: 22, fontWeight: '300'},
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingBottom: 44,
   },
-  btn: {
-    alignItems: 'center',
-    padding: 16,
-    minWidth: 90,
-  },
-  btnIcon: {
-    fontSize: 26,
-    marginBottom: 6,
-  },
-  btnLabel: {
-    color: '#555',
-    fontSize: 12,
-    letterSpacing: 0.5,
-  },
+  btn: {alignItems: 'center', padding: 14, minWidth: 80},
+  btnIcon: {fontSize: 24, marginBottom: 6},
+  btnLabel: {color: colors.textDim, fontSize: 12, letterSpacing: 0.3},
 });
