@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Medicloud Flex — prototype</title>
+<style>
+  :root {
+    --ink: #0A1A2F;
+    --teal: #0E8F8B;
+    --mint: #D8F2EF;
+    --amber: #F5A623;
+    --slate: #64748B;
+    --bg: #EEF3F5;
+    --line: #E7EDF1;
+    --line-soft: #EEF2F5;
+    --border: #E2E8F0;
+    --muted-on-ink: #9FB3C2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+  }
+  #phone {
+    width: 100%;
+    max-width: 28rem;
+    min-height: 100vh;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1);
+  }
+  main { flex: 1; overflow-y: auto; padding-bottom: 6rem; }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  svg { display: block; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* header */
+  header { background: var(--ink); color: #fff; padding: 1.5rem 1.25rem 1.25rem; }
+  .head-row { display: flex; align-items: flex-start; justify-content: space-between; }
+  .brand { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--mint); }
+  .brand-name { font-size: 1.5rem; font-weight: 600; margin-top: -2px; }
+  .roles { display: flex; border-radius: 999px; padding: 2px; background: rgba(255,255,255,.12); }
+  .roles button { padding: .375rem .75rem; font-size: 12px; border-radius: 999px; font-weight: 500; }
+  .roles button[aria-pressed="true"] { background: var(--teal); }
+  .head-sub { font-size: 12px; margin: .5rem 0 0; color: var(--muted-on-ink); }
+
+  /* layout helpers */
+  .pad { padding: 1.25rem; }
+  .stack > * + * { margin-top: 1.25rem; }
+  .card { border-radius: 1rem; padding: 1.25rem; background: var(--bg); }
+  .row-between { display: flex; align-items: baseline; justify-content: space-between; }
+  .tiny { font-size: 12px; color: var(--slate); }
+  .tinier { font-size: 11px; color: var(--slate); }
+
+  /* wallet */
+  .label-cap { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--slate); }
+  .big-amount { font-size: 2.25rem; font-weight: 600; margin: .25rem 0 1rem; }
+  .strip { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
+  .pill { height: 1.5rem; border-radius: 999px; border: 1px solid var(--mint); background: var(--mint); border-color: var(--teal); }
+  .pill.spent { background: var(--border); border-color: var(--border); }
+  .quick { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .quick button { border-radius: 1rem; padding: 1rem; text-align: left; }
+  .quick .primary { background: var(--teal); color: #fff; }
+  .quick .ghost { border: 1px solid var(--border); color: var(--ink); }
+  .quick .qlabel { margin-top: 1.5rem; font-weight: 500; font-size: 14px; }
+  h2.sec { font-size: 14px; font-weight: 600; margin: 0 0 .5rem; }
+  ul.reset { list-style: none; margin: 0; padding: 0; }
+  .visit { padding: .75rem 0; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line-soft); }
+  .visit:first-child { border-top: none; }
+  .visit-type { font-size: 14px; font-weight: 500; }
+
+  /* clinics */
+  h2.title { font-size: 1.125rem; font-weight: 600; margin: 0; }
+  .clinic { border-radius: 1rem; border: 1px solid var(--line); padding: 1rem; }
+  .clinic + .clinic { margin-top: .75rem; }
+  .clinic-top { display: flex; gap: .75rem; }
+  .icon-badge { height: 2.5rem; width: 2.5rem; border-radius: .75rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--mint); color: var(--teal); }
+  .clinic-body { flex: 1; min-width: 0; }
+  .clinic-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .clinic-meta { font-size: 12px; margin-top: 2px; display: flex; align-items: center; gap: .75rem; color: var(--slate); }
+  .clinic-meta .wait { display: flex; align-items: center; gap: 4px; }
+  .price-row { margin-top: .5rem; display: flex; align-items: baseline; gap: .5rem; }
+  .price { font-size: 1rem; font-weight: 600; }
+  .list-price { font-size: 12px; text-decoration: line-through; color: var(--slate); }
+  .member { font-size: 11px; font-weight: 500; color: var(--teal); }
+  .btn-dark { width: 100%; border-radius: .75rem; padding: .75rem; color: #fff; font-weight: 500; background: var(--ink); }
+  .clinic .btn-dark { margin-top: .75rem; padding: .625rem; font-size: 14px; }
+
+  /* booking */
+  .back { display: flex; align-items: center; gap: 4px; font-size: 14px; margin-bottom: 1rem; color: var(--slate); }
+  .slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-bottom: 1.25rem; }
+  .slots button { border-radius: .75rem; padding: .625rem 0; font-size: 14px; font-weight: 500; border: 1px solid var(--border); color: var(--ink); }
+  .slots button[aria-pressed="true"] { background: var(--teal); color: #fff; border-color: var(--teal); }
+  .breakdown { border-radius: 1rem; padding: 1rem; margin-bottom: 1.25rem; background: var(--bg); }
+  .brow { display: flex; justify-content: space-between; padding: .25rem 0; font-size: 14px; }
+  .brow .k { color: var(--slate); }
+  .brow .v.bold { font-weight: 600; }
+
+  /* confirmation */
+  .confirm { padding: 2.5rem 1.25rem; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .check-circle { height: 3.5rem; width: 3.5rem; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: var(--mint); color: var(--teal); }
+  .qr-wrap { padding: .75rem; border-radius: 1rem; border: 1px solid var(--border); display: inline-block; }
+  .qr { display: grid; grid-template-columns: repeat(11, 14px); gap: 2px; }
+  .qr i { width: 14px; height: 14px; border-radius: 2px; }
+  .narrow { max-width: 20rem; }
+
+  /* card */
+  .benefit-card { border-radius: 1.5rem; padding: 1.25rem; color: #fff; background: var(--ink); }
+  .card-amount { font-size: 1.875rem; font-weight: 600; margin-top: .5rem; }
+  .qr-white { margin-top: 1.25rem; display: flex; justify-content: center; background: #fff; border-radius: 1rem; padding: 1rem 0; }
+
+  /* HR */
+  .hero { border-radius: 1rem; padding: 1.25rem; background: var(--ink); }
+  .hero-label { display: flex; align-items: center; gap: .5rem; font-size: 12px; color: var(--mint); }
+  .hero-amount { font-size: 1.875rem; font-weight: 600; color: #fff; margin-top: .5rem; }
+  .hero-sub { font-size: 12px; margin-top: .25rem; color: var(--muted-on-ink); }
+  .costbars { margin-top: 1rem; display: grid; gap: .5rem; }
+  .costbar-head { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: .25rem; color: var(--muted-on-ink); }
+  .track-dark { height: 10px; border-radius: 999px; background: rgba(255,255,255,.12); }
+  .track-dark > div { height: 10px; border-radius: 999px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+  .stat { border-radius: 1rem; padding: .75rem; text-align: center; background: var(--bg); }
+  .stat-v { font-size: 1.25rem; font-weight: 600; }
+  .stat-l { font-size: 11px; color: var(--slate); }
+  .usebar + .usebar { margin-top: .75rem; }
+  .usebar-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: .25rem; }
+  .track { height: 8px; border-radius: 999px; background: var(--line-soft); }
+  .track > div { height: 8px; border-radius: 999px; background: var(--teal); }
+  .note { border-radius: 1rem; border: 1px solid var(--line); padding: 1rem; }
+  .note-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .25rem; }
+  .note h3 { font-size: 14px; font-weight: 600; margin: 0; }
+
+  /* tab bar */
+  nav.tabs { position: absolute; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--line-soft); display: flex; }
+  nav.tabs[hidden] { display: none; }  /* class selector would otherwise beat the UA [hidden] rule */
+  nav.tabs button { flex: 1; padding: .75rem 0; display: flex; flex-direction: column; align-items: center; gap: .25rem; color: var(--slate); }
+  nav.tabs button[aria-current="page"] { color: var(--teal); }
+  nav.tabs span { font-size: 11px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="phone">
+  <header>
+    <div class="head-row">
+      <div>
+        <div class="brand">Medicloud</div>
+        <div class="brand-name">Flex</div>
+      </div>
+      <div class="roles">
+        <button data-role="employee">Employee</button>
+        <button data-role="hr">HR</button>
+      </div>
+    </div>
+    <p class="head-sub" id="head-sub"></p>
+  </header>
+  <main id="view"></main>
+  <nav class="tabs" id="tabs" hidden></nav>
+</div>
+
+<script>
+/* Medicloud Flex — prototype for Option B in the Medicloud Singapore case (Ivey W20043):
+   bypass insurance, act as a flexible-benefit provider to SME employees using the clinic panel.
+
+   Dependency-free port of App.jsx: no build step, no CDN. Open this file in a browser. */
+
+var C = {
+  ink: "#0A1A2F", teal: "#0E8F8B", mint: "#D8F2EF",
+  amber: "#F5A623", slate: "#64748B", bg: "#EEF3F5"
+};
+
+/* ---- lucide-style icons, inlined as SVG strings ---- */
+function svg(size, body) {
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" ' +
+         'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+         body + '</svg>';
+}
+var ICON = {
+  wallet: function (s) { return svg(s, '<path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><path d="M16 12h.01"/>'); },
+  mapPin: function (s) { return svg(s, '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>'); },
+  qrCode: function (s) { return svg(s, '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20v.01M20 20v.01"/>'); },
+  building: function (s) { return svg(s, '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4"/>'); },
+  chevronLeft: function (s) { return svg(s, '<path d="m15 18-6-6 6-6"/>'); },
+  check: function (s) { return svg(s, '<path d="M20 6 9 17l-5-5"/>'); },
+  clock: function (s) { return svg(s, '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'); },
+  stethoscope: function (s) { return svg(s, '<path d="M4 2v6a6 6 0 0 0 12 0V2"/><path d="M8 2H4M16 2h-4M10 14v3a4 4 0 0 0 8 0v-1"/><circle cx="20" cy="10" r="2"/>'); },
+  smile: function (s) { return svg(s, '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>'); },
+  leaf: function (s) { return svg(s, '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>'); },
+  trendingDown: function (s) { return svg(s, '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>'); }
+};
+
+var CLINICS = [
+  { id: 1, name: "Bukit Merah Family Clinic", type: "GP",     icon: "stethoscope", km: 0.4, wait: 10, cap: 38, list: 70 },
+  { id: 2, name: "Tanjong Pagar Dental",      type: "Dental", icon: "smile",       km: 1.1, wait: 25, cap: 95, list: 150 },
+  { id: 3, name: "Redhill TCM Wellness",      type: "TCM",    icon: "leaf",        km: 1.6, wait: 15, cap: 45, list: 80 },
+  { id: 4, name: "Chinatown Medical",         type: "GP",     icon: "stethoscope", km: 2.0, wait: 5,  cap: 35, list: 65 }
+];
+
+var ALLOWANCE = 500;
+
+var state = {
+  role: "employee",
+  tab: "wallet",
+  claims: [
+    { id: "c1", place: "Bukit Merah Family Clinic", type: "GP visit",   amt: 38, date: "12 Aug" },
+    { id: "c2", place: "Redhill TCM Wellness",      type: "Acupuncture", amt: 45, date: "28 Jul" },
+    { id: "c3", place: "Tanjong Pagar Dental",      type: "Scaling",     amt: 95, date: "09 Jul" }
+  ],
+  booking: null,
+  slot: null,
+  confirmed: null
+};
+
+function used() {
+  return state.claims.reduce(function (s, c) { return s + c.amt; }, 0);
+}
+function left() { return ALLOWANCE - used(); }
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function (ch) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+  });
+}
+
+/* Signature element: allowance shown as a blister-pack strip — one capsule per $25 of benefit. */
+function blisterStrip(spentAmt, total) {
+  var cells = total / 25;
+  var spent = Math.round(spentAmt / 25);
+  var out = '<div class="strip">';
+  for (var i = 0; i < cells; i++) out += '<div class="pill' + (i < spent ? " spent" : "") + '"></div>';
+  return out + "</div>";
+}
+
+/* Deterministic placeholder QR — same seed always draws the same pattern. */
+function fakeQR(seed) {
+  var h = 0, i;
+  for (i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  var out = '<div class="qr-wrap"><div class="qr">';
+  for (i = 0; i < 121; i++) {
+    h = (Math.imul(h, 1103515245) + 12345 + i) >>> 0;
+    var on = (h >>> 16) % 2 === 0;
+    out += '<i style="background:' + (on ? C.ink : "transparent") + '"></i>';
+  }
+  return out + "</div></div>";
+}
+
+function walletView() {
+  var u = used(), l = left();
+  return '' +
+    '<div class="pad stack">' +
+      '<section class="card">' +
+        '<div class="row-between">' +
+          '<span class="label-cap">Left to spend</span>' +
+          '<span class="tiny">S$' + u + ' of S$500 used</span>' +
+        '</div>' +
+        '<div class="big-amount num">S$' + l + '</div>' +
+        blisterStrip(u, 500) +
+        '<p class="tiny" style="margin:.75rem 0 0">Resets 31 Dec. No claim forms — the clinic bills Medicloud directly.</p>' +
+      '</section>' +
+      '<div class="quick">' +
+        '<button class="primary" data-go="clinics">' + ICON.mapPin(20) + '<div class="qlabel">Find a panel clinic</div></button>' +
+        '<button class="ghost" data-go="pay">' + ICON.qrCode(20) + '<div class="qlabel">Show benefit card</div></button>' +
+      '</div>' +
+      '<section>' +
+        '<h2 class="sec">Recent visits</h2>' +
+        '<ul class="reset">' +
+          state.claims.map(function (c) {
+            return '<li class="visit">' +
+              '<div><div class="visit-type">' + esc(c.type) + '</div>' +
+              '<div class="tiny">' + esc(c.place) + ' · ' + esc(c.date) + '</div></div>' +
+              '<div class="num" style="font-size:14px;font-weight:600">S$' + c.amt + '</div></li>';
+          }).join("") +
+        '</ul>' +
+      '</section>' +
+    '</div>';
+}
+
+function clinicsView() {
+  var l = left();
+  return '' +
+    '<div class="pad">' +
+      '<h2 class="title">Panel clinics near you</h2>' +
+      '<p class="tiny" style="margin:.25rem 0 1rem">Prices are capped for Medicloud members. S$' + l + ' of your benefit is available.</p>' +
+      '<ul class="reset">' +
+        CLINICS.map(function (c) {
+          var afford = c.cap <= l;
+          return '<li class="clinic">' +
+            '<div class="clinic-top">' +
+              '<div class="icon-badge">' + ICON[c.icon](18) + '</div>' +
+              '<div class="clinic-body">' +
+                '<div class="clinic-name">' + esc(c.name) + '</div>' +
+                '<div class="clinic-meta"><span>' + c.km + ' km</span>' +
+                  '<span class="wait">' + ICON.clock(12) + c.wait + ' min wait</span></div>' +
+                '<div class="price-row"><span class="price">S$' + c.cap + '</span>' +
+                  '<span class="list-price">S$' + c.list + '</span>' +
+                  '<span class="member">member price</span></div>' +
+              '</div>' +
+            '</div>' +
+            '<button class="btn-dark" data-book="' + c.id + '"' + (afford ? "" : " disabled") + '>' +
+              (afford ? "Book and pay from benefit" : "Not enough benefit left") +
+            '</button></li>';
+        }).join("") +
+      '</ul>' +
+    '</div>';
+}
+
+var SLOTS = ["09:30", "11:00", "14:15", "16:45"];
+
+function bookingView() {
+  var c = state.booking;
+  return '' +
+    '<div class="pad">' +
+      '<button class="back" data-back="1">' + ICON.chevronLeft(16) + ' Back</button>' +
+      '<h2 class="title">' + esc(c.name) + '</h2>' +
+      '<p class="tiny" style="margin:.25rem 0 1.25rem">' + esc(c.type) + ' · Today, 17 Aug</p>' +
+      '<div class="slots">' +
+        SLOTS.map(function (s) {
+          return '<button data-slot="' + s + '" aria-pressed="' + (state.slot === s) + '">' + s + '</button>';
+        }).join("") +
+      '</div>' +
+      '<div class="breakdown">' +
+        '<div class="brow"><span class="k">Consultation (capped)</span><span class="v">S$' + c.cap + '</span></div>' +
+        '<div class="brow"><span class="k">You pay at the clinic</span><span class="v">S$0</span></div>' +
+        '<div class="brow"><span class="k">Deducted from benefit</span><span class="v bold">S$' + c.cap + '</span></div>' +
+        '<p class="tinier" style="margin:.5rem 0 0">No third-party administrator. The clinic keeps S$' +
+          Math.round(c.cap * 0.9) + ' of this visit.</p>' +
+      '</div>' +
+      '<button class="btn-dark" data-confirm="1">Confirm ' + state.slot + ' appointment</button>' +
+    '</div>';
+}
+
+function confirmationView() {
+  var r = state.confirmed;
+  return '' +
+    '<div class="confirm">' +
+      '<div class="check-circle">' + ICON.check(28) + '</div>' +
+      '<h2 style="font-size:1.25rem;font-weight:600;margin:1rem 0 0">Appointment booked</h2>' +
+      '<p class="tiny" style="margin:.25rem 0 0;font-size:14px">' + esc(r.place) + ' · Today ' + esc(r.slot) + '</p>' +
+      '<div style="margin:1.5rem 0">' + fakeQR(r.id) + '</div>' +
+      '<p class="tiny narrow">Show this code at the counter. S$' + r.amt +
+        ' is deducted from your benefit — nothing to pay, nothing to claim back.</p>' +
+      '<button class="btn-dark" style="margin-top:1.5rem" data-done="1">Done</button>' +
+    '</div>';
+}
+
+function payView() {
+  return '' +
+    '<div class="pad">' +
+      '<div class="benefit-card">' +
+        '<div class="brand">Benefit card</div>' +
+        '<div class="card-amount num">S$' + left() + '</div>' +
+        '<div class="tiny" style="color:var(--muted-on-ink);margin-top:.25rem">Wei Ling Tan · •••• 4417</div>' +
+        '<div class="qr-white">' + fakeQR("card-4417") + '</div>' +
+      '</div>' +
+      '<p class="tiny" style="margin-top:1rem">Works at all 50 panel clinics. The clinic scans, Medicloud settles the bill weekly.</p>' +
+    '</div>';
+}
+
+function hrView() {
+  var bars = [
+    { label: "GP", pct: 46, amt: 8740 },
+    { label: "Dental", pct: 31, amt: 5890 },
+    { label: "TCM", pct: 14, amt: 2660 },
+    { label: "Wellness", pct: 9, amt: 1710 }
+  ];
+  function costBar(label, value, pct, color) {
+    return '<div><div class="costbar-head"><span>' + label + '</span><span>' + value + '</span></div>' +
+      '<div class="track-dark"><div style="width:' + pct + '%;background:' + color + '"></div></div></div>';
+  }
+  function stat(label, value) {
+    return '<div class="stat"><div class="stat-v">' + value + '</div><div class="stat-l">' + label + '</div></div>';
+  }
+  return '' +
+    '<div class="pad stack">' +
+      '<section class="hero">' +
+        '<div class="hero-label">' + ICON.trendingDown(14) + ' Versus a group outpatient policy</div>' +
+        '<div class="hero-amount num">S$31,500</div>' +
+        '<div class="hero-sub">saved this year across 42 employees</div>' +
+        '<div class="costbars">' +
+          costBar("Insurance + TPA route", "S$1,250 / employee", 100, "#31485E") +
+          costBar("Medicloud Flex", "S$500 / employee", 40, C.teal) +
+        '</div>' +
+      '</section>' +
+      '<div class="stats">' + stat("Enrolled", "42") + stat("Activated", "88%") + stat("Benefit used", "62%") + '</div>' +
+      '<section>' +
+        '<h2 class="sec" style="margin-bottom:.75rem">Where the benefit goes</h2>' +
+        bars.map(function (b) {
+          return '<div class="usebar"><div class="usebar-head"><span>' + b.label + '</span>' +
+            '<span class="tiny">S$' + b.amt.toLocaleString() + '</span></div>' +
+            '<div class="track"><div style="width:' + b.pct + '%"></div></div></div>';
+        }).join("") +
+      '</section>' +
+      '<section class="note">' +
+        '<div class="note-head"><span style="color:' + C.amber + '">' + ICON.building(16) + '</span>' +
+          '<h3>Revenue model</h3></div>' +
+        '<p class="tiny">S$8 per employee per month platform fee, plus a 10% clinic commission — against the 40% ' +
+          'a third-party administrator takes today. Break-even at roughly 3,000 covered employees.</p>' +
+      '</section>' +
+    '</div>';
+}
+
+function tabBar() {
+  var items = [
+    { id: "wallet",  label: "Benefit", icon: "wallet" },
+    { id: "clinics", label: "Clinics", icon: "mapPin" },
+    { id: "pay",     label: "Card",    icon: "qrCode" }
+  ];
+  return items.map(function (it) {
+    return '<button data-go="' + it.id + '"' + (state.tab === it.id ? ' aria-current="page"' : "") + '>' +
+      ICON[it.icon](20) + '<span>' + it.label + '</span></button>';
+  }).join("");
+}
+
+function render() {
+  document.getElementById("head-sub").textContent = state.role === "hr"
+    ? "Tai Seng Logistics Pte Ltd · 42 employees"
+    : "Wei Ling Tan · Tai Seng Logistics · Plan year 2026";
+
+  document.querySelectorAll(".roles button").forEach(function (b) {
+    b.setAttribute("aria-pressed", String(b.dataset.role === state.role));
+  });
+
+  var html;
+  if (state.role === "hr") html = hrView();
+  else if (state.confirmed) html = confirmationView();
+  else if (state.booking) html = bookingView();
+  else if (state.tab === "wallet") html = walletView();
+  else if (state.tab === "clinics") html = clinicsView();
+  else html = payView();
+  document.getElementById("view").innerHTML = html;
+
+  var nav = document.getElementById("tabs");
+  var showTabs = state.role === "employee" && !state.booking && !state.confirmed;
+  nav.hidden = !showTabs;
+  nav.innerHTML = showTabs ? tabBar() : "";
+}
+
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button");
+  if (!t) return;
+
+  if (t.dataset.role) { state.role = t.dataset.role; return render(); }
+  if (t.dataset.go) { state.tab = t.dataset.go; return render(); }
+  if (t.dataset.back) { state.booking = null; return render(); }
+  if (t.dataset.slot) { state.slot = t.dataset.slot; return render(); }
+  if (t.dataset.done) { state.confirmed = null; state.tab = "wallet"; return render(); }
+
+  if (t.dataset.book) {
+    state.booking = CLINICS.filter(function (c) { return c.id === Number(t.dataset.book); })[0];
+    state.slot = SLOTS[0];
+    return render();
+  }
+
+  if (t.dataset.confirm) {
+    var c = state.booking;
+    var rec = {
+      id: "n" + Date.now(), place: c.name, type: c.type + " visit",
+      amt: c.cap, date: "Today", slot: state.slot
+    };
+    state.claims = [rec].concat(state.claims);
+    state.confirmed = rec;
+    state.booking = null;
+    return render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>

@@ -4,8 +4,18 @@ A UI prototype for **Option B** in the Medicloud Singapore case (Ivey W20043): b
 insurers and act as a flexible-benefit provider straight to SME employees, using the existing
 clinic panel.
 
-This is **unrelated to the `minimal-launcher` Android app** in the rest of this repository. It
-lives on its own branch, in its own folder, and is not wired into the React Native build.
+## Separate from the launcher
+
+This is **unrelated to the `minimal-launcher` Android app** in the repository root, and is kept
+fully isolated from it:
+
+- its own `package.json` and `node_modules` — it shares no dependencies with the app;
+- excluded from Metro via `blockList` in the root `metro.config.js`, so the React Native
+  bundler never sees it;
+- listed in `.easignore.txt`, so it is not uploaded to EAS builds;
+- lives on the `claude/medicloud-flex-prototype-qkcp6s` branch, not merged to the default branch.
+
+Nothing here is imported by the Android app, and nothing here imports from it.
 
 ## What it shows
 
@@ -17,23 +27,40 @@ Two roles, toggled from the header:
 - **HR** — cost versus a group outpatient policy, enrolment stats, spend by category, and the
   revenue model (S$8/employee/month + 10% clinic commission vs. the ~40% a TPA takes).
 
-## Files
+## Running it
 
-| File | What it is |
+There are two ways in, and they are independent.
+
+### 1. The React app (React + Vite + Tailwind + lucide-react)
+
+```bash
+cd prototypes/medicloud-flex
+npm install
+npm run dev        # dev server with hot reload
+```
+
+`npm run build` emits `dist/`, and `npm run preview` serves that production build. The built
+app must be **served**, not opened from disk — its entry is an ES module, and browsers refuse
+to load those over `file://`.
+
+### 2. `standalone.html` — no build, no install
+
+Open the file in a browser. That is the whole setup: no dependencies, no build step, no
+network. It is a hand-port of the same UI using plain CSS instead of Tailwind, inline SVG
+instead of `lucide-react`, and a small vanilla-JS state loop instead of hooks.
+
+Useful for sending the prototype to someone who should not have to run `npm install`. Because
+it is a separate implementation, a change to `src/App.jsx` does **not** appear here — the two
+have to be updated together.
+
+## Layout
+
+| Path | What it is |
 | --- | --- |
-| `index.html` | Self-contained runnable prototype. No build, no dependencies, no network. |
-| `App.jsx` | The original React source, kept for porting into a real React app. |
-
-### Running it
-
-Open `index.html` in any browser — that is the whole setup.
-
-### About `App.jsx`
-
-The original source targets **web React** and needs `react-dom`, Tailwind CSS, and
-`lucide-react`. None of those are in this repository, so it will not build here as-is. It is
-kept verbatim as the reference implementation; `index.html` is a dependency-free port of it
-(plain CSS instead of Tailwind, inline SVG instead of `lucide-react`, a small vanilla-JS state
-loop instead of hooks).
+| `src/App.jsx` | The prototype. Original source, unmodified. |
+| `src/main.jsx` | React entry point. |
+| `src/index.css` | Tailwind directives. |
+| `index.html` | Vite entry. |
+| `standalone.html` | Dependency-free port of the same UI. |
 
 All figures, clinic names, prices, and the QR codes are invented for the prototype.

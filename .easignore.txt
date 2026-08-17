@@ -30,3 +30,4 @@ tmp
 *.mp4
 *.mp3
 *.mov
+prototypes
