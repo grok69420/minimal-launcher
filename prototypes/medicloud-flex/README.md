@@ -1,4 +1,13 @@
-# Medicloud Flex — prototype
+# Medicloud Flex — prototype (superseded)
+
+> **Superseded by [`../medicloud-flex-rn/`](../medicloud-flex-rn/).** That React Native app is
+> the current version. It was rebuilt against the case decks and the pre-build adversarial
+> briefing, which attack this prototype's model on three points: it presents the account as an
+> employer allowance when the case describes payroll deduction from before-tax income; its
+> "nothing to pay, nothing to claim" framing reads as a prepaid, risk-bearing structure —
+> functionally insurance — rather than a discount panel; and its HR dashboard implies
+> employer-visible utilisation. This copy is kept as the original design study only. Do not
+> present its figures.
 
 A UI prototype for **Option B** in the Medicloud Singapore case (Ivey W20043): bypass the
 insurers and act as a flexible-benefit provider straight to SME employees, using the existing
