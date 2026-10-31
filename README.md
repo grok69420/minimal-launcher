@@ -14,9 +14,13 @@ program from this branch.
 4. The video is processed in parts of about 90 seconds; each finished part is saved to
    Google Drive (folder `KeepOnePerson`), so an interrupted job can be continued.
 
+Photos: put the video and some photos of the person in Google Drive, folder
+`KeepOnePerson_input` - the app finds the person by face in every scene by itself.
+
 Engines: YOLO11 (person detection), SAM 2.1 (tracking and segmentation),
-InsightFace (finding the person again in other scenes), ProPainter (rebuilding the
-background).
+InsightFace (recognising the person), MiniMax-Remover (realistic, AI-generated
+background - default) and ProPainter (fast fill, also used automatically if the
+realistic fill cannot run).
 
 ## Files
 - `Keep_One_Person.ipynb` - one-button Colab notebook
@@ -24,6 +28,7 @@ background).
 - `remove_people.py` - the processing engine
 
 ## Licences of the components
+- MiniMax-Remover model: CC BY-NC 4.0 - non-commercial use only.
 - ProPainter: S-Lab License 1.0 - non-commercial use only.
 - InsightFace pretrained face models: non-commercial research use only.
 - Ultralytics YOLO11: AGPL-3.0.

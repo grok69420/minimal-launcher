@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import time
+import traceback
 
 import cv2
 import numpy as np
@@ -706,6 +707,99 @@ class ReID:
         return None
 
 
+# ---------------------------------------------------------------- realistic fill (MiniMax-Remover)
+MM_CODE = os.environ.get("KOP_MM_CODE", "/content/repos/MiniMax-Remover")
+MM_WEIGHTS = os.environ.get("KOP_MM_WEIGHTS", "/content/repos/minimax_weights")
+
+
+def fill_size(w, h, area=832 * 480):
+    """Working size for the generative fill (the model was trained at 832x480)."""
+    a, ref = w / h, 832 / 480
+    if abs(a - ref) / ref < 0.06:
+        return 832, 480
+    if abs(a - 1 / ref) * ref < 0.06:
+        return 480, 832
+    return (max(16, int(round((area * a) ** 0.5 / 16)) * 16),
+            max(16, int(round((area / a) ** 0.5 / 16)) * 16))
+
+
+class MiniMaxFiller:
+    """Generates realistic background where people were removed (diffusion model)."""
+
+    def __init__(self, code_dir=MM_CODE, weights=MM_WEIGHTS, steps=12):
+        if code_dir not in sys.path:
+            sys.path.insert(0, code_dir)
+        from diffusers.models import AutoencoderKLWan
+        from diffusers.schedulers import UniPCMultistepScheduler
+        from transformer_minimax_remover import Transformer3DModel
+        from pipeline_minimax_remover import Minimax_Remover_Pipeline
+        vae = AutoencoderKLWan.from_pretrained(os.path.join(weights, "vae"), torch_dtype=torch.float16)
+        tr = Transformer3DModel.from_pretrained(os.path.join(weights, "transformer"),
+                                                torch_dtype=torch.float16)
+        sch = UniPCMultistepScheduler.from_pretrained(os.path.join(weights, "scheduler"))
+        self.pipe = Minimax_Remover_Pipeline(transformer=tr, vae=vae, scheduler=sch).to("cuda")
+        self.steps = steps
+
+    def fill(self, imgs, masks, fw, fh, dil=2):
+        """imgs: BGR frames, masks: bool arrays; len must be 4k+1. Returns BGR frames (fw x fh)."""
+        x = np.stack([cv2.cvtColor(cv2.resize(im, (fw, fh), interpolation=cv2.INTER_AREA),
+                                   cv2.COLOR_BGR2RGB) for im in imgs])
+        m = np.stack([cv2.resize(k.astype(np.uint8), (fw, fh), interpolation=cv2.INTER_NEAREST)
+                      for k in masks])[..., None]
+        out = self.pipe(images=torch.from_numpy(x).float() / 127.5 - 1.0,
+                        masks=torch.from_numpy(m).float(), num_frames=len(imgs), height=fh,
+                        width=fw, num_inference_steps=self.steps,
+                        generator=torch.Generator(device="cuda").manual_seed(42),
+                        iterations=dil).frames[0]
+        return [cv2.cvtColor(np.clip(o * 255 + 0.5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+                for o in out]
+
+    def close(self):
+        del self.pipe
+        if DEVICE == "cuda":
+            torch.cuda.empty_cache()
+
+
+def _pad_4k1(seq):
+    """Mirror-pad a frame list to a length of the form 4k+1 (needed by the video model)."""
+    need = ((len(seq) - 1 + 3) // 4) * 4 + 1
+    ext = list(seq)
+    while len(ext) < need:
+        ext += seq[::-1][1:] or seq
+        ext += seq[1:] or seq
+    return ext[:need]
+
+
+def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=49, overlap=8,
+                   stages=None):
+    """Same output format as inpaint(): (chunks, {chunk: folder of filled frames})."""
+    fw, fh = fill_size(w, h)
+    chs = plan_chunks(ranges, window, overlap)
+    todo = [c for c, (a, b, _, _) in enumerate(chs) if any(flags[i] for i in range(a, b))]
+    results = {}
+    for t, c in enumerate(todo):
+        a, b, _, _ = chs[c]
+        seq = list(range(a, b))
+        ext = _pad_4k1(seq)
+        out = filler.fill([cv2.imread(frames[g]) for g in ext],
+                          [_read_mask(final_dir, g) for g in ext], fw, fh)
+        d = os.path.join(work, "mm_out", f"c{c:04d}")
+        os.makedirs(d, exist_ok=True)
+        for j in range(len(seq)):
+            cv2.imwrite(os.path.join(d, f"{j:04d}.png"), out[j])
+        results[c] = d
+        if stages:
+            stages.step(t + 1, len(todo))
+    return chs, results
+
+
+def _sam2_to(vid_pred, img_pred, device):
+    vid_pred.to(device)
+    img_pred.model.to(device)
+    if DEVICE == "cuda":
+        torch.cuda.empty_cache()
+
+
 # ---------------------------------------------------------------- ProPainter
 def _chunks(n, size, overlap):
     out, s = [], 0
@@ -935,7 +1029,9 @@ def set_keeper(st, img_pred, frame_idx, x, y, reset_search=True):
     box, mask = person_at(img_pred, st["_video"][frame_idx], st["boxes"][frame_idx], x, y)
     if box is None:
         return None
-    st["seeds"][int(st["_unit_of"][frame_idx])] = (int(frame_idx), np.asarray(box, np.float32))
+    u = int(st["_unit_of"][frame_idx])
+    st["seeds"][u] = (int(frame_idx), np.asarray(box, np.float32))
+    st.setdefault("seed_src", {}).pop(u, None)
     if reset_search:
         st["auto"] = None  # references changed -> redo the scene search
     save_job(st)
@@ -971,6 +1067,43 @@ def _ensure_target(st, vid_pred, u, seed):
     st["_tracked"][u] = key
 
 
+def save_photos(st, paths):
+    """Keep copies of the reference photos in the job folder (used again after a resume)."""
+    d = os.path.join(st["job_dir"], "photos")
+    os.makedirs(d, exist_ok=True)
+    keep = []
+    for k, p in enumerate(paths or []):
+        dst = os.path.join(d, f"photo_{k:02d}{os.path.splitext(p)[1].lower() or '.jpg'}")
+        _copy_atomic(p, dst)
+        keep.append(dst)
+    st["photos"] = keep
+    save_job(st)
+    return keep
+
+
+def anchors_from_photos(st, reid, img_pred, max_anchors=3, min_face=0.45):
+    """Find the person from the reference photos (by face) in the first scenes where they
+    clearly appear; those scenes become the starting points. Returns how many were found."""
+    reid.reset()
+    if not sum(bool(reid.add_photo(p)) for p in st.get("photos", [])):
+        return -1  # no usable face in the photos
+    found = []
+    S = Stages(["Looking for your person using the photos"])
+    S.start(0)
+    for u, (lo, hi, _) in enumerate(st["units"]):
+        r = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi, n_samples=4)
+        if r and r["how"] == "face" and r["score"] >= min_face:
+            found.append(u)
+            st["seeds"][u] = (int(r["frame"]), np.asarray(r["box"], np.float32))
+            st.setdefault("seed_src", {})[u] = "photo"
+        S.step(u + 1, len(st["units"]))
+        if len(found) >= max_anchors:
+            break
+    st["auto"] = None
+    save_job(st)
+    return len(found)
+
+
 def find_person(st, reid, vid_pred, img_pred, photos=()):
     """Find the kept person in every scene piece the user did not decide."""
     if not any(v is not None for v in st["seeds"].values()):
@@ -980,7 +1113,7 @@ def find_person(st, reid, vid_pred, img_pred, photos=()):
     S = Stages(["Learning what your person looks like", "Searching every scene"])
     S.start(0)
     reid.reset()
-    for p in photos or ():
+    for p in list(photos or ()) + list(st.get("photos", [])):
         reid.add_photo(p)
     for t, u in enumerate(user):
         _ensure_target(st, vid_pred, u, st["seeds"][u])
@@ -1016,7 +1149,7 @@ def _part_signature(st, p, grow, pad):
     a, b = st["parts"][p]
     us = [u for u, (lo, hi, _) in enumerate(st["units"]) if a <= lo and hi <= b]
     return {"range": [a, b], "seeds": [_seed_key(scene_seed(st, u)) for u in us],
-            "grow": grow, "pad": pad, "preset": st["preset"]}
+            "grow": grow, "pad": pad, "preset": st["preset"], "fill": st.get("fill", "realistic")}
 
 
 def part_is_current(st, p, grow=None, pad=2):
@@ -1076,12 +1209,39 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2):
     S.start(4)
     if DEVICE == "cuda":
         torch.cuda.empty_cache()
-    chs, results = inpaint(video, d["final"], flags, work, pp_dir, ranges, w, h, pp_side,
-                           stages=S)
+    chs = results = None
+    ov = 16
+    if st.get("fill", "realistic") == "realistic":
+        big = DEVICE == "cuda" and torch.cuda.get_device_properties(0).total_memory > 20e9
+        _sam2_to(vid_pred, img_pred, "cpu")  # free GPU memory for the fill model
+        filler = None
+        try:
+            filler = MiniMaxFiller()
+            for win in ((81, 49, 25) if big else (49, 25)):
+                try:
+                    shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
+                    chs, results = fill_realistic(video, d["final"], flags, work, ranges, w, h,
+                                                  filler, window=win, overlap=8, stages=S)
+                    ov = 8
+                    break
+                except torch.cuda.OutOfMemoryError:
+                    torch.cuda.empty_cache()
+                    log(f"  GPU memory full; retrying with shorter pieces")
+        except Exception as e:  # missing model, download problem ... -> fast fill instead
+            traceback.print_exc()
+            log(f"  realistic fill unavailable ({e.__class__.__name__}); using the fast fill")
+        finally:
+            if filler is not None:
+                filler.close()
+            _sam2_to(vid_pred, img_pred, DEVICE)
+    if results is None:
+        chs, results = inpaint(video, d["final"], flags, work, pp_dir, ranges, w, h, pp_side,
+                               stages=S)
+        ov = 16
     S.start(5)
     out = os.path.join(work, "part.mp4")
     composite(video, d["final"], d["protect"], flags, chs, results, out, fps, a, b, w, h,
-              stages=S)
+              overlap=ov, stages=S)
     _copy_atomic(out, _part_file(st["job_dir"], p, ".mp4"))
     _copy_atomic(chk, _part_file(st["job_dir"], p, "_check.mp4"))
     with open(_part_file(st["job_dir"], p, ".json") + ".tmp", "w") as f:

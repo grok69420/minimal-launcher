@@ -24,6 +24,10 @@ PART_SECONDS = float(os.environ.get("KOP_PART_SECONDS", rp.PART_SECONDS))
 CKPT_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/"
 MAX_VIEW = 1280
 QUALITY = ["Automatic", "Best", "Balanced", "Fast"]
+DRIVE_INPUT = os.environ.get("KOP_DRIVE_INPUT", "/content/drive/MyDrive/KeepOnePerson_input")
+FILLS = ["Realistic (AI-generated background, slower)", "Fast (smoother, quicker)"]
+VIDEO_EXT = (".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v")
+PHOTO_EXT = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 
 _M = {}
 
@@ -135,7 +139,9 @@ def render(st, i, mask=None):
 
 def scene_status(st, u):
     if u in st["seeds"]:
-        return "✔ your choice" if st["seeds"][u] is not None else "nobody kept"
+        if st["seeds"][u] is None:
+            return "nobody kept"
+        return "✔ found by photo" if st.get("seed_src", {}).get(u) == "photo" else "✔ your choice"
     a = (st["auto"] or {}).get(u)
     return "✘ not found - everyone removed" if a is None else "✔ found"
 
@@ -162,16 +168,38 @@ def _frame_note(st, i):
 
 
 # ---------------------------------------------------------------- step 1: choose video
+def drive_inputs():
+    """Videos and photos the user put in Google Drive > KeepOnePerson_input."""
+    if not os.path.isdir(DRIVE_INPUT):
+        return [], []
+    files = sorted(os.listdir(DRIVE_INPUT))
+    vids = [os.path.join(DRIVE_INPUT, f) for f in files if f.lower().endswith(VIDEO_EXT)]
+    pics = [os.path.join(DRIVE_INPUT, f) for f in files if f.lower().endswith(PHOTO_EXT)]
+    return vids, pics
+
+
 def on_page():
     ch = job_choices()
     note = ("Your work is saved to Google Drive, so long videos can be continued later."
             if drive_ok() else "⚠️ Google Drive is not connected: if Colab disconnects, "
                                "work on long videos is lost.")
+    if drive_ok():
+        os.makedirs(DRIVE_INPUT, exist_ok=True)
+    vids, pics = drive_inputs()
+    found = (f"📁 **Found in your Google Drive** (folder *KeepOnePerson_input*): "
+             f"{len(vids)} video(s) and {len(pics)} photo(s).") if vids else ""
     return (gr.update(visible=bool(ch)), gr.update(choices=ch, value=ch[0][1] if ch else None),
-            note)
+            note, gr.update(visible=bool(vids)), found,
+            gr.update(choices=[(os.path.basename(v), v) for v in vids],
+                      value=vids[0] if vids else None))
 
 
-def on_next1(video, path, quality, start, end, progress=gr.Progress()):
+def on_use_drive(vid_path, quality, fill, start, end, progress=gr.Progress()):
+    _, pics = drive_inputs()
+    return on_next1(None, vid_path, quality, start, end, pics, fill, progress)
+
+
+def on_next1(video, path, quality, start, end, photos=None, fill=None, progress=gr.Progress()):
     src = (path or "").strip() or video
     if not src or not os.path.exists(src):
         raise gr.Error("Please choose a video first.")
@@ -187,15 +215,33 @@ def on_next1(video, path, quality, start, end, progress=gr.Progress()):
             preset = "Best" if secs <= 180 else "Balanced"
         st = rp.create_job(src, jobs_root(), CACHE, start or 0, end or 0, preset, 0.25,
                            PART_SECONDS)
-        models(preset)
+        st["fill"] = "fast" if (fill or "").startswith("Fast") else "realistic"
+        rp.save_job(st)
+        vid, img_pred, reid = models(preset)
+        found = None
+        if photos:
+            rp.save_photos(st, photos)
+            found = rp.anchors_from_photos(st, reid, img_pred)
+            if found and found > 0:
+                rp.find_person(st, reid, vid, img_pred)
     except Exception as e:
         _fail(e)
     counts = [len(b) for b in st["boxes"]]
     i = int(np.argmax(counts)) if max(counts) else 0
-    head = (f"**Click on the person you want to keep.** "
-            f"(Not in this picture? Use the arrows to find a better moment.)")
+    if found and found > 0:  # photos worked: go straight to the scene check
+        n_ok = sum(1 for u in range(len(st["units"])) if rp.scene_seed(st, u) is not None)
+        head2 = (f"Using your photos, your person was found in **{n_ok} of {len(st['units'])}** "
+                 "scene(s) (green box). In the others everyone is removed. **Wrong?** Click that "
+                 "scene to fix it. **All good?** Press **Start**.")
+        return [st, render(st, i), gr.update(maximum=st["n"] - 1, value=i), "", _frame_note(st, i),
+                gr.update(interactive=False), gallery(st), head2] + show(2)
+    head = "**Click on the person you want to keep.** (Not in this picture? Use the arrows.)"
+    if photos:
+        head = ("The photos did not match anyone in the video clearly enough, so please "
+                "**click on the person you want to keep.**" if found == 0 else
+                "No face was found in the photos, so please **click on the person you want to keep.**")
     return [st, render(st, i), gr.update(maximum=st["n"] - 1, value=i), head,
-            _frame_note(st, i), gr.update(interactive=False)] + show(1)
+            _frame_note(st, i), gr.update(interactive=False), gr.update(), gr.update()] + show(1)
 
 
 # ---------------------------------------------------------------- step 2: pick the person
@@ -358,13 +404,23 @@ with gr.Blocks(title="Keep One Person") as demo:
                 resume_dd = gr.Dropdown(show_label=False, choices=[], scale=4)
                 resume_btn = gr.Button("Continue", variant="primary", scale=1)
         gr.Markdown("### Step 1 of 3 - Choose your video", elem_classes="step-head")
+        with gr.Group(visible=False) as drive_box:
+            drive_md = gr.Markdown()
+            with gr.Row():
+                drive_dd = gr.Dropdown(show_label=False, choices=[], scale=4)
+                drive_btn = gr.Button("Use these files ▶", variant="primary", scale=1)
         vid_in = gr.Video(label="Drop your video here, or click to choose a file", sources=["upload"],
                           height=260)
+        photos_in = gr.File(label="Photos of the person to keep (optional - then the app finds "
+                                  "them by itself)", file_count="multiple",
+                            file_types=["image"], type="filepath")
         with gr.Accordion("More options", open=False):
             path_in = gr.Textbox(label="Video file on Google Drive (best for big files)",
                                  placeholder="/content/drive/MyDrive/my_video.mp4")
             quality_in = gr.Radio(QUALITY, value="Automatic", label="Quality",
                                   info="Automatic: Best for short videos, Balanced for long ones.")
+            fill_in = gr.Radio(FILLS, value=FILLS[0], label="How to fill where people were",
+                               info="Realistic paints in believable background (needs more time).")
             with gr.Row():
                 start_in = gr.Number(label="Only from second", value=0, minimum=0)
                 end_in = gr.Number(label="…to second (0 = to the end)", value=0, minimum=0)
@@ -413,9 +469,11 @@ with gr.Blocks(title="Keep One Person") as demo:
 
     steps = [p0, p1, p2, p3, p4]
 
-    demo.load(on_page, None, [resume_box, resume_dd, store_note])
-    next1.click(on_next1, [vid_in, path_in, quality_in, start_in, end_in],
-                [state, view, frame_sl, head1, note1, next2] + steps)
+    demo.load(on_page, None, [resume_box, resume_dd, store_note, drive_box, drive_md, drive_dd])
+    n1_outs = [state, view, frame_sl, head1, note1, next2, gal, head2] + steps
+    next1.click(on_next1, [vid_in, path_in, quality_in, start_in, end_in, photos_in, fill_in],
+                n1_outs)
+    drive_btn.click(on_use_drive, [drive_dd, quality_in, fill_in, start_in, end_in], n1_outs)
     back_btn.click(lambda st, i: on_move(st, i, -1), [state, frame_sl], [view, frame_sl, note1])
     fwd_btn.click(lambda st, i: on_move(st, i, +1), [state, frame_sl], [view, frame_sl, note1])
     frame_sl.release(on_slide, [state, frame_sl], [view, note1])
