@@ -8,11 +8,11 @@ The sound stays as it was. Runs in Google Colab (an A100 GPU with Colab Pro is r
 
 **Start:** open
 [Keep_One_Person.ipynb in Colab](https://colab.research.google.com/github/grok69420/minimal-launcher/blob/keep-one-person/Keep_One_Person.ipynb)
-and press the ▶ play button. The notebook always downloads the latest version of the program
+and press the ▶ play button, then upload your video in the app. The notebook always downloads the latest version of the program
 from this branch.
 
 ## Google Drive
-- `Keep One Person/` - put your video (and photos of the person to keep) here
+- `Keep One Person/` - optional: put your video and photos here instead of uploading them in the app
 - `Keep One Person/Finished/` - finished videos and check videos appear here
 - `Keep One Person/Feedback/` - your corrections (the app learns from them)
 - `Keep One Person/In progress (automatic)/` - work in progress; long videos are processed in

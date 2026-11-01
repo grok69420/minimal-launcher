@@ -333,7 +333,7 @@ def on_page():
             note, gr.update(visible=bool(vids)), found,
             gr.update(choices=[(os.path.basename(v), v) for v in vids],
                       value=vids[0] if vids else None, visible=len(vids) > 1),
-            gr.update(open=not vids))
+            gr.update(open=True))
 
 
 def on_use_drive(vid_path, fill, start, end, mode, progress=gr.Progress()):
@@ -654,7 +654,7 @@ with gr.Blocks(title="Keep One Person") as demo:
             drive_md = gr.Markdown()
             drive_dd = gr.Dropdown(show_label=False, choices=[], visible=False)
             drive_btn = gr.Button("Start with these files ▶", variant="primary", size="lg")
-        with gr.Accordion("Upload files instead", open=True) as upload_acc:
+        with gr.Accordion("Upload your video (and photos)", open=True) as upload_acc:
             vid_in = gr.Video(label="Your video", sources=["upload"], height=230)
             photos_in = gr.File(label="Photos of the person to keep (optional, 'Keep one person' "
                                       "only - with photos the app finds them by itself)", file_count="multiple",
