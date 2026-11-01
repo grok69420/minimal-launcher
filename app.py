@@ -104,15 +104,31 @@ def fb_dir():
 _MLOCK = threading.Lock()
 
 
+SETUP = threading.Event()  # set when every download of the setup has finished
+SETUP.set()
+SETUP_ERR = []
+
+
+def _ready():
+    """Wait for the setup downloads that still run in the background (app opened early)."""
+    if not SETUP.is_set():
+        rp.log("Finishing the setup (downloads) ...")
+        SETUP.wait()
+    if SETUP_ERR:
+        raise RuntimeError(SETUP_ERR[0])
+
+
 def preload():
     """Load the AI models in the background right after start (while the video uploads)."""
     try:
+        _ready()
         models("Balanced")
     except Exception:
         traceback.print_exc()
 
 
 def models(preset):
+    _ready()
     with _MLOCK:
         return _models(preset)
 
@@ -180,9 +196,9 @@ def render(st, i, mask=None):
     img = cv2.imread(st["_video"][i])
     u = int(st["_unit_of"][i])
     col = RED if is_remove(st) else GREEN
-    tgt = os.path.join(st["cache"], "target", f"{i:06d}.png")
+    tgt = rp._mpath(os.path.join(st["cache"], "target"), i)
     if mask is None and st["_tracked"].get(u) is not None and os.path.exists(tgt):
-        mask = cv2.imread(tgt, cv2.IMREAD_GRAYSCALE) > 127
+        mask = rp.load_mask(tgt)
     if mask is not None and mask.any():
         img[mask] = (0.45 * img[mask] + 0.55 * col).astype(np.uint8)
     t = max(3, img.shape[1] // 300)
@@ -263,7 +279,11 @@ def _done_text(st):
         lines.append(f"⏱ Took **{_took(prep + t['total'])}** for {_took(st['n'] / fps)} of video "
                      f"(preparing {_took(prep)}, removing {_took(t['total'])}{par}).")
     if st.get("fill_level"):
+        what = {"sharpest": "every frame painted, extra care", "sharp": "every frame painted",
+                "balanced": "every 2nd frame painted, the frames between follow the camera",
+                "fast": "every 3rd frame painted, the frames between follow the camera"}
         lines.append(f"🎨 Background painting: **{st['fill_level']}**"
+                     + (f" - {what[st['fill_level']]}" if st['fill_level'] in what else "")
                      + (" (chosen to finish in about 15 minutes)" if st.get("fill_auto") else "."))
     sc = list((st.get("selfcheck") or {}).values())
     left = sorted(g for r in sc for g in r.get("left", []))
@@ -376,12 +396,48 @@ def on_video_uploaded(path):
     except Exception:
         return ("⚠️ This file could not be read as a video. Please choose another file.",
                 gr.update(value=None, visible=False))
+    _prescan(path)  # start the scan now: it is ready sooner after you press Next
     info = (f"✅ **Video ready:** {os.path.basename(path)} · {_mmss(dur)} · {w}×{h} · "
             f"{rp.fps_float(fps):.0f} fps · {codec or 'video'} · "
             f"{'with sound' if has_audio else 'no sound'}. Press **Next**.")
     if img is None:
         return info, gr.update(value=None, visible=False)
     return info, gr.update(value=cv2.cvtColor(img, cv2.COLOR_BGR2RGB), visible=True)
+
+
+_PRE = {}  # video path -> early scan started right after the upload
+
+
+def _prescan(path):
+    """Copy and scan the video as soon as it is uploaded, while you choose the options."""
+    if not path or path in _PRE:
+        return
+    box = {"done": threading.Event()}
+    _PRE[path] = box
+
+    def work():
+        try:
+            _ready()
+            secs = rp.probe(path)[2]
+            preset = auto_preset(secs)
+            ld = rp.learned_defaults(fb_dir())
+            box["st"] = rp.create_job(path, jobs_root(), CACHE, 0, 0, preset, ld["conf"],
+                                      PART_SECONDS)
+        except Exception as e:
+            box["err"] = e
+            traceback.print_exc()
+        finally:
+            box["done"].set()
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _take_prescan(path, start, end):
+    """The early scan of this video (waits for it to finish), or None to scan now."""
+    box = _PRE.pop(path, None)
+    if box is None or (start or 0) or (end or 0):
+        return None
+    box["done"].wait()
+    return box.get("st")
 
 
 def on_use_drive(vid_path, fill, start, end, mode, progress=gr.Progress()):
@@ -404,8 +460,11 @@ def on_next1(video, path, start, end, photos=None, fill=None, mode=None, progres
             secs = min(secs, end - (start or 0))
         preset = auto_preset(secs)
         ld = rp.learned_defaults(fb_dir())  # adapts to the corrections you made before
-        st = rp.create_job(src, jobs_root(), CACHE, start or 0, end or 0, preset, ld["conf"],
-                           PART_SECONDS)
+        st = _take_prescan(src, start, end)
+        if st is None:
+            _ready()
+            st = rp.create_job(src, jobs_root(), CACHE, start or 0, end or 0, preset, ld["conf"],
+                               PART_SECONDS)
         st["grow"] = ld["grow"]
         st["steps"] = (rp.FILL_STEPS[preset] + ld["extra_steps"]) if ld["extra_steps"] else None
         st["fill"] = "realistic"

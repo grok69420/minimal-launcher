@@ -50,25 +50,25 @@ SAM2_MODELS = {
 PRESETS = {
     "Best": dict(sam2="large", det="yolo11x.pt", det_imgsz=1280, pp_max_side=960,
                  seg="yolo11x-seg.pt"),
-    "Balanced": dict(sam2="base_plus", det="yolo11x.pt", det_imgsz=960, pp_max_side=854,
+    "Balanced": dict(sam2="base_plus", det="yolo11x.pt", det_imgsz=1280, pp_max_side=854,
                      seg="yolo11x-seg.pt"),
     "Fast": dict(sam2="small", det="yolo11m.pt", det_imgsz=640, pp_max_side=640,
                  seg="yolo11m-seg.pt"),
 }
 PART_SECONDS = 30.0
+SCAN_IOU = 0.8
 PAD = 4                # frames of temporal carry-over of the removal masks
 GROW = 0.016           # removal masks are widened by this share of the picture size (hair, blur)
 WORKER = False         # True inside a parallel worker process
 OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
 FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
 FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
-# background painting quality levels: (name, working area, steps, frames/s on an A100)
-# (fps measured on the A100 for 81-frame pieces: 3.1 / 7.9 / 14.1; "fastest" paints every
-# second frame and blends the frames between)
-FILL_LEVELS = [("sharpest", 832 * 480, 8, 3.1, 1), ("sharp", 640 * 368, 5, 7.9, 1),
-               ("fast", 512 * 288, 4, 14.0, 1)]
-# ("fastest", every second frame painted, frames between blended) smeared moving
-# backgrounds - removed after feedback
+# background painting quality levels: (name, working area, steps, frames/s on an A100, stride,
+# tiny decoder). Below the model's own size (832x480) the painting shows a checkerboard
+# pattern, so every level paints at 832x480; the faster levels paint every 2nd / 3rd frame
+# and make the frames between by following the camera movement (no smearing).
+FILL_LEVELS = [("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
+               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True)]
 FILL_EFFICIENCY = 0.55  # share of that speed reached while the other parts use the GPU too
 TARGET_SECONDS = 15 * 60  # the whole job should take at most this long
 JOB_FILE = "job.pkl"
@@ -144,7 +144,20 @@ def _autocast():
 
 
 def _mpath(d, i):
+    return os.path.join(d, f"{i:06d}.msk")
+
+
+def _lpath(d, i):  # person labels (small numbers per pixel) stay PNG
     return os.path.join(d, f"{i:06d}.png")
+
+
+def load_mask(p):
+    """Masks are stored as packed bits (8 pixels per byte): ~10x faster than PNG."""
+    with open(p, "rb") as f:
+        buf = f.read()
+    h, w = (int(v) for v in np.frombuffer(buf, np.int32, 2))
+    a = np.frombuffer(buf, np.uint8, offset=8).reshape(h, -1)
+    return np.unpackbits(a, axis=1, count=w).view(bool)
 
 
 _IO = ThreadPoolExecutor(6)  # disk writes run beside the GPU work
@@ -156,11 +169,15 @@ def _read_mask(d, i):
     f = _PENDING.get(p)
     if f is not None:
         f.result()
-    return cv2.imread(p, cv2.IMREAD_GRAYSCALE) > 127
+    return load_mask(p)
 
 
 def _write_now(p, m):
-    cv2.imwrite(p, m.astype(np.uint8) * 255, [cv2.IMWRITE_PNG_COMPRESSION, 1])
+    m = np.asarray(m, bool)
+    with open(p + ".tmp", "wb") as f:
+        f.write(np.array(m.shape[:2], np.int32).tobytes())
+        f.write(np.packbits(m, axis=1).tobytes())
+    os.replace(p + ".tmp", p)
 
 
 def _write_mask(d, i, m):
@@ -205,7 +222,7 @@ def _live_view(d, i, m):
             img[m] = (0.45 * img[m] + 0.55 * red).astype(np.uint8)
             prot = _mpath(os.path.join(os.path.dirname(d), "protect"), i)
             if not _PV["remove"] and os.path.exists(prot):
-                k = cv2.imread(prot, cv2.IMREAD_GRAYSCALE) > 127
+                k = load_mask(prot)
                 img[k] = (0.45 * img[k] + 0.55 * green).astype(np.uint8)
         _PREVIEW(img)
     except Exception:
@@ -459,7 +476,8 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
     scores, boxes, buf, prev = [], [], [], None
 
     def flush():
-        res = model.predict(buf, classes=[0], conf=conf, imgsz=imgsz, verbose=False,
+        # iou 0.8: in crowds people overlap a lot; the usual 0.7 throws away real people
+        res = model.predict(buf, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz, verbose=False,
                             device=0 if DEVICE == "cuda" else "cpu",
                             quantize=16 if DEVICE == "cuda" else None)
         for r in res:
@@ -720,7 +738,7 @@ def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, l
             lab = np.zeros(tgt.shape, np.uint8)
             for k, m in enumerate(sorted(inst, key=lambda x: -x.sum())[:254]):
                 lab[m & ~prot] = k + 1
-            _PENDING[_mpath(inst_dir, i)] = _IO.submit(cv2.imwrite, _mpath(inst_dir, i), lab)
+            _PENDING[_lpath(inst_dir, i)] = _IO.submit(cv2.imwrite, _lpath(inst_dir, i), lab)
         _write_mask(raw_dir, i, other)
         _write_mask(prot_dir, i, prot)
         if stages:
@@ -742,7 +760,7 @@ def track_others(pred, frames, inst_dir, prot_dir, out_dir, tmp, ranges, chunk=6
             while pos < len(seq) - 1:
                 s = seq[pos]
                 idxs = [s] + seq[pos + 1:pos + chunk]
-                lab = cv2.imread(_mpath(inst_dir, s), cv2.IMREAD_GRAYSCALE)
+                lab = cv2.imread(_lpath(inst_dir, s), cv2.IMREAD_GRAYSCALE)
                 prot = _read_mask(prot_dir, s)
                 dets = [lab == k for k in np.unique(lab) if k]
                 dets = [d for d in dets if d.sum() >= min_px]
@@ -880,6 +898,8 @@ class ReID:
 
     def reset(self):
         self.ref_faces, self.ref_bodies = [], []
+        self._seen = {}  # frame -> (descriptions, H, W): a second search reuses them
+
 
     def _faces(self, img):
         if self.face is None:
@@ -1002,14 +1022,20 @@ class ReID:
                      closeups=True):
         """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
         cands = []
+        seen = getattr(self, "_seen", None)
+        if seen is None:
+            seen = self._seen = {}
         for i in self.sample_frames(lo, hi, n_samples):
             if not len(boxes[i]):
                 continue
-            img = cv2.imread(frames[i])
-            masks = (outline_masks(segs[i], boxes[i], img.shape[0], img.shape[1]) if segs is not None
-                     else segment_boxes(img_pred, img, boxes[i]))
-            H, W = img.shape[:2]
-            for k, d in enumerate(self.describe(img, boxes[i], masks)):
+            key = (getattr(frames, "dir", id(frames)), i)
+            if key not in seen:
+                img = cv2.imread(frames[i])
+                masks = (outline_masks(segs[i], boxes[i], img.shape[0], img.shape[1])
+                         if segs is not None else segment_boxes(img_pred, img, boxes[i]))
+                seen[key] = (self.describe(img, boxes[i], masks), img.shape[0], img.shape[1])
+            descs, H, W = seen[key]
+            for k, d in enumerate(descs):
                 b = boxes[i][k]
                 cands.append(dict(frame=i, k=k, box=b, face=self.face_sim(d), body=self.body_sim(d),
                                   emb=d["face"], n=len(boxes[i]),
@@ -1049,6 +1075,10 @@ MM_WEIGHTS = os.environ.get("KOP_MM_WEIGHTS", "/content/repos/minimax_weights")
 
 
 _FILL_AREA = [832 * 480]
+MM_FAST = os.environ.get("KOP_MM_FAST", "1") == "1"
+TAE = os.environ.get("KOP_TAE", "0") == "1"
+TAE_URL = "https://github.com/madebyollin/taehv/raw/main/"
+TAE_WEIGHTS = os.environ.get("KOP_TAE_WEIGHTS", "/content/repos/taehv/taew2_1.pth")
 
 
 def fill_size(w, h, area=None):
@@ -1081,9 +1111,44 @@ class MiniMaxFiller:
         sch = UniPCMultistepScheduler.from_pretrained(os.path.join(weights, "scheduler"))
         self.pipe = Minimax_Remover_Pipeline(transformer=tr, vae=vae, scheduler=sch).to("cuda")
         self.steps = steps
+        self.tae = None  # optional tiny decoder (much faster, slightly softer)
+        if TAE:
+            self.use_tae()
+
+    def use_tae(self, on=True):
+        if not on:
+            self.tae = None
+            return
+        if getattr(self, "_tae", None) is not None:
+            self.tae = self._tae
+            return
+        d = os.path.dirname(TAE_WEIGHTS)
+        os.makedirs(d, exist_ok=True)
+        for name in ("taehv.py", "taew2_1.pth"):
+            if not os.path.exists(os.path.join(d, name)):
+                subprocess.run(["wget", "-q", "-O", os.path.join(d, name + ".part"),
+                                TAE_URL + name], check=True)
+                os.replace(os.path.join(d, name + ".part"), os.path.join(d, name))
+        if d not in sys.path:
+            sys.path.insert(0, d)
+        from taehv import TAEHV
+        self.tae = self._tae = TAEHV(TAE_WEIGHTS).to("cuda", torch.float16).eval()
 
     def fill(self, imgs, masks, fw, fh, dil=2, seed=42, steps=None):
         """imgs: BGR frames, masks: bool arrays; len must be 4k+1. Returns BGR frames (fw x fh)."""
+        if MM_FAST:
+            try:
+                with _gpu_lock(_LOCK_ST[0]):  # one painting at a time on the GPU
+                    try:
+                        return self._fill_gpu(imgs, masks, fw, fh, dil, seed, steps or self.steps)
+                    finally:  # give the memory back: the other parts (processes) need it too
+                        if WORKER:
+                            torch.cuda.empty_cache()
+            except torch.cuda.OutOfMemoryError:
+                raise
+            except Exception:
+                traceback.print_exc()
+                log("  (fast painting path failed - using the standard one)")
         x = np.stack([cv2.cvtColor(cv2.resize(im, (fw, fh), interpolation=cv2.INTER_AREA),
                                    cv2.COLOR_BGR2RGB) for im in imgs])
         m = np.stack([cv2.resize(k.astype(np.uint8), (fw, fh), interpolation=cv2.INTER_NEAREST)
@@ -1097,10 +1162,128 @@ class MiniMaxFiller:
         return [cv2.cvtColor(np.clip(o * 255 + 0.5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
                 for o in out]
 
+    @torch.no_grad()
+    def _fill_gpu(self, imgs, masks, fw, fh, dil, seed, steps):
+        """Same result as the model's own pipeline, but every step stays on the GPU (the
+        pipeline resizes and widens the masks on the CPU, ~15 % of its time) and both
+        pictures are encoded in one batch."""
+        p, dev, F_ = self.pipe, "cuda", torch.nn.functional
+        n = len(imgs)
+        x = torch.from_numpy(np.stack(imgs)).to(dev, non_blocking=True)  # n,H,W,3 BGR uint8
+        x = x.flip(-1).permute(0, 3, 1, 2).half()  # n,3,H,W RGB
+        if x.shape[-2:] != (fh, fw):
+            x = F_.interpolate(x, size=(fh, fw), mode="bilinear", antialias=True, align_corners=False)
+        x = (x / 127.5 - 1.0).clamp_(-1, 1)
+        m = torch.from_numpy(np.stack(masks).view(np.uint8)).to(dev, non_blocking=True).half()
+        if m.shape[-2:] != (fh, fw):
+            m = F_.interpolate(m[:, None], size=(fh, fw), mode="nearest")[:, 0]
+        for _ in range(dil):  # = scipy binary_dilation (4-neighbour cross), as the pipeline does
+            q = F_.pad(m[None], (1, 1, 1, 1))[0]
+            m = torch.maximum(torch.maximum(q[:, 1:-1, 1:-1], q[:, :-2, 1:-1]),
+                              torch.maximum(torch.maximum(q[:, 2:, 1:-1], q[:, 1:-1, :-2]), q[:, 1:-1, 2:]))
+        img = x.permute(1, 0, 2, 3)[None]  # 1,3,n,h,w
+        m3 = m[None, None].expand(1, 3, n, fh, fw)
+        vae = p.vae
+        mean = torch.tensor(vae.config.latents_mean).view(1, -1, 1, 1, 1).to(dev, torch.float16)
+        istd = 1.0 / torch.tensor(vae.config.latents_std).view(1, -1, 1, 1, 1).to(dev, torch.float16)
+        masked_lat = (vae.encode(img * (1 - m3)).latent_dist.mode() - mean) * istd
+        mask_lat = (vae.encode(2 * m3 - 1.0).latent_dist.mode() - mean) * istd
+        p.scheduler.set_timesteps(steps, device=dev)
+        g = torch.Generator(device=dev).manual_seed(seed)
+        lat = torch.randn((1, 16, (n - 1) // p.vae_scale_factor_temporal + 1,
+                           fh // p.vae_scale_factor_spatial, fw // p.vae_scale_factor_spatial),
+                          generator=g, device=dev, dtype=torch.float16)
+        for t in p.scheduler.timesteps:
+            inp = torch.cat([lat.to(torch.float16), masked_lat, mask_lat], dim=1)
+            noise = p.transformer(hidden_states=inp.half(), timestep=t.expand(1))[0]
+            lat = p.scheduler.step(noise, t, lat, return_dict=False)[0]
+        if self.tae is not None:  # tiny decoder: works on the model's own latents, gives [0, 1]
+            video = self.tae.decode_video(lat.half().permute(0, 2, 1, 3, 4), parallel=n <= 49,
+                                          show_progress_bar=False)[0, :n]  # n,3,h,w
+            out = (video.permute(0, 2, 3, 1).float().clamp(0, 1) * 255 + 0.5).byte()
+        else:
+            lat = lat.half() / istd + mean
+            video = vae.decode(lat, return_dict=False)[0]  # 1,3,n,h,w in [-1, 1]
+            out = ((video[0].permute(1, 2, 3, 0).float().clamp(-1, 1) + 1) * 127.5 + 0.5).byte()
+        out = out.flip(-1).cpu().numpy()  # n,h,w,3 BGR
+        return [np.ascontiguousarray(o) for o in out]
+
     def close(self):
         del self.pipe
         if DEVICE == "cuda":
             torch.cuda.empty_cache()
+
+
+SR_URL = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
+SR_WEIGHTS = os.environ.get("KOP_SR", "/content/repos/realesr-general-x4v3.pth")
+SHARPEN = os.environ.get("KOP_SHARPEN", "0") == "1"  # off: it sharpened the painting's flaws too
+
+
+class _SRNet(torch.nn.Module):
+    """Real-ESRGAN 'general x4 v3' (compact): restores detail in an upscaled picture."""
+
+    def __init__(self, feat=64, conv=32, up=4):
+        super().__init__()
+        layers = [torch.nn.Conv2d(3, feat, 3, 1, 1), torch.nn.PReLU(feat)]
+        for _ in range(conv):
+            layers += [torch.nn.Conv2d(feat, feat, 3, 1, 1), torch.nn.PReLU(feat)]
+        layers.append(torch.nn.Conv2d(feat, 3 * up * up, 3, 1, 1))
+        self.body = torch.nn.ModuleList(layers)
+        self.ps = torch.nn.PixelShuffle(up)
+        self.up = up
+
+    def forward(self, x):
+        o = x
+        for layer in self.body:
+            o = layer(o)
+        return self.ps(o) + torch.nn.functional.interpolate(x, scale_factor=self.up, mode="nearest")
+
+
+class Sharpener:
+    """Brings the painted background (made at a smaller size for speed) up to the video's full
+    size with real detail instead of a blurry enlargement."""
+
+    def __init__(self, path=SR_WEIGHTS):
+        if not os.path.exists(path):
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            subprocess.run(["wget", "-q", "-O", path + ".part", SR_URL], check=True)
+            os.replace(path + ".part", path)
+        sd = torch.load(path, map_location="cpu")
+        sd = sd.get("params", sd.get("params_ema", sd))
+        self.net = _SRNet()
+        self.net.load_state_dict(sd)
+        self.net = self.net.to(DEVICE).half().eval()
+
+    @torch.no_grad()
+    def __call__(self, patches, size, batch=8):
+        """patches: BGR uint8 frames (all the same size); size: (w, h) wanted. Returns BGR."""
+        W, H = size
+        out = []
+        for i in range(0, len(patches), batch):
+            x = torch.from_numpy(np.ascontiguousarray(np.stack(patches[i:i + batch])[..., ::-1]))
+            x = x.to(DEVICE).permute(0, 3, 1, 2).half() / 255.0
+            y = self.net(x).clamp_(0, 1).float()
+            y = torch.nn.functional.interpolate(y, size=(H, W), mode="bilinear", antialias=True,
+                                                align_corners=False)
+            y = (y * 255 + 0.5).clamp_(0, 255).byte().permute(0, 2, 3, 1).cpu().numpy()
+            out += [np.ascontiguousarray(f[..., ::-1]) for f in y]
+        return out
+
+
+_SHARP = {}
+
+
+def sharpener():
+    """Loaded once; None when switched off or not available (then plain enlargement)."""
+    if not SHARPEN or DEVICE != "cuda":
+        return None
+    if "s" not in _SHARP:
+        try:
+            _SHARP["s"] = Sharpener()
+        except Exception:
+            traceback.print_exc()
+            _SHARP["s"] = None
+    return _SHARP["s"]
 
 
 def _pad_4k1(seq):
@@ -1164,8 +1347,29 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
     def save(path, img, patch, box):
         x1, y1, x2, y2 = box
         img = img.copy()
-        img[y1:y2, x1:x2] = cv2.resize(patch, (x2 - x1, y2 - y1), interpolation=cv2.INTER_LANCZOS4)
+        if patch.shape[:2] != (y2 - y1, x2 - x1):
+            patch = cv2.resize(patch, (x2 - x1, y2 - y1), interpolation=cv2.INTER_LANCZOS4)
+        img[y1:y2, x1:x2] = patch
         cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+    def between(path, g, k, t, sub, imgs, masks, out, box, fw, fh):
+        """Frame g between painted frames sub[k] and sub[k+1]: both paintings are moved with
+        the camera to frame g, then cross-faded (blending without moving them smears)."""
+        base = cv2.imread(frames[g])
+        mg = _read_mask(final_dir, g)
+        x1, y1, x2, y2 = box
+        P = np.array([[fw / (x2 - x1), 0, -x1 * fw / (x2 - x1)],
+                      [0, fh / (y2 - y1), -y1 * fh / (y2 - y1)], [0, 0, 1]])
+        Pi = np.linalg.inv(P)
+        warped = []
+        for kk in (k, k + 1):
+            H = camera_motion(imgs[kk], base, masks[kk], mg)
+            o = out[kk]
+            if H is not None:
+                o = cv2.warpPerspective(o, P @ H @ Pi, (fw, fh), flags=cv2.INTER_LINEAR,
+                                        borderMode=cv2.BORDER_REPLICATE)
+            warped.append(o)
+        save(path, base, cv2.addWeighted(warped[0], 1 - t, warped[1], t, 0), box)
 
     writes = []
     nxt = _IO.submit(load, todo[0]) if todo else None
@@ -1177,26 +1381,52 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         fw, fh = fill_size(x2 - x1, y2 - y1)
         out = filler.fill([im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks],
                           fw, fh, seed=seed, steps=steps)
+        sh = sharpener() if (x2 - x1) > 1.25 * fw else None
+        if sh is not None:  # full-size detail instead of a blurry enlargement
+            out = sh(out, (x2 - x1, y2 - y1))
         d = os.path.join(work, "mm_out", f"c{c:04d}_s{seed}")
         os.makedirs(d, exist_ok=True)
         sub = painted(a, b)
         pos = {g: k for k, g in enumerate(sub)}
         for j, g in enumerate(range(a, b)):
+            path = os.path.join(d, f"{j:04d}.jpg")
             if g in pos:
-                patch, base = out[pos[g]], imgs[pos[g]]
-            else:  # between two painted frames: blend them
+                writes.append(_IO.submit(save, path, imgs[pos[g]], out[pos[g]], (x1, y1, x2, y2)))
+            else:  # between two painted frames
                 k = max(k for k, x in enumerate(sub) if x < g)
                 t = (g - sub[k]) / (sub[k + 1] - sub[k])
-                patch = cv2.addWeighted(out[k], 1 - t, out[k + 1], t, 0)
-                base = cv2.imread(frames[g])
-            writes.append(_IO.submit(save, os.path.join(d, f"{j:04d}.jpg"), base, patch,
-                                     (x1, y1, x2, y2)))
+                writes.append(_IO.submit(between, path, g, k, t, sub, imgs, masks, out,
+                                         (x1, y1, x2, y2), fw, fh))
         results[c] = (d, ".jpg")
         if stages:
             stages.step(t + 1, len(todo))
     for f in writes:
         f.result()
     return chs, results
+
+
+def camera_motion(a_img, b_img, a_mask, b_mask, size=480):
+    """How the picture moves from frame a to frame b (3x3, in full-size pixels), measured on
+    the background only (people masked out). None when it cannot be measured reliably."""
+    h, w = a_img.shape[:2]
+    s = size / max(h, w)
+    sw, sh = max(8, int(round(w * s))), max(8, int(round(h * s)))
+    ga = cv2.cvtColor(cv2.resize(a_img, (sw, sh), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+    gb = cv2.cvtColor(cv2.resize(b_img, (sw, sh), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+    busy = cv2.resize((a_mask | b_mask).view(np.uint8), (sw, sh), interpolation=cv2.INTER_NEAREST)
+    free = cv2.erode((1 - busy).astype(np.uint8), np.ones((5, 5), np.uint8))
+    pts = cv2.goodFeaturesToTrack(ga, 400, 0.01, 6, mask=free)
+    if pts is None or len(pts) < 12:
+        return None
+    nb, ok, _ = cv2.calcOpticalFlowPyrLK(ga, gb, pts, None, winSize=(21, 21), maxLevel=3)
+    ok = ok.ravel() == 1
+    if ok.sum() < 12:
+        return None
+    H, inl = cv2.findHomography(pts[ok], nb[ok], cv2.RANSAC, 2.0)
+    if H is None or inl is None or inl.sum() < 10:
+        return None
+    S = np.diag([s, s, 1.0])
+    return np.linalg.inv(S) @ H @ S
 
 
 def is_static(frames, final_dir, prot_dir, lo, hi, samples=12, max_shift=1.0, max_diff=7.0):
@@ -1414,7 +1644,8 @@ def inpaint(frames, final_dir, flags, work, pp_dir, ranges, w, h, max_side=960, 
 
 
 def _inpainted_frame(g, chs, results, overlap, size):
-    acc, wsum = None, 0.0
+    """The painted frame g (uint8); where two painted pieces overlap they are cross-faded."""
+    imgs, wts = [], []
     for c, (a, b, sa, sb) in enumerate(chs):
         if not (a <= g < b) or c not in results:
             continue
@@ -1425,21 +1656,28 @@ def _inpainted_frame(g, chs, results, overlap, size):
             wgt *= min(1.0, (b - g) / (overlap + 1))
         folder, ext = results[c]
         if isinstance(folder, str) and folder == "plate":  # steady camera: clean background
-            img = ext.astype(np.float32)
+            img = np.asarray(ext)
+            if img.dtype != np.uint8:
+                img = np.clip(img + 0.5, 0, 255).astype(np.uint8)
         else:
             img = cv2.imread(os.path.join(folder, f"{g - a:04d}{ext}"))
             if (img.shape[1], img.shape[0]) != tuple(size):
                 img = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
-            img = img.astype(np.float32)
-        acc = img * wgt if acc is None else acc + img * wgt
-        wsum += wgt
-    return acc / wsum
+        imgs.append(img)
+        wts.append(wgt)
+    if len(imgs) == 1:
+        return imgs[0]
+    out, tot = imgs[0], wts[0]
+    for img, wgt in zip(imgs[1:], wts[1:]):
+        out = cv2.addWeighted(out, tot / (tot + wgt), img, wgt / (tot + wgt), 0)
+        tot += wgt
+    return out
 
 
 def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo, hi, w, h,
               overlap=16, feather_px=9, stages=None):
     """Final frames of the part: the painted background blended in where people were removed.
-    Several frames are prepared at once in threads; they are written in order."""
+    Several frames are prepared at once in threads (OpenCV releases the GIL); written in order."""
     def make(g):
         orig = cv2.imread(frames[g])
         if not flags.get(g):
@@ -1447,25 +1685,36 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
         # blend only around the removed area (fast), matching the frame's brightness
         inp = _inpainted_frame(g, chs, results, overlap, (w, h))
         mb = _read_mask(final_dir, g)
+        if not mb.any():
+            return orig
         x1, y1, x2, y2 = (int(v) for v in _bbox(mb))
         pd = 4 * feather_px + 2
         x1, y1, x2, y2 = max(0, x1 - pd), max(0, y1 - pd), min(w, x2 + pd), min(h, y2 + pd)
         mm = mb[y1:y2, x1:x2]
-        m = mm.astype(np.float32)
-        a = np.maximum(cv2.GaussianBlur(m, (0, 0), feather_px), m) if feather_px > 0 else m
+        m8 = mm.view(np.uint8)
+        if feather_px > 0:  # soft edge outside the removed area, computed at 1/4 size
+            sh_, sw_ = max(1, (y2 - y1) // 4), max(1, (x2 - x1) // 4)
+            sm = cv2.resize(m8.astype(np.float32), (sw_, sh_), interpolation=cv2.INTER_AREA)
+            sm = cv2.GaussianBlur(sm, (0, 0), feather_px / 4)
+            a = cv2.resize(sm, (x2 - x1, y2 - y1), interpolation=cv2.INTER_LINEAR)
+            a = cv2.max(a, m8.astype(np.float32))
+        else:
+            a = m8.astype(np.float32)
         pr = _read_mask(prot_dir, g)[y1:y2, x1:x2]
         a[pr] = 0.0
-        o = orig[y1:y2, x1:x2].astype(np.float32)
+        o = orig[y1:y2, x1:x2]
         f = inp[y1:y2, x1:x2]
-        ring = (cv2.dilate(mm.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0) & ~mm & ~pr
-        if ring.sum() > 50:
-            f = f * np.clip((o[ring].mean(0) + 1) / (f[ring].mean(0) + 1), 0.85, 1.18)
+        ring = cv2.dilate(m8, np.ones((9, 9), np.uint8)) & ~m8 & ~pr.view(np.uint8)
+        if cv2.countNonZero(ring) > 50:
+            mo, mf = cv2.mean(o, mask=ring)[:3], cv2.mean(f, mask=ring)[:3]
+            gain = np.clip((np.array(mo) + 1) / (np.array(mf) + 1), 0.85, 1.18)
+            if np.abs(gain - 1).max() > 0.004:
+                f = cv2.transform(f, np.diag(gain).astype(np.float32))
         orig = orig.copy()
-        orig[y1:y2, x1:x2] = np.clip(o * (1 - a[..., None]) + f * a[..., None] + 0.5, 0,
-                                     255).astype(np.uint8)
+        orig[y1:y2, x1:x2] = cv2.blendLinear(f, o, a, 1.0 - a)
         return orig
 
-    wr = FFWriter(out_mp4, w, h, fps)
+    wr = FFWriter(out_mp4, w, h, fps, crf=13, preset="veryfast")
     pool = ThreadPoolExecutor(max(1, min(3, (os.cpu_count() or 2) // 4)))
     futs, nxt = {}, lo
     for g in range(lo, hi):
@@ -2184,6 +2433,7 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     grow_eff = grow * opts.get("grow_mult", 1.0)
     lv = _fill_level(st, opts)
     stride = lv[4] if len(lv) > 4 else 1
+    tae = bool(lv[5]) if len(lv) > 5 else False
     steps = opts.get("steps") or st.get("steps") or lv[2]
     seed = opts.get("seed", 42)
     _FILL_AREA[0] = lv[1]
@@ -2235,10 +2485,12 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     preview = _IO.submit(make_preview, video, d["final"], d["protect"], chk, fps, a, b,
                          labels.get, w, h)
     S.done()
+    if WORKER and DEVICE == "cuda":  # tracking memory back to the GPU pool for the painting
+        torch.cuda.empty_cache()
     return dict(a=a, b=b, video=video, w=w, h=h, fps=fps, us=us, ranges=ranges, opts=opts,
                 preview=preview,
                 steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags,
-                stride=stride)
+                stride=stride, tae=tae)
 
 
 def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
@@ -2267,6 +2519,12 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
         if use_ai:
             try:
                 filler, close_it = _get_filler()
+                if hasattr(filler, "use_tae"):
+                    try:
+                        filler.use_tae(ctx.get("tae", False))
+                    except Exception:  # tiny decoder not available: the normal one is used
+                        traceback.print_exc()
+                        filler.use_tae(False)
             except Exception as e:  # missing model, download problem ... -> fast fill instead
                 traceback.print_exc()
                 log(f"  realistic fill unavailable ({e.__class__.__name__}); using the fast fill")
@@ -2276,7 +2534,8 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
         done_moving = False
         if moving and filler is not None:
             k = ctx.get("stride", 1)
-            for win in ((81 * k, 49 * k, 25 * k) if big_gpu() else (49 * k, 25 * k)):
+            # 49 painted frames per piece: 81 at 832x480 ran out of memory with 3 parts at once
+            for win in (49 * k, 25 * k, 13 * k):
                 try:
                     if ctx.get("mm_prev") is None:
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
@@ -2504,7 +2763,7 @@ def learned_defaults(fb_dir):
         notes.append("finds more people")
     if sm:
         notes.append("more careful painting")
-    return dict(grow=round(GROW * 1.25 ** e, 4), conf=max(0.12, 0.2 - 0.04 * min(pz, 2)),
+    return dict(grow=round(GROW * 1.25 ** e, 4), conf=max(0.10, 0.15 - 0.025 * min(pz, 2)),
                 extra_steps=4 * min(sm, 2), notes=notes, counts=counts)
 
 

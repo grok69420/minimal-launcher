@@ -31,20 +31,33 @@ clothing); SAM 2 tracks people pixel-accurately. Removed areas are filled in two
 - **Steady camera** (tripod, interview, presentation): the empty background is assembled
   from the moments each spot was uncovered - sharp, no flicker, and fast. Spots that were
   never uncovered are painted by AI.
-- **Moving camera**: AI-generated background (MiniMax-Remover, zoomed in on small areas for
-  sharpness; ProPainter as the fast or fallback fill).
+- **Moving camera**: AI-generated background (MiniMax-Remover at its own size, 832x480 - smaller
+  sizes made a checkerboard pattern; ProPainter as the fallback). The faster levels paint every
+  2nd or 3rd frame; the frames between are the painted frames moved along with the camera
+  (measured on the background), then cross-faded - no smearing.
 
-**Speed:** on a Colab A100 a 4.6-minute music video with a dozen dancers to remove took
-13.5 minutes in total (measured). Parts are processed three at a time, and the background
-painting quality is chosen automatically so the whole job finishes in about 15 minutes
-(choose *Sharpest background* under More options for the best painting, which takes longer).
+**Finding people:** the scan looks at every frame at 1280 pixels and keeps people who overlap
+in crowds; on 7 sample frames of a crowded music video it found 184 people where the previous
+version found 100.
+
+**Speed (measured on a Colab A100, 4.6-minute music video with up to 30+ dancers):** 14.3
+minutes of processing (scan 3.5 min, finding the person 1.3 min, removing and painting 9.6
+min, three parts at a time). Add the setup and upload: the app opens while the AI models are
+still downloading, and the scan starts as soon as the upload is finished. The background
+painting level is chosen automatically to finish as soon as possible; choose *Sharpest
+background* under More options for every frame painted with extra care (takes longer).
+
+**Limits:** where a crowd covers the background in every frame of a shot, there is no real
+background to recover - the painted area is invented and looks soft there. Steady shots and
+shots with a few people come out much cleaner.
 
 After each part a **self-check** looks for people who should be gone and fixes the part once
 automatically; anything still found is pointed out on the finished screen. Everything else
 keeps the original pixels, resolution and audio. The finished screen shows how long each
 step took.
 
-Engines: YOLO11, SAM 2.1, InsightFace, MiniMax-Remover, ProPainter.
+Engines: YOLO11, SAM 2.1, InsightFace, MiniMax-Remover (with the TAEHV tiny decoder),
+ProPainter.
 
 ## Files
 - `Keep_One_Person.ipynb` - one-button Colab notebook
@@ -57,6 +70,7 @@ Engines: YOLO11, SAM 2.1, InsightFace, MiniMax-Remover, ProPainter.
 - InsightFace pretrained face models: non-commercial research use only.
 - Ultralytics YOLO11: AGPL-3.0.
 - SAM 2: Apache 2.0.
+- TAEHV (tiny decoder): MIT.
 
 Commercial use of videos made with this tool would need commercial licences for these
 components.
