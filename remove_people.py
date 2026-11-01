@@ -397,7 +397,7 @@ class Video:
 class FFWriter:
     """Pipe BGR frames into ffmpeg (H.264), optionally muxing audio from `audio_src`."""
 
-    def __init__(self, path, w, h, fps, audio_src=None, crf=16, duration=None):
+    def __init__(self, path, w, h, fps, audio_src=None, crf=16, duration=None, preset="fast"):
         cmd = ["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
                "-s", f"{w}x{h}", "-r", str(fps), "-i", "-"]
         if audio_src:
@@ -406,7 +406,7 @@ class FFWriter:
             if duration:  # video length decides; audio is trimmed to it, never the reverse
                 cmd += ["-t", f"{duration:.3f}"]
         cmd += ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264",
-                "-preset", "fast", "-crf", str(crf), "-pix_fmt", "yuv420p",
+                "-preset", preset, "-crf", str(crf), "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart", path]
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
@@ -671,7 +671,8 @@ def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, l
     best matches the tracked person is skipped, all others go into the removal mask
     (and into an instance-label image used to seed tracking)."""
     for d in (raw_dir, prot_dir, inst_dir):
-        os.makedirs(d, exist_ok=True)
+        if d:
+            os.makedirs(d, exist_ok=True)
     seg, nxt = {}, None
 
     def load(ks):
@@ -700,10 +701,11 @@ def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, l
                     other |= m
                     inst.append(m)
         other &= ~prot
-        lab = np.zeros(tgt.shape, np.uint8)
-        for k, m in enumerate(sorted(inst, key=lambda x: -x.sum())[:254]):
-            lab[m & ~prot] = k + 1
-        _PENDING[_mpath(inst_dir, i)] = _IO.submit(cv2.imwrite, _mpath(inst_dir, i), lab)
+        if inst_dir:  # instance labels: only needed when every other person is tracked too
+            lab = np.zeros(tgt.shape, np.uint8)
+            for k, m in enumerate(sorted(inst, key=lambda x: -x.sum())[:254]):
+                lab[m & ~prot] = k + 1
+            _PENDING[_mpath(inst_dir, i)] = _IO.submit(cv2.imwrite, _mpath(inst_dir, i), lab)
         _write_mask(raw_dir, i, other)
         _write_mask(prot_dir, i, prot)
         if stages:
@@ -799,7 +801,7 @@ def preview_size(w, h, max_side=720):
 def make_preview(frames, final_dir, prot_dir, out_mp4, fps, lo, hi, label, w, h):
     """Red = will be erased, green = kept person. Check this before trusting the result."""
     pw, ph = preview_size(w, h)
-    wr = FFWriter(out_mp4, pw, ph, fps, crf=23)
+    wr = FFWriter(out_mp4, pw, ph, fps, crf=23, preset="ultrafast")
     for i in range(lo, hi):
         img = cv2.resize(cv2.imread(frames[i]), (pw, ph), interpolation=cv2.INTER_AREA)
         rm = cv2.resize(_read_mask(final_dir, i).astype(np.uint8), (pw, ph)) > 0
@@ -2151,7 +2153,8 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
         os.makedirs(d["tracked"], exist_ok=True)
         _track_extra(st, vid_pred, video, "extra", us, work, d["tracked"], minus=d["protect"])
     else:
-        mask_others(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], d["inst"], a, b,
+        mask_others(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"],
+                    d["inst"] if opts.get("track_all") else None, a, b,
                     stages=S, segs=st.get("_segs"))
         S.start(2)
         if opts.get("track_all"):  # slow: SAM 2 follows every other person
