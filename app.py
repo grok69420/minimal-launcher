@@ -242,7 +242,10 @@ def _done_text(st):
     lines = ["### ✅ Finished!", where]
     t = st.get("timings") or {}
     if t.get("parts_done"):
-        lines.append(f"⏱ Took **{_took(t['total'])}** for {_took(st['n'] / fps)} of video.")
+        prep = sum((st.get("prep") or {}).values())
+        par = f", {t['workers']} parts at the same time" if t.get("workers", 1) > 1 else ""
+        lines.append(f"⏱ Took **{_took(prep + t['total'])}** for {_took(st['n'] / fps)} of video "
+                     f"(preparing {_took(prep)}, removing {_took(t['total'])}{par}).")
     sc = list((st.get("selfcheck") or {}).values())
     left = sorted(g for r in sc for g in r.get("left", []))
     if left:
@@ -253,7 +256,8 @@ def _done_text(st):
         lines.append("🔎 The self-check found leftover people and fixed them automatically.")
     elif sc:
         lines.append("🔎 Self-check: no leftover people found.")
-    steps = {k: v for k, v in t.items() if k not in ("total", "parts_done") and v >= 1}
+    steps = {k: v for k, v in t.items() if k not in ("total", "parts_done", "workers") and v >= 1}
+    steps.update({k: v for k, v in (st.get("prep") or {}).items() if v >= 1})
     if steps:
         lines.append("<small>Time per step: " + " · ".join(
             f"{k.lower()} {_took(v)}" for k, v in sorted(steps.items(), key=lambda kv: -kv[1]))
@@ -383,7 +387,8 @@ def on_next1(video, path, start, end, photos=None, fill=None, mode=None, progres
         ld = rp.learned_defaults(fb_dir())  # adapts to the corrections you made before
         st = rp.create_job(src, jobs_root(), CACHE, start or 0, end or 0, preset, ld["conf"],
                            PART_SECONDS)
-        st["grow"], st["steps"] = ld["grow"], ld["steps"]
+        st["grow"] = ld["grow"]
+        st["steps"] = (rp.FILL_STEPS[preset] + ld["extra_steps"]) if ld["extra_steps"] else None
         st["fill"] = "fast" if (fill or "").startswith("Fast") else "realistic"
         st["mode"] = "remove" if (mode or "").startswith("Remove") else "keep"
         st["out_dir"] = out_root()

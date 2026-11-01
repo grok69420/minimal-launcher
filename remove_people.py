@@ -13,6 +13,7 @@ Short clips and long videos (music videos, presentations, scene compilations):
   6. join        : parts joined losslessly, original audio added
 """
 import contextlib
+import fcntl
 import glob
 import json
 import os
@@ -23,6 +24,7 @@ import subprocess
 import sys
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -32,6 +34,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 if DEVICE == "cuda":  # faster maths on A100 / L4 at no visible quality cost
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.benchmark = True  # faster 3D convolutions in the fill model
 
 
 def big_gpu():
@@ -48,7 +51,12 @@ PRESETS = {
     "Balanced": dict(sam2="base_plus", det="yolo11x.pt", det_imgsz=960, pp_max_side=854),
     "Fast": dict(sam2="small", det="yolo11m.pt", det_imgsz=640, pp_max_side=640),
 }
-PART_SECONDS = 90.0
+PART_SECONDS = 45.0
+PAD = 3                # frames of temporal carry-over of the removal masks
+WORKER = False         # True inside a parallel worker process
+OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
+FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
+FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
 JOB_FILE = "job.pkl"
 
 # ---------------------------------------------------------------- logging / progress
@@ -94,6 +102,7 @@ class Stages:
         return f"Part {self.outer[0] + 1}/{self.outer[1]} · " if self.outer else ""
 
     def start(self, i):
+        flush_masks()
         self.done()
         self._t = time.time()
         self.i = i
@@ -124,13 +133,38 @@ def _mpath(d, i):
     return os.path.join(d, f"{i:06d}.png")
 
 
+_IO = ThreadPoolExecutor(6)  # disk writes run beside the GPU work
+_PENDING = {}
+
+
 def _read_mask(d, i):
-    return cv2.imread(_mpath(d, i), cv2.IMREAD_GRAYSCALE) > 127
+    p = _mpath(d, i)
+    f = _PENDING.get(p)
+    if f is not None:
+        f.result()
+    return cv2.imread(p, cv2.IMREAD_GRAYSCALE) > 127
+
+
+def _write_now(p, m):
+    cv2.imwrite(p, m.astype(np.uint8) * 255, [cv2.IMWRITE_PNG_COMPRESSION, 1])
 
 
 def _write_mask(d, i, m):
-    cv2.imwrite(_mpath(d, i), m.astype(np.uint8) * 255, [cv2.IMWRITE_PNG_COMPRESSION, 1])
+    p = _mpath(d, i)
+    old = _PENDING.pop(p, None)
+    if old is not None:
+        old.result()
+    _PENDING[p] = _IO.submit(_write_now, p, m)
+    if len(_PENDING) > 512:
+        flush_masks()
     _live_view(d, i, m)
+
+
+def flush_masks():
+    """Wait until all masks are on disk."""
+    for f in list(_PENDING.values()):
+        f.result()
+    _PENDING.clear()
 
 
 _PV = {"t": 0.0, "video": None, "remove": False}
@@ -383,7 +417,11 @@ def make_units(shots, parts):
 
 
 # ---------------------------------------------------------------- SAM 2
+_SAM2_DIR = [None]
+
+
 def load_sam2(sam2_dir, size="large", ckpt=None):
+    _SAM2_DIR[0] = sam2_dir
     if sam2_dir not in sys.path:
         sys.path.insert(0, sam2_dir)
     from sam2.build_sam import build_sam2, build_sam2_video_predictor
@@ -462,7 +500,8 @@ def _track_seq(pred, frames, idxs, seeds, tmp, on_frame):
         os.symlink(os.path.abspath(frames[g]), os.path.join(tmp, f"{j:05d}.jpg"))
     with torch.inference_mode(), _autocast():
         off = not big_gpu()
-        st = pred.init_state(tmp, offload_video_to_cpu=off, offload_state_to_cpu=off)
+        st = pred.init_state(tmp, offload_video_to_cpu=off or OFFLOAD_VIDEO,
+                             offload_state_to_cpu=off, async_loading_frames=True)
         for k, (kind, arr) in enumerate(seeds):
             if kind == "box":
                 pred.add_new_points_or_box(st, frame_idx=0, obj_id=k + 1, box=arr)
@@ -506,6 +545,7 @@ def track_target(pred, frames, seed_idx, box, out_dir, tmp, lo, hi, chunk=200, m
             _track_seq(pred, frames, idxs, [seed["s"]], tmp, on_frame)
             pos += chunk - 1
     shutil.rmtree(tmp, ignore_errors=True)
+    flush_masks()
 
 
 def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, lo, hi,
@@ -515,11 +555,18 @@ def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, l
     (and into an instance-label image used to seed tracking)."""
     for d in (raw_dir, prot_dir, inst_dir):
         os.makedirs(d, exist_ok=True)
-    seg = {}
+    seg, nxt = {}, None
+
+    def load(ks):
+        return ks, [cv2.imread(frames[k]) for k in ks]
+
     for i in range(lo, hi):
-        if i not in seg:
+        if i not in seg:  # the next frames are read from disk while the GPU works
             ks = list(range(i, min(hi, i + SEG_BATCH)))
-            got = segment_frames(img_pred, [cv2.imread(frames[k]) for k in ks], [boxes[k] for k in ks])
+            imgs = nxt.result()[1] if nxt is not None and nxt.result()[0] == ks else load(ks)[1]
+            nk = list(range(ks[-1] + 1, min(hi, ks[-1] + 1 + SEG_BATCH)))
+            nxt = _IO.submit(load, nk) if nk else None
+            got = segment_frames(img_pred, imgs, [boxes[k] for k in ks])
             seg = dict(zip(ks, got))
         tgt = _read_mask(tgt_dir, i)
         other = np.zeros_like(tgt)
@@ -539,11 +586,12 @@ def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, l
         lab = np.zeros(tgt.shape, np.uint8)
         for k, m in enumerate(sorted(inst, key=lambda x: -x.sum())[:254]):
             lab[m & ~prot] = k + 1
-        cv2.imwrite(_mpath(inst_dir, i), lab)
+        _PENDING[_mpath(inst_dir, i)] = _IO.submit(cv2.imwrite, _mpath(inst_dir, i), lab)
         _write_mask(raw_dir, i, other)
         _write_mask(prot_dir, i, prot)
         if stages:
             stages.step(i - lo + 1, hi - lo)
+    flush_masks()
 
 
 def track_others(pred, frames, inst_dir, prot_dir, out_dir, tmp, ranges, chunk=60,
@@ -592,6 +640,7 @@ def track_others(pred, frames, inst_dir, prot_dir, out_dir, tmp, ranges, chunk=6
                 carried = [(last["m"][k], seeds[k][1]) for k in range(len(seeds))]
         if stages:
             stages.step(si + 1, len(ranges))
+    flush_masks()
     shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -621,6 +670,7 @@ def finalize_masks(raw_dir, trk_dir, prot_dir, final_dir, ranges, pad_t=2, grow_
             u &= ~_read_mask(prot_dir, i)
             _write_mask(final_dir, i, u)
             flags[i] = bool(u.any())
+    flush_masks()
     return flags
 
 
@@ -797,13 +847,19 @@ MM_CODE = os.environ.get("KOP_MM_CODE", "/content/repos/MiniMax-Remover")
 MM_WEIGHTS = os.environ.get("KOP_MM_WEIGHTS", "/content/repos/minimax_weights")
 
 
-def fill_size(w, h, area=832 * 480):
-    """Working size for the generative fill (the model was trained at 832x480)."""
+_FILL_AREA = [832 * 480]
+
+
+def fill_size(w, h, area=None):
+    """Working size for the generative fill (the model was trained at 832x480; smaller sizes
+    are faster)."""
+    area = area or _FILL_AREA[0]
     a, ref = w / h, 832 / 480
+    k = (area / (832 * 480)) ** 0.5
     if abs(a - ref) / ref < 0.06:
-        return 832, 480
+        return int(round(832 * k / 16)) * 16, int(round(480 * k / 16)) * 16
     if abs(a - 1 / ref) * ref < 0.06:
-        return 480, 832
+        return int(round(480 * k / 16)) * 16, int(round(832 * k / 16)) * 16
     return (max(16, int(round((area * a) ** 0.5 / 16)) * 16),
             max(16, int(round((area / a) ** 0.5 / 16)) * 16))
 
@@ -1194,6 +1250,8 @@ def _safe_name(src):
 
 
 def save_job(st):
+    if st.get("_worker"):
+        return
     data = {k: v for k, v in st.items() if not k.startswith("_")}
     p = os.path.join(st["job_dir"], JOB_FILE)
     with open(p + ".tmp", "wb") as f:
@@ -1228,6 +1286,7 @@ def create_job(src, jobs_root, cache_root, start=0.0, end=0.0, preset="Best", co
     os.makedirs(job_dir, exist_ok=True)
     os.makedirs(cache, exist_ok=True)
     S = Stages(["Preparing video", "Saving to job folder", "Finding scenes and people"])
+    TIMINGS.clear()
     S.start(0)
     fps, has_audio, _, _, _ = probe(src)
     master = os.path.join(cache, "master.mp4")
@@ -1255,6 +1314,9 @@ def create_job(src, jobs_root, cache_root, start=0.0, end=0.0, preset="Best", co
     save_job(st)
     _attach(st, cache_root)
     log(f"{n} frames, {len(shots)} scene(s), {len(parts)} part(s).", 1.0)
+    S.done()
+    st["prep"] = {k: round(v, 1) for k, v in TIMINGS.items()}
+    save_job(st)
     return st
 
 
@@ -1320,6 +1382,11 @@ def _seed_key(seed):
     return None if seed is None else [int(seed[0])] + [round(float(v), 1) for v in seed[1]]
 
 
+def _tmp(st, name):
+    """Scratch folder of this process (parallel workers must not share them)."""
+    return os.path.join(st["cache"], f"{name}_{os.getpid()}")
+
+
 def _ensure_target(st, vid_pred, u, seed):
     """Masks of the kept person in scene piece u (reused if already made for this seed)."""
     lo, hi, _ = st["units"][u]
@@ -1334,7 +1401,8 @@ def _ensure_target(st, vid_pred, u, seed):
     else:
         st["_video"].ensure(lo, hi)
         track_target(vid_pred, st["_video"], seed[0], seed[1], tgt,
-                     os.path.join(st["cache"], "tmp_track"), lo, hi)
+                     _tmp(st, "tmp_track"), lo, hi)
+    flush_masks()
     st["_tracked"][u] = key
 
 
@@ -1432,14 +1500,15 @@ def _ensure_removal(st, vid_pred, u):
         _write_mask(tgt, i, np.zeros((st["h"], st["w"]), bool))
     if seeds:
         st["_video"].ensure(lo, hi)
-    one = os.path.join(st["cache"], "target_one")
+    one = _tmp(st, "target_one")
     for f, box in seeds:
         shutil.rmtree(one, ignore_errors=True)
-        track_target(vid_pred, st["_video"], f, box, one, os.path.join(st["cache"], "tmp_track"),
+        track_target(vid_pred, st["_video"], f, box, one, _tmp(st, "tmp_track"),
                      lo, hi)
         for i in range(lo, hi):
             _write_mask(tgt, i, _read_mask(tgt, i) | _read_mask(one, i))
     shutil.rmtree(one, ignore_errors=True)
+    flush_masks()
     st["_tracked"][u] = key
 
 
@@ -1452,12 +1521,12 @@ def find_targets(st, reid, vid_pred, img_pred):
     S = Stages(["Learning what each person looks like", "Searching every scene"])
     S.start(0)
     refs = []
-    one = os.path.join(st["cache"], "target_one")
+    one = _tmp(st, "target_one")
     for t, (u, f, b) in enumerate(picks):
         lo, hi, _ = st["units"][u]
         st["_video"].ensure(lo, hi)
         shutil.rmtree(one, ignore_errors=True)
-        track_target(vid_pred, st["_video"], f, b, one, os.path.join(st["cache"], "tmp_track"), lo, hi)
+        track_target(vid_pred, st["_video"], f, b, one, _tmp(st, "tmp_track"), lo, hi)
         r = copy.copy(reid)
         r.reset()
         good = [i for i in range(lo, hi) if _read_mask(one, i).sum() >= 400]
@@ -1494,11 +1563,18 @@ def mask_removal(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, lo, hi, st
     every other detected person is protected (never erased)."""
     for d in (raw_dir, prot_dir):
         os.makedirs(d, exist_ok=True)
-    seg = {}
+    seg, nxt = {}, None
+
+    def load(ks):
+        return ks, [cv2.imread(frames[k]) for k in ks]
+
     for i in range(lo, hi):
-        if i not in seg:
+        if i not in seg:  # the next frames are read from disk while the GPU works
             ks = list(range(i, min(hi, i + SEG_BATCH)))
-            got = segment_frames(img_pred, [cv2.imread(frames[k]) for k in ks], [boxes[k] for k in ks])
+            imgs = nxt.result()[1] if nxt is not None and nxt.result()[0] == ks else load(ks)[1]
+            nk = list(range(ks[-1] + 1, min(hi, ks[-1] + 1 + SEG_BATCH)))
+            nxt = _IO.submit(load, nk) if nk else None
+            got = segment_frames(img_pred, imgs, [boxes[k] for k in ks])
             seg = dict(zip(ks, got))
         rem = _read_mask(tgt_dir, i)
         prot = np.zeros_like(rem)
@@ -1513,6 +1589,7 @@ def mask_removal(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, lo, hi, st
         _write_mask(prot_dir, i, prot)
         if stages:
             stages.step(i - lo + 1, hi - lo)
+    flush_masks()
 
 
 def find_person(st, reid, vid_pred, img_pred, photos=()):
@@ -1570,7 +1647,7 @@ def _part_signature(st, p, grow, pad):
             "grow": grow, "pad": pad, "preset": st["preset"], "fill": st.get("fill", "realistic")}
 
 
-def part_is_current(st, p, grow=None, pad=2):
+def part_is_current(st, p, grow=None, pad=PAD):
     if not _part_done_file(st["job_dir"], p):
         return False
     try:
@@ -1711,6 +1788,24 @@ def _track_extra(st, vid_pred, video, key, us, work, dst, minus=None):
                 _write_mask(dst, i, m)
 
 
+def _work_dir(st, p):
+    return os.path.join(st["cache"], f"part_work_{p:04d}")
+
+
+@contextlib.contextmanager
+def _gpu_lock(st):
+    """Only one parallel worker at a time runs the fill model (GPU memory)."""
+    if not WORKER:
+        yield
+        return
+    with open(os.path.join(st["cache"], "gpu_fill.lock"), "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 _FILL = {}
 
 
@@ -1738,10 +1833,12 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
     ranges = [tuple(st["units"][u][:2]) for u in us]
     opts = st.get("part_opts", {}).get(p, {})
     grow_eff = grow * opts.get("grow_mult", 1.0)
-    steps, seed = opts.get("steps") or st.get("steps"), opts.get("seed", 42)
+    steps = opts.get("steps") or st.get("steps") or FILL_STEPS.get(st["preset"], 8)
+    seed = opts.get("seed", 42)
+    _FILL_AREA[0] = FILL_AREA.get(st["preset"], 832 * 480)
     cfg = PRESETS[st["preset"]]
     pp_side = 1280 if (st["preset"] == "Best" and big_gpu()) else cfg["pp_max_side"]
-    work = os.path.join(st["cache"], "part_work")
+    work = _work_dir(st, p)
     shutil.rmtree(work, ignore_errors=True)
     d = {k: os.path.join(work, k) for k in ("raw", "protect", "inst", "tracked", "final")}
     tgt = os.path.join(st["cache"], "target")
@@ -1768,8 +1865,9 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
         mask_others(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], d["inst"], a, b,
                     stages=S)
         S.start(2)
-        track_others(vid_pred, video, d["inst"], d["protect"], d["tracked"],
-                     os.path.join(work, "tmp_track"), ranges, stages=S)
+        if opts.get("track_all"):  # slow: SAM 2 follows every other person
+            track_others(vid_pred, video, d["inst"], d["protect"], d["tracked"],
+                         os.path.join(work, "tmp_track"), ranges, stages=S)
         # people the self-check or the user pointed out
         _track_extra(st, vid_pred, video, "extra", us, work, d["tracked"], minus=d["protect"])
     S.start(3)
@@ -1796,6 +1894,8 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
     filler, close_it = None, False
     use_ai = st.get("fill", "realistic") == "realistic" or opts.get("ai")
     offload = use_ai and not big_gpu()
+    lock = _gpu_lock(st)
+    lock.__enter__()  # one fill at a time when parts run in parallel
     if offload:
         _sam2_to(vid_pred, img_pred, "cpu")  # free GPU memory for the fill model
     try:
@@ -1826,10 +1926,13 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
             filler.close()
         if offload:
             _sam2_to(vid_pred, img_pred, DEVICE)
-    if moving and not done_moving:
-        fills.append(inpaint(video, d["final"], flags, work, pp_dir, moving, w, h, pp_side,
-                             stages=S))
-        ov = 16
+    try:
+        if moving and not done_moving:
+            fills.append(inpaint(video, d["final"], flags, work, pp_dir, moving, w, h, pp_side,
+                                 stages=S))
+            ov = 16
+    finally:
+        lock.__exit__(None, None, None)
     chs, results = _merge_fills(fills)
     S.start(5)
     out = os.path.join(work, "part.mp4")
@@ -1843,7 +1946,7 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
     return viol
 
 
-def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2, self_check=True):
+def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=True):
     a, b = st["parts"][p]
     rep = {"found": 0, "fixed": 0, "left": []}
     for rnd in range(2 if self_check else 1):
@@ -1866,7 +1969,7 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2, self_check=True
             break
         rep["fixed"] = made
     st.setdefault("selfcheck", {})[p] = rep
-    work = os.path.join(st["cache"], "part_work")
+    work = _work_dir(st, p)
     _copy_atomic(os.path.join(work, "part.mp4"), _part_file(st["job_dir"], p, ".mp4"))
     _copy_atomic(os.path.join(work, "check.mp4"), _part_file(st["job_dir"], p, "_check.mp4"))
     with open(_part_file(st["job_dir"], p, ".json") + ".tmp", "w") as f:
@@ -1936,7 +2039,8 @@ def add_feedback(st, img_pred, kind, frame, x=None, y=None, text="", fb_dir=None
             set_keeper(st, img_pred, frame, x, y, reset_search=False)
         msg = "keep that person"
     elif kind == "smudge":
-        opts["steps"] = min(24, (opts.get("steps") or st.get("steps") or 8) + 6)
+        opts["steps"] = min(24, (opts.get("steps") or st.get("steps")
+                                 or FILL_STEPS.get(st["preset"], 8)) + 4)
         opts["seed"] = opts.get("seed", 42) + 1
         opts["ai"] = True
         opts["smudge"] = opts.get("smudge", 0) + 1
@@ -1975,7 +2079,164 @@ def learned_defaults(fb_dir):
     if sm:
         notes.append("more careful painting")
     return dict(grow=round(0.012 * 1.25 ** e, 4), conf=max(0.15, 0.25 - 0.05 * min(pz, 2)),
-                steps=8 + 4 * min(sm, 2), notes=notes, counts=counts)
+                extra_steps=4 * min(sm, 2), notes=notes, counts=counts)
+
+
+# ---------------------------------------------------------------- parallel parts
+def n_workers(n_todo):
+    """How many parts to process at the same time (GPU memory and CPU cores allow ~3 on an
+    A100 40 GB). KOP_WORKERS overrides."""
+    n = int(os.environ.get("KOP_WORKERS", "0") or 0)
+    if n:
+        return max(1, min(n, n_todo))
+    if DEVICE != "cuda":
+        return 1
+    mem = torch.cuda.get_device_properties(0).total_memory
+    n = 3 if mem > 35e9 else 2 if mem > 20e9 else 1
+    return max(1, min(n, n_todo, (os.cpu_count() or 2) // 2))
+
+
+def run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow):
+    """Process parts in n_w worker processes; show their combined progress and pictures;
+    merge what they changed (self-check fixes) back into the job."""
+    flush_masks()
+    c = st["cache"]
+    for f in glob.glob(os.path.join(c, "status_w*")) + glob.glob(os.path.join(c, "preview_w*")) + \
+            glob.glob(os.path.join(c, "result_*")) + glob.glob(os.path.join(c, "timings_w*")):
+        os.remove(f)
+    groups = [todo[k::n_w] for k in range(n_w)]
+    log(f"Working on {n_w} parts at the same time ...", 0.0)
+    _sam2_to(vid_pred, img_pred, "cpu")  # the workers need the GPU memory
+    procs = []
+    try:
+        for k, g in enumerate(groups):
+            lf = open(os.path.join(c, f"worker_{k}.log"), "w")
+            cmd = [sys.executable, os.path.abspath(__file__), "--worker", st["job_dir"],
+                   os.path.dirname(c), _SAM2_DIR[0] or "", pp_dir, str(grow), str(k),
+                   ",".join(str(p) for p in g)]
+            procs.append((subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT,
+                                           env=dict(os.environ, PYTHONUNBUFFERED="1")), lf))
+        shown = 0.0
+        while any(pr.poll() is None for pr, _ in procs):
+            time.sleep(1.0)
+            done = sum(1 for p in todo if os.path.exists(os.path.join(c, f"result_{p}.pkl")))
+            run, texts = 0.0, []
+            for k in range(n_w):
+                try:
+                    with open(os.path.join(c, f"status_w{k}.json")) as f:
+                        j = json.load(f)
+                except Exception:
+                    continue
+                if j.get("p") is not None and not os.path.exists(os.path.join(c, f"result_{j['p']}.pkl")):
+                    run += min(max(j.get("f", 0.0), 0.0), 1.0)
+                    texts.append(j.get("text", ""))
+            if _PROGRESS is not None:
+                try:
+                    _PROGRESS(min(0.99, (done + run) / len(todo)),
+                              f"{n_w} parts at the same time · " + " | ".join(texts[:3]))
+                except Exception:
+                    pass
+            pv = sorted(glob.glob(os.path.join(c, "preview_w*.jpg")), key=os.path.getmtime)
+            if pv and _PREVIEW is not None and os.path.getmtime(pv[-1]) > shown:
+                shown = os.path.getmtime(pv[-1])
+                img = cv2.imread(pv[-1])
+                if img is not None:
+                    try:
+                        _PREVIEW(img)
+                    except Exception:
+                        pass
+    finally:
+        for pr, lf in procs:
+            if pr.poll() is None:
+                pr.wait()
+            lf.close()
+        _sam2_to(vid_pred, img_pred, DEVICE)
+    for k, (pr, _) in enumerate(procs):
+        if pr.returncode != 0:
+            with open(os.path.join(c, f"worker_{k}.log")) as f:
+                tail = f.read()[-3000:]
+            log(f"A parallel worker stopped (code {pr.returncode}); its parts are redone one by "
+                f"one.\n{tail}")
+    for p in todo:
+        rp_ = os.path.join(c, f"result_{p}.pkl")
+        if not os.path.exists(rp_):
+            continue
+        with open(rp_, "rb") as f:
+            r = pickle.load(f)
+        for u, v in r["extra"].items():
+            st.setdefault("extra", {})[u] = v
+        if r["part_opts"] is not None:
+            st.setdefault("part_opts", {})[p] = r["part_opts"]
+        st.setdefault("selfcheck", {})[p] = r["selfcheck"]
+        st.setdefault("plate_ranges", {})[p] = r["plate_ranges"]
+    for k in range(n_w):
+        try:
+            with open(os.path.join(c, f"timings_w{k}.json")) as f:
+                for name, v in json.load(f).items():
+                    TIMINGS[name] = TIMINGS.get(name, 0.0) + v
+        except Exception:
+            pass
+    save_job(st)
+
+
+def _worker_main(job_dir, cache_root, sam2_dir, pp_dir, grow, wid, parts):
+    """One parallel worker: processes its parts with its own models."""
+    global WORKER, OFFLOAD_VIDEO
+    WORKER, OFFLOAD_VIDEO = True, True
+    if os.environ.get("KOP_PRESETS"):  # test settings handed down by the main process
+        PRESETS.update(json.loads(os.environ["KOP_PRESETS"]))
+    st = load_job(job_dir, cache_root)
+    st["_worker"] = True
+    c, n = st["cache"], len(st["parts"])
+    vid_pred, img_pred = load_sam2(sam2_dir, PRESETS[st["preset"]]["sam2"])
+    cur, last = {"p": None}, {"s": 0.0, "v": 0.0}
+
+    def _atomic_json(path, obj):
+        with open(path + ".tmp", "w") as f:
+            json.dump(obj, f)
+        os.replace(path + ".tmp", path)
+
+    def prog(frac, text):
+        if time.time() - last["s"] < 0.5 or cur["p"] is None:
+            return
+        last["s"] = time.time()
+        pf = (frac * n - cur["p"]) if frac is not None else None
+        try:
+            old = {}
+            if pf is None and os.path.exists(os.path.join(c, f"status_w{wid}.json")):
+                with open(os.path.join(c, f"status_w{wid}.json")) as f:
+                    old = json.load(f)
+            _atomic_json(os.path.join(c, f"status_w{wid}.json"),
+                         {"p": cur["p"], "f": pf if pf is not None else old.get("f", 0.0),
+                          "text": text})
+        except Exception:
+            pass
+
+    def prev(img):
+        if time.time() - last["v"] < 2.0:
+            return
+        last["v"] = time.time()
+        path = os.path.join(c, f"preview_w{wid}.jpg")
+        cv2.imwrite(path + ".tmp.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        os.replace(path + ".tmp.jpg", path)
+
+    set_progress(prog)
+    set_preview(prev)
+    _PV.update(video=st["_video"], remove=st.get("mode") == "remove")
+    for p in parts:
+        cur["p"] = p
+        process_part(st, p, vid_pred, img_pred, pp_dir, grow)
+        a, b = st["parts"][p]
+        us = [u for u, (lo, hi, _) in enumerate(st["units"]) if a <= lo and hi <= b]
+        res = {"extra": {u: st["extra"][u] for u in us if u in st.get("extra", {})},
+               "part_opts": st.get("part_opts", {}).get(p),
+               "selfcheck": st.get("selfcheck", {}).get(p),
+               "plate_ranges": st.get("plate_ranges", {}).get(p)}
+        path = os.path.join(c, f"result_{p}.pkl")
+        with open(path + ".tmp", "wb") as f:
+            pickle.dump(res, f)
+        os.replace(path + ".tmp", path)
+    _atomic_json(os.path.join(c, f"timings_w{wid}.json"), TIMINGS)
 
 
 def join_parts(st):
@@ -2009,12 +2270,16 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
         if not any(st.get("rseeds", {}).values()):
             raise ValueError("Click on the people to remove first.")
         if st.get("rauto") is None and len(st["units"]) > len(st.get("rseeds", {})):
+            t = time.time()
             find_targets(st, reid, vid_pred, img_pred)
+            st.setdefault("prep", {})["Finding the people in every scene"] = round(time.time() - t, 1)
     else:
         if not any(v is not None for v in st["seeds"].values()):
             raise ValueError("Click on the person to keep first.")
         if st["auto"] is None and len(st["units"]) > len(st["seeds"]):
+            t = time.time()
             find_person(st, reid, vid_pred, img_pred, photos)
+            st.setdefault("prep", {})["Finding your person in every scene"] = round(time.time() - t, 1)
     st["grow"] = grow
     save_job(st)
     _PV.update(video=st["_video"], remove=st.get("mode") == "remove")
@@ -2024,8 +2289,12 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
     if todo and len(todo) < len(st["parts"]):
         log(f"{len(st['parts']) - len(todo)} of {len(st['parts'])} part(s) already done; "
             f"processing {len(todo)}.")
-    for p in todo:
-        process_part(st, p, vid_pred, img_pred, pp_dir, grow)
+    n_w = n_workers(len(todo))
+    if n_w > 1:
+        run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow)
+    for p in todo:  # sequential (and whatever a parallel worker could not finish)
+        if n_w == 1 or not part_is_current(st, p, grow):
+            process_part(st, p, vid_pred, img_pred, pp_dir, grow)
     final = final_path(st["job_dir"], st)
     local = os.path.join(st["cache"], os.path.basename(final))
     if todo or not os.path.exists(final):
@@ -2037,7 +2306,13 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
         for src_, dst in ((final, out), (final_path(st["job_dir"], st, True), chk)):
             if not os.path.exists(dst):
                 _copy_atomic(src_, dst)
-    st["timings"] = dict(TIMINGS, total=time.time() - t0, parts_done=len(todo))
+    st["timings"] = dict(TIMINGS, total=time.time() - t0, parts_done=len(todo), workers=n_w)
     save_job(st)
     log(f"Done: {final}", 1.0)
     return out, chk
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "--worker":
+    _a = sys.argv[2:]
+    _worker_main(_a[0], _a[1], _a[2], _a[3], float(_a[4]), int(_a[5]),
+                 [int(x) for x in _a[6].split(",") if x])
