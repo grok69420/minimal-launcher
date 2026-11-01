@@ -739,9 +739,18 @@ class ReID:
         if use_face:
             try:
                 from insightface.app import FaceAnalysis
+                prov, ctx = ["CPUExecutionProvider"], -1
+                try:  # faces on the GPU (~15x faster) when onnxruntime-gpu is installed
+                    import onnxruntime as ort
+                    if hasattr(ort, "preload_dlls"):
+                        ort.preload_dlls()
+                    if DEVICE == "cuda" and "CUDAExecutionProvider" in ort.get_available_providers():
+                        prov, ctx = ["CUDAExecutionProvider", "CPUExecutionProvider"], 0
+                except Exception:
+                    pass
                 fa = FaceAnalysis(name="buffalo_l", allowed_modules=["detection", "recognition"],
-                                  providers=["CPUExecutionProvider"])
-                fa.prepare(ctx_id=-1, det_size=(640, 640))
+                                  providers=prov)
+                fa.prepare(ctx_id=ctx, det_size=(640, 640))
                 self.face = fa
             except Exception as e:  # never block the pipeline on the optional face model
                 log(f"  face recognition unavailable ({e}); using appearance only")
@@ -859,6 +868,10 @@ class ReID:
                                   body=self.body_sim(d)))
             if any(c["face"] is not None and c["face"] >= self.FACE_MATCH for c in cands):
                 break  # the face decides; no need to look further
+            fr = [c for c in cands if c["frame"] == i]
+            if len(fr) == 1 and fr[0]["body"] >= self.BODY_MATCH + 0.04 and \
+                    (fr[0]["face"] is None or fr[0]["face"] >= self.FACE_REJECT):
+                break  # only one person here and clearly the right clothes
         if not cands:
             return None
         faced = [c for c in cands if c["face"] is not None and c["face"] >= self.FACE_MATCH]
