@@ -69,9 +69,11 @@ FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
 # pattern, so every level paints at 832x480; the faster levels paint every 2nd / 3rd frame
 # and make the frames between by following the camera movement (no smearing).
 FILL_LEVELS = [("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
-               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True)]
-FILL_EFFICIENCY = 0.55  # share of that speed reached while the other parts use the GPU too
-TARGET_SECONDS = 15 * 60  # the whole job should take at most this long
+               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True),
+               ("fastest", 832 * 480, 6, 20.0, 4, True)]
+FILL_EFFICIENCY = 0.72  # share of that speed reached with tracking etc. sharing the GPU (measured)
+# the engine's share of the 15 minutes; the rest is starting Colab, setup, upload and clicks
+TARGET_SECONDS = 12 * 60
 JOB_FILE = "job.pkl"
 
 # ---------------------------------------------------------------- logging / progress
