@@ -1829,10 +1829,10 @@ def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.35):
                 if x2 - x1 < 4 or y2 - y1 < 4:
                     continue
                 pr = _read_mask(prot_dir, g)
+                painted = _read_mask(final_dir, g)[y1:y2, x1:x2].mean()
                 if remove_mode:
-                    if (_read_mask(final_dir, g)[y1:y2, x1:x2].mean() > 0.5
-                            and pr[y1:y2, x1:x2].mean() < 0.3):
-                        out.append((g, bx))
+                    if painted > 0.5 and pr[y1:y2, x1:x2].mean() < 0.3:
+                        out.append((g, bx, True))
                     continue
                 if pr[y1:y2, x1:x2].mean() >= 0.15:
                     continue
@@ -1840,7 +1840,8 @@ def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.35):
                     continue
                 if not pr.any() and kept_nearby(g, bx):
                     continue
-                out.append((g, bx))
+                # painted: a figure in the repainted area; else a real person left over
+                out.append((g, bx, painted >= 0.4))
         batch.clear()
         ids.clear()
 
@@ -1865,15 +1866,23 @@ def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.35):
     return out
 
 
-def _apply_self_fix(st, p, viol, max_per_unit=3):
-    """Turn self-check findings into fixes for this part. Returns how many fixes were made."""
+def _apply_self_fix(st, p, viol, max_per_unit=3, max_repaint=0.35):
+    """Turn self-check findings into fixes for this part. Left-over people are tracked and
+    removed; figures painted into the background are painted again with wider masks (only
+    when they are in a limited share of the part, to keep the time). Returns (fixes made,
+    frames to repaint)."""
     opts = st.setdefault("part_opts", {}).setdefault(p, {})
-    if st.get("mode") == "remove":  # something person-like painted in: repaint those moments
+    a, b = st["parts"][p]
+    made, repaint = 0, set()
+    pf = sorted({int(v[0]) for v in viol if v[2]})
+    if pf and len(pf) * 3 <= max_repaint * (b - a):  # self-check looks at every 3rd frame
         opts["seed"] = opts.get("seed", 42) + 1
-        return 1
-    made = 0
+        repaint = {i for g in pf for i in range(max(a, g - 12), min(b, g + 13))}
+        made += 1
     groups = {}
-    for g, bx in viol:  # same person seen in several frames -> one fix
+    for g, bx, painted in viol:  # same person seen in several frames -> one fix
+        if painted:
+            continue
         u = int(st["_unit_of"][g])
         gl = groups.setdefault(u, [])
         for grp in gl:
@@ -1889,7 +1898,7 @@ def _apply_self_fix(st, p, viol, max_per_unit=3):
             if not any(f == g and _iou(b2, bx) > 0.5 for f, b2 in cur):
                 cur.append((int(g), np.asarray(bx, np.float32)))
                 made += 1
-    return made
+    return made, repaint
 
 
 def _track_extra(st, vid_pred, video, key, us, work, dst, minus=None):
@@ -2137,26 +2146,34 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
     return viol
 
 
-def _part_remask(st, p, ctx, vid_pred, viol, grow, pad):
+def _part_remask(st, p, ctx, vid_pred, viol, grow, pad, repaint=()):
     """After the self-check: add the people it found to the existing masks; only the
     moments that changed are painted again."""
     a, b, video, w, h, d, work, us, ranges, S = (ctx[k] for k in (
         "a", "b", "video", "w", "h", "d", "work", "us", "ranges", "S"))
     opts = st.get("part_opts", {}).get(p, {})
     S.start(2)
-    if st.get("mode") == "remove":
-        changed = {i for g, _ in viol for i in range(max(a, g - 12), min(b, g + 13))}
-    else:
+    changed = set(repaint)
+    if st.get("mode") != "remove" and any(not v[2] for v in viol):
         shutil.rmtree(d["tracked"], ignore_errors=True)
         os.makedirs(d["tracked"], exist_ok=True)
         _track_extra(st, vid_pred, video, "extra", us, work, d["tracked"], minus=d["protect"])
         flush_masks()
-        changed = {i for i in range(a, b) if os.path.exists(_mpath(d["tracked"], i))
-                   and _read_mask(d["tracked"], i).any()}
+        changed |= {i for i in range(a, b) if os.path.exists(_mpath(d["tracked"], i))
+                    and _read_mask(d["tracked"], i).any()}
     S.start(3)
     grow_eff = grow * opts.get("grow_mult", 1.0)
+    grow_px = max(1, round(grow_eff * max(h, w)))
     ctx["flags"] = finalize_masks(d["raw"], d["tracked"], d["protect"], d["final"], ranges, pad,
-                                  max(1, round(grow_eff * max(h, w))))
+                                  grow_px)
+    if repaint:  # wider masks where figures were painted in (edges of people left visible)
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (grow_px + 1, grow_px + 1))
+        for i in sorted(repaint):
+            m = _read_mask(d["final"], i)
+            if m.any():
+                m = (cv2.dilate(m.astype(np.uint8), k) > 0) & ~_read_mask(d["protect"], i)
+                _write_mask(d["final"], i, m)
+        flush_masks()
     if changed:  # the check video shows the added people too
         labels = {i: unit_label(st, u).lower() for u in us for i in range(*st["units"][u][:2])}
         make_preview(video, d["final"], d["protect"], os.path.join(work, "check.mp4"), ctx["fps"],
@@ -2175,25 +2192,29 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check, ctx=None):
 def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=True, ctx=None):
     a, b = st["parts"][p]
     rep = {"found": 0, "fixed": 0, "left": []}
-    viol = []
+    viol, repaint = [], set()
     for rnd in range(2 if self_check else 1):
         if rnd == 0:
             ctx = ctx or _part_masks(st, p, vid_pred, img_pred, grow, pad)
         else:
-            ctx = _part_remask(st, p, ctx, vid_pred, viol, grow, pad)
+            ctx = _part_remask(st, p, ctx, vid_pred, viol, grow, pad, repaint)
         viol = _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check=self_check)
         if rnd == 0:
             rep["found"] = len(viol)
+            rep["painted"] = sum(1 for v in viol if v[2])
+        rep["samples"] = [(int(v[0]), [int(x) for x in v[1][:4]], bool(v[2]))
+                          for v in viol[::max(1, len(viol) // 8)][:8]]
         if not viol:
             break
-        frames = sorted({int(g) for g, _ in viol})
+        frames = sorted({int(v[0]) for v in viol})
         if rnd == 1:  # still there after the automatic fix: show to the user
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]
             log(f"  Self-check: {len(viol)} sighting(s) remain - please check them")
             break
-        made = _apply_self_fix(st, p, viol)
-        log(f"  Self-check: {len(viol)} sighting(s) of people who should be gone; "
-            f"{'fixing this part' if made else 'nothing to change'}")
+        made, repaint = _apply_self_fix(st, p, viol)
+        n_p = sum(1 for v in viol if v[2])
+        log(f"  Self-check: {len(viol) - n_p} left-over person sighting(s), {n_p} figure(s) "
+            f"painted in; {'fixing this part' if made else 'nothing to change'}")
         save_job(st)
         if not made:
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]

@@ -41,3 +41,23 @@ print(f"TOTAL {total / 60:.1f} min for {st['n'] / rp.fps_float(st['fps']) / 60:.
 print("PREP", json.dumps(st.get("prep")))
 print("STEPS", json.dumps({k: round(v) for k, v in st["timings"].items()}))
 print("SELFCHECK", json.dumps(st.get("selfcheck")))
+
+# pictures of what the self-check saw (yellow = left-over person, magenta = painted figure)
+import cv2  # noqa: E402
+import numpy as np  # noqa: E402
+tiles = []
+cap = cv2.VideoCapture(out)
+for p, r in sorted((st.get("selfcheck") or {}).items()):
+    for g, bx, painted in (r or {}).get("samples", [])[:3]:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, g)
+        ok, f = cap.read()
+        if not ok:
+            continue
+        cv2.rectangle(f, tuple(bx[:2]), tuple(bx[2:]), (255, 0, 255) if painted else (0, 255, 255), 4)
+        tiles.append(cv2.resize(f, (480, 270)))
+if tiles:
+    while len(tiles) % 3:
+        tiles.append(np.zeros_like(tiles[0]))
+    rows = [np.hstack(tiles[k:k + 3]) for k in range(0, len(tiles), 3)]
+    cv2.imwrite("/content/sightings.jpg", np.vstack(rows[:6]))
+    print("sightings picture: /content/sightings.jpg")
