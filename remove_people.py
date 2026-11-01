@@ -56,7 +56,8 @@ PRESETS = {
                  seg="yolo11m-seg.pt"),
 }
 PART_SECONDS = 30.0
-PAD = 3                # frames of temporal carry-over of the removal masks
+PAD = 4                # frames of temporal carry-over of the removal masks
+GROW = 0.016           # removal masks are widened by this share of the picture size (hair, blur)
 WORKER = False         # True inside a parallel worker process
 OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
 FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
@@ -65,7 +66,9 @@ FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
 # (fps measured on the A100 for 81-frame pieces: 3.1 / 7.9 / 14.1; "fastest" paints every
 # second frame and blends the frames between)
 FILL_LEVELS = [("sharpest", 832 * 480, 8, 3.1, 1), ("sharp", 640 * 368, 5, 7.9, 1),
-               ("fast", 512 * 288, 4, 14.0, 1), ("fastest", 512 * 288, 4, 26.0, 2)]
+               ("fast", 512 * 288, 4, 14.0, 1)]
+# ("fastest", every second frame painted, frames between blended) smeared moving
+# backgrounds - removed after feedback
 FILL_EFFICIENCY = 0.55  # share of that speed reached while the other parts use the GPU too
 TARGET_SECONDS = 15 * 60  # the whole job should take at most this long
 JOB_FILE = "job.pkl"
@@ -305,10 +308,22 @@ class TeeVideo:
         os.replace(tmp, self.out)
 
 
+MP4_AUDIO = {"aac", "mp3", "ac3", "eac3", "alac", "flac", "opus"}
+
+
 def extract_audio(src, out, start=0.0, end=0.0):
+    """The original sound, copied unchanged (no re-encoding). `out` should end in .mka."""
     r = subprocess.run(["ffmpeg", "-v", "error", "-y"] + _trim_args(start, end) +
-                       ["-i", src, "-map", "0:a:0", "-vn", "-c:a", "aac", "-b:a", "192k", out])
+                       ["-i", src, "-map", "0:a:0", "-vn", "-c:a", "copy", out])
     return out if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0 else None
+
+
+def audio_args(path):
+    """ffmpeg options to put this audio into the MP4: copied when possible, else 320k AAC."""
+    codec = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+                            "stream=codec_name", "-of", "csv=p=0", path],
+                           capture_output=True, text=True).stdout.strip()
+    return ["-c:a", "copy"] if codec in MP4_AUDIO else ["-c:a", "aac", "-b:a", "320k"]
 
 
 class Video:
@@ -397,7 +412,7 @@ class Video:
 class FFWriter:
     """Pipe BGR frames into ffmpeg (H.264), optionally muxing audio from `audio_src`."""
 
-    def __init__(self, path, w, h, fps, audio_src=None, crf=16, duration=None, preset="fast"):
+    def __init__(self, path, w, h, fps, audio_src=None, crf=14, duration=None, preset="fast"):
         cmd = ["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
                "-s", f"{w}x{h}", "-r", str(fps), "-i", "-"]
         if audio_src:
@@ -983,7 +998,8 @@ class ReID:
         mid = (lo + hi) / 2
         return sorted(idxs, key=lambda i: abs(i - mid))
 
-    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6, segs=None):
+    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6, segs=None,
+                     closeups=True):
         """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
         cands = []
         for i in self.sample_frames(lo, hi, n_samples):
@@ -992,9 +1008,13 @@ class ReID:
             img = cv2.imread(frames[i])
             masks = (outline_masks(segs[i], boxes[i], img.shape[0], img.shape[1]) if segs is not None
                      else segment_boxes(img_pred, img, boxes[i]))
+            H, W = img.shape[:2]
             for k, d in enumerate(self.describe(img, boxes[i], masks)):
-                cands.append(dict(frame=i, k=k, box=boxes[i][k], face=self.face_sim(d),
-                                  body=self.body_sim(d)))
+                b = boxes[i][k]
+                cands.append(dict(frame=i, k=k, box=b, face=self.face_sim(d), body=self.body_sim(d),
+                                  emb=d["face"], n=len(boxes[i]),
+                                  big=(b[3] - b[1]) >= 0.6 * H or
+                                  (b[2] - b[0]) * (b[3] - b[1]) >= 0.2 * W * H))
             if any(c["face"] is not None and c["face"] >= self.FACE_MATCH for c in cands):
                 break  # the face decides; no need to look further
             fr = [c for c in cands if c["frame"] == i]
@@ -1006,7 +1026,7 @@ class ReID:
         faced = [c for c in cands if c["face"] is not None and c["face"] >= self.FACE_MATCH]
         if faced:
             c = max(faced, key=lambda c: c["face"])
-            return dict(frame=c["frame"], box=c["box"], how="face", score=c["face"])
+            return dict(frame=c["frame"], box=c["box"], how="face", score=c["face"], emb=c["emb"])
         ok = [c for c in cands if c["face"] is None or c["face"] >= self.FACE_REJECT]
         if not ok:
             return None
@@ -1014,6 +1034,12 @@ class ReID:
         rivals = [o["body"] for o in cands if o["frame"] == c["frame"] and o["k"] != c["k"]]
         if c["body"] >= self.BODY_MATCH and (not rivals or c["body"] - max(rivals) >= self.BODY_MARGIN):
             return dict(frame=c["frame"], box=c["box"], how="appearance", score=c["body"])
+        # a close-up of a single person who is not clearly someone else: keep them. Erasing a
+        # face that fills the picture leaves a smear over the whole frame.
+        close = [c for c in ok if c["n"] == 1 and c["big"]] if closeups else []
+        if close:
+            c = max(close, key=lambda c: (c["box"][2] - c["box"][0]) * (c["box"][3] - c["box"][1]))
+            return dict(frame=c["frame"], box=c["box"], how="close-up", score=c["body"])
         return None
 
 
@@ -1411,7 +1437,7 @@ def _inpainted_frame(g, chs, results, overlap, size):
 
 
 def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo, hi, w, h,
-              overlap=16, feather_px=6, stages=None):
+              overlap=16, feather_px=9, stages=None):
     """Final frames of the part: the painted background blended in where people were removed.
     Several frames are prepared at once in threads; they are written in order."""
     def make(g):
@@ -1485,8 +1511,8 @@ def _attach(st, cache_root):
     if not os.path.exists(master):
         log("Copying the saved master video back from the job folder ...")
         _copy_atomic(os.path.join(st["job_dir"], "master.mp4"), master)
-    if st.get("audio") and not os.path.exists(os.path.join(st["cache"], "audio.m4a")):
-        _copy_atomic(os.path.join(st["job_dir"], "audio.m4a"), os.path.join(st["cache"], "audio.m4a"))
+    if st.get("audio") and not os.path.exists(os.path.join(st["cache"], st["audio"])):
+        _copy_atomic(os.path.join(st["job_dir"], st["audio"]), os.path.join(st["cache"], st["audio"]))
     st["_video"] = Video(master, st["fps"], st["w"], st["h"], st["cache"])
     st["_unit_of"] = np.zeros(st["n"], np.int32)
     for u, (a, b, _) in enumerate(st["units"]):
@@ -1514,7 +1540,7 @@ def create_job(src, jobs_root, cache_root, start=0.0, end=0.0, preset="Best", co
     S.start(0)
     fps, has_audio, src_dur, _, _ = probe(src)
     master = os.path.join(cache, "master.mp4")
-    audio = extract_audio(src, os.path.join(cache, "audio.m4a"), start, end) if has_audio else None
+    audio = extract_audio(src, os.path.join(cache, "audio.mka"), start, end) if has_audio else None
     tee = TeeVideo(src, master, fps, start, end)
     dur = max(0.0, (min(end, src_dur) if end else src_dur) - (start or 0))
     S.start(2)  # the master copy is written while the scan reads the same frames
@@ -1527,7 +1553,7 @@ def create_job(src, jobs_root, cache_root, start=0.0, end=0.0, preset="Best", co
     S.start(1)
     _copy_atomic(master, os.path.join(job_dir, "master.mp4"))
     if audio:
-        _copy_atomic(audio, os.path.join(job_dir, "audio.m4a"))
+        _copy_atomic(audio, os.path.join(job_dir, "audio.mka"))
     if segs is not None:
         with open(os.path.join(job_dir, OUTLINES_FILE), "wb") as f:
             pickle.dump(segs, f)
@@ -1538,8 +1564,8 @@ def create_job(src, jobs_root, cache_root, start=0.0, end=0.0, preset="Best", co
     parts = plan_parts(shots, n, max(1, int(round(part_seconds * fps_float(fps)))))
     st = dict(version=3, name=name, job_dir=job_dir, src=os.path.basename(src), start=start,
               end=end, preset=preset, conf=conf, fps=fps, n=n, w=w, h=h,
-              audio="audio.m4a" if audio else None, shots=shots, parts=parts,
-              units=make_units(shots, parts), boxes=boxes, seeds={}, auto=None, grow=0.012,
+              audio="audio.mka" if audio else None, shots=shots, parts=parts,
+              units=make_units(shots, parts), boxes=boxes, seeds={}, auto=None, grow=GROW,
               created=time.time())
     save_job(st)
     _attach(st, cache_root)
@@ -1775,7 +1801,7 @@ def find_targets(st, reid, vid_pred, img_pred):
         found = []
         for r in refs:
             res = r.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi,
-                                 segs=st.get("_segs"))
+                                 segs=st.get("_segs"), closeups=False)
             if res is None:
                 continue
             seed = (int(res["frame"]), np.asarray(res["box"], np.float32))
@@ -1839,8 +1865,11 @@ def find_person(st, reid, vid_pred, img_pred, photos=()):
     for t, u in enumerate(user):
         _ensure_target(st, vid_pred, u, st["seeds"][u])
         lo, hi, _ = st["units"][u]
-        good = [i for i in range(lo, hi) if _read_mask(tgt, i).sum() >= 400]
-        for i in [good[int(round(x))] for x in np.linspace(0, len(good) - 1, min(6, len(good)))]:
+        areas = {i: int(_read_mask(tgt, i).sum()) for i in range(lo, hi)}
+        good = [i for i in range(lo, hi) if areas[i] >= 400]
+        spread = [good[int(round(x))] for x in np.linspace(0, len(good) - 1, min(8, len(good)))]
+        largest = sorted(good, key=lambda i: -areas[i])[:4]  # biggest views show the face best
+        for i in sorted(set(spread + largest)):
             m = _read_mask(tgt, i)
             reid.add_person(cv2.imread(st["_video"][i]), _bbox(m), m)
         S.step(t + 1, len(user))
@@ -1853,6 +1882,24 @@ def find_person(st, reid, vid_pred, img_pred, photos=()):
         auto[u] = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi,
                                     segs=st.get("_segs"))
         S.step(t + 1, len(todo))
+    # second look: faces of the person found clearly in other scenes (other lighting, make-up,
+    # angles) become references too; scenes not settled by a face are searched again
+    learned = [r["emb"] for r in auto.values()
+               if r and r["how"] == "face" and r["score"] >= 0.5 and r.get("emb") is not None]
+    if learned:
+        reid.ref_faces.extend(learned[:40])
+        again = [u for u in todo if auto[u] is None or auto[u]["how"] != "face"]
+        for u in again:
+            lo, hi, _ = st["units"][u]
+            r = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi,
+                                  segs=st.get("_segs"))
+            if r is not None and (auto[u] is None or r["how"] == "face"):
+                auto[u] = r
+        log(f"  learned {len(learned)} more look(s) of your person; searched "
+            f"{len(again)} scene piece(s) again")
+    for r in auto.values():
+        if r:
+            r.pop("emb", None)
     st["auto"] = auto
     save_job(st)
     found = sum(1 for u in range(len(st["units"])) if scene_seed(st, u) is not None)
@@ -2457,7 +2504,7 @@ def learned_defaults(fb_dir):
         notes.append("finds more people")
     if sm:
         notes.append("more careful painting")
-    return dict(grow=round(0.012 * 1.25 ** e, 4), conf=max(0.15, 0.25 - 0.05 * min(pz, 2)),
+    return dict(grow=round(GROW * 1.25 ** e, 4), conf=max(0.12, 0.2 - 0.04 * min(pz, 2)),
                 extra_steps=4 * min(sm, 2), notes=notes, counts=counts)
 
 
@@ -2631,9 +2678,9 @@ def join_parts(st):
                 f.write("file '" + path.replace("'", "'\\''") + "'\n")
         local = os.path.join(st["cache"], os.path.basename(final_path(st["job_dir"], st, check)))
         cmd = ["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst]
-        audio = os.path.join(st["cache"], "audio.m4a") if st.get("audio") and not check else None
+        audio = os.path.join(st["cache"], st["audio"]) if st.get("audio") and not check else None
         if audio:
-            cmd += ["-i", audio, "-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-b:a", "192k",
+            cmd += ["-i", audio, "-map", "0:v:0", "-map", "1:a:0"] + audio_args(audio) + [
                     "-t", f"{st['n'] / fps_float(st['fps']):.3f}"]
         cmd += ["-c:v", "copy", "-movflags", "+faststart", local + ".tmp.mp4"]
         subprocess.run(cmd, check=True)
@@ -2643,9 +2690,10 @@ def join_parts(st):
     return outs[0], outs[1]
 
 
-def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
+def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=None, photos=()):
     """Erase everyone except the kept person, part by part (finished parts are skipped,
     so this also resumes an interrupted job). Returns (video, check video) paths."""
+    grow = grow or GROW
     if st.get("mode") == "remove":
         if not any(st.get("rseeds", {}).values()):
             raise ValueError("Click on the people to remove first.")

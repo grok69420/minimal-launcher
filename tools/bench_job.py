@@ -1,6 +1,6 @@
 """Developer tool: redo the newest job (same video, same choices) headless with the current
 code and print how long every step takes.
-python tools/bench_job.py [job folder]"""
+python tools/bench_job.py [job folder] [original video]"""
 import glob
 import json
 import os
@@ -16,7 +16,8 @@ OUT = "/content/kop_bench"
 old_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(
     max(glob.glob(ROOT + "/*/job.pkl"), key=os.path.getmtime))
 old = rp.load_job(old_dir, "/content/kop_cache")
-src = old["src"] if os.path.exists(old["src"]) else os.path.join(old_dir, "master.mp4")
+src = sys.argv[2] if len(sys.argv) > 2 else (
+    old["src"] if os.path.exists(old["src"]) else os.path.join(old_dir, "master.mp4"))
 print("video:", src, old["n"], "frames", old["w"], "x", old["h"], old["preset"], old.get("mode"),
       flush=True)
 shutil.rmtree(OUT, ignore_errors=True)

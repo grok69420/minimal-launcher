@@ -101,7 +101,23 @@ def fb_dir():
     return os.path.join(DRIVE_ROOT if drive_ok() else CACHE, "Feedback")
 
 
+_MLOCK = threading.Lock()
+
+
+def preload():
+    """Load the AI models in the background right after start (while the video uploads)."""
+    try:
+        models("Balanced")
+    except Exception:
+        traceback.print_exc()
+
+
 def models(preset):
+    with _MLOCK:
+        return _models(preset)
+
+
+def _models(preset):
     """SAM 2 (size depends on quality) + person recognition, loaded once and reused."""
     size = rp.PRESETS[preset]["sam2"]
     if _M.get("size") != size:
@@ -458,9 +474,9 @@ def on_click(st, i, evt: gr.SelectData):
         n = sum(len(v) for v in st.get("rseeds", {}).values())
         return st, render(st, i, mask if added else None), \
             (f"🔴 **{n} person(s) will be removed.** Click more people (also at other moments), "
-             "or press **Next**."), gr.update(interactive=n > 0)
+             "or press **Start**."), gr.update(interactive=n > 0)
     return st, render(st, i, mask), \
-        "✅ **This person (green) will be kept.** Press **Next** - or click someone else.", \
+        "✅ **This person (green) will be kept.** Press **Start** - or click someone else.", \
         gr.update(interactive=True)
 
 
@@ -468,6 +484,15 @@ def _has_choice(st):
     if is_remove(st):
         return any(st.get("rseeds", {}).values())
     return any(v is not None for v in st["seeds"].values())
+
+
+def on_go(st):
+    """Start right away: the scenes are searched as the first step of the work."""
+    _need(st)
+    if not _has_choice(st):
+        raise gr.Error("Please click on the people first.")
+    st["_go"] = True
+    return [st, gr.update(), ""] + show(3)
 
 
 def on_next2(st, progress=gr.Progress()):
@@ -540,7 +565,7 @@ def on_nobody(st, i):
 # ---------------------------------------------------------------- screen 3: working (live)
 def _remove(st):
     vid, img_pred, reid = models(st["preset"])
-    return rp.remove_others(st, reid, vid, img_pred, PP_DIR, st.get("grow", 0.012))
+    return rp.remove_others(st, reid, vid, img_pred, PP_DIR, st.get("grow") or rp.GROW)
 
 
 def on_start(st):
@@ -719,7 +744,8 @@ with gr.Blocks(title="Keep One Person") as demo:
             note1 = gr.Markdown()
             fwd_btn = gr.Button("1 second forward ▶")
         frame_sl = gr.Slider(0, 1, value=0, step=1, label="Or drag to any moment")
-        next2 = gr.Button("Next ▶", variant="primary", size="lg", interactive=False)
+        next2 = gr.Button("Start ▶", variant="primary", size="lg", interactive=False)
+        check_btn = gr.Button("Check each scene before starting (takes longer)", size="sm")
 
     with gr.Column(visible=False) as p2:
         gr.Markdown("### Step 3 · Check each scene", elem_classes="step-head")
@@ -780,7 +806,9 @@ with gr.Blocks(title="Keep One Person") as demo:
     fwd_btn.click(lambda st, i: on_move(st, i, +1), [state, frame_sl], [view, frame_sl, note1])
     frame_sl.release(on_slide, [state, frame_sl], [view, note1])
     view.select(on_click, [state, frame_sl], [state, view, head1, next2])
-    next2.click(on_next2, [state], [state, gal, head2] + steps).then(
+    next2.click(on_go, [state], [state, gal, head2] + steps).then(
+        on_maybe_start, [state], run_outs)
+    check_btn.click(on_next2, [state], [state, gal, head2] + steps).then(
         on_maybe_start, [state], run_outs)
     gal.select(on_pick_scene, [state], [fix_box, fix_view, fix_sl, fix_head, nobody_btn])
     fix_sl.release(lambda st, i: render(st, int(i)), [state, fix_sl], [fix_view])
