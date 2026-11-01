@@ -265,6 +265,44 @@ def make_master(src, out, fps, start=0.0, end=0.0):
     os.replace(tmp, out)
 
 
+class TeeVideo:
+    """Writes the master copy and hands the same frames to the scan in one decoding pass."""
+
+    def __init__(self, src, out, fps, start=0.0, end=0.0):
+        self.src, self.out, self.fps, self.start, self.end = src, out, fps, start, end
+        png = subprocess.run(["ffmpeg", "-v", "error"] + _trim_args(start, end) +
+                             ["-i", src, "-map", "0:v:0", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                              "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"],
+                             capture_output=True).stdout
+        img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+        if img is None:
+            raise RuntimeError("Could not read the video.")
+        self.h, self.w = img.shape[:2]
+
+    def stream(self):
+        tmp = self.out + ".tmp.mp4"
+        cmd = (["ffmpeg", "-v", "error", "-y"] + _trim_args(self.start, self.end) +
+               ["-i", self.src, "-filter_complex",
+                f"[0:v:0]fps={self.fps},scale=trunc(iw/2)*2:trunc(ih/2)*2,split=2[m][s]",
+                "-map", "[m]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-g", "30",
+                "-pix_fmt", "yuv420p", "-an", tmp,
+                "-map", "[s]", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"])
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=10 ** 8)
+        size = self.w * self.h * 3
+        try:
+            while True:
+                buf = p.stdout.read(size)
+                if len(buf) < size:
+                    break
+                yield np.frombuffer(buf, np.uint8).reshape(self.h, self.w, 3)
+        finally:
+            p.stdout.close()
+            rc = p.wait()
+        if rc != 0:
+            raise RuntimeError("Making the master copy failed.")
+        os.replace(tmp, self.out)
+
+
 def extract_audio(src, out, start=0.0, end=0.0):
     r = subprocess.run(["ffmpeg", "-v", "error", "-y"] + _trim_args(start, end) +
                        ["-i", src, "-map", "0:a:0", "-vn", "-c:a", "aac", "-b:a", "192k", out])
@@ -405,7 +443,8 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
 
     def flush():
         res = model.predict(buf, classes=[0], conf=conf, imgsz=imgsz, verbose=False,
-                            device=0 if DEVICE == "cuda" else "cpu", half=DEVICE == "cuda")
+                            device=0 if DEVICE == "cuda" else "cpu",
+                            quantize=16 if DEVICE == "cuda" else None)
         for r in res:
             boxes.append(r.boxes.xyxy.cpu().numpy().astype(np.float32))
             if segs is not None:
@@ -1427,20 +1466,22 @@ def create_job(src, jobs_root, cache_root, start=0.0, end=0.0, preset="Best", co
     S = Stages(["Preparing video", "Saving to job folder", "Finding scenes and people"])
     TIMINGS.clear()
     S.start(0)
-    fps, has_audio, _, _, _ = probe(src)
+    fps, has_audio, src_dur, _, _ = probe(src)
     master = os.path.join(cache, "master.mp4")
-    make_master(src, master, fps, start, end)
     audio = extract_audio(src, os.path.join(cache, "audio.m4a"), start, end) if has_audio else None
+    tee = TeeVideo(src, master, fps, start, end)
+    dur = max(0.0, (min(end, src_dur) if end else src_dur) - (start or 0))
+    S.start(2)  # the master copy is written while the scan reads the same frames
+    scores, boxes, segs = scan(tee, cfg["det"], cfg["det_imgsz"], conf,
+                               int(round(dur * fps_float(fps))), stages=S,
+                               seg_weights=cfg.get("seg"))
     _, _, dur, w, h = probe(master)
+    if (w, h) != (tee.w, tee.h):
+        raise RuntimeError(f"Master copy size {w}x{h} differs from {tee.w}x{tee.h}.")
     S.start(1)
     _copy_atomic(master, os.path.join(job_dir, "master.mp4"))
     if audio:
         _copy_atomic(audio, os.path.join(job_dir, "audio.m4a"))
-    S.start(2)
-    video = Video(master, fps, w, h, cache)
-    scores, boxes, segs = scan(video, cfg["det"], cfg["det_imgsz"], conf,
-                               int(round(dur * fps_float(fps))), stages=S,
-                               seg_weights=cfg.get("seg"))
     if segs is not None:
         with open(os.path.join(job_dir, OUTLINES_FILE), "wb") as f:
             pickle.dump(segs, f)
