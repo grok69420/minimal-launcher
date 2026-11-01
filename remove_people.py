@@ -55,7 +55,7 @@ PRESETS = {
     "Fast": dict(sam2="small", det="yolo11m.pt", det_imgsz=640, pp_max_side=640,
                  seg="yolo11m-seg.pt"),
 }
-PART_SECONDS = 45.0
+PART_SECONDS = 30.0
 PAD = 3                # frames of temporal carry-over of the removal masks
 WORKER = False         # True inside a parallel worker process
 OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
@@ -763,12 +763,25 @@ def track_others(pred, frames, inst_dir, prot_dir, out_dir, tmp, ranges, chunk=6
     shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _grow(u, grow_px, k, k2):
+    """Dilate a mask by grow_px (done at half size for large growths; same result to a pixel or
+    two, several times faster)."""
+    if grow_px < 8:
+        return cv2.dilate(u.astype(np.uint8), k) > 0
+    h, w = u.shape
+    small = cv2.resize(u.astype(np.uint8), (w // 2, h // 2), interpolation=cv2.INTER_AREA)
+    small = cv2.dilate((small > 0).astype(np.uint8), k2)
+    return (cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST) > 0) | u
+
+
 def finalize_masks(raw_dir, trk_dir, prot_dir, final_dir, ranges, pad_t=2, grow_px=15):
     """Union of detections + tracks, temporal carry-over inside the scene piece (covers
     flicker) and dilation (hair, motion blur). The kept person's pixels are never
     included. Returns {frame: needs_removal}."""
     os.makedirs(final_dir, exist_ok=True)
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * grow_px + 1, 2 * grow_px + 1))
+    g2 = grow_px // 2 + 1  # a pixel more at half size: never smaller than the full-size growth
+    k2 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * g2 + 1, 2 * g2 + 1))
     flags = {}
     for lo, hi in ranges:
         cache = {}
@@ -785,7 +798,7 @@ def finalize_masks(raw_dir, trk_dir, prot_dir, final_dir, ranges, pad_t=2, grow_
             for j in win:
                 u |= cache[j]
             if u.any() and grow_px > 0:
-                u = cv2.dilate(u.astype(np.uint8), k) > 0
+                u = _grow(u, grow_px, k, k2)
             u &= ~_read_mask(prot_dir, i)
             _write_mask(final_dir, i, u)
             flags[i] = bool(u.any())
@@ -962,7 +975,7 @@ class ReID:
         return float(np.mean(sims[:3]))
 
     @staticmethod
-    def sample_frames(lo, hi, n_samples=6):
+    def sample_frames(lo, hi, n_samples=4):
         """Frames to look at in [lo, hi): the middle first, then spread out."""
         inner = list(range(lo + 1, hi - 1)) if hi - lo > 4 else list(range(lo, hi))
         idxs = sorted(set(inner[int(round(t))] for t in
@@ -970,7 +983,7 @@ class ReID:
         mid = (lo + hi) / 2
         return sorted(idxs, key=lambda i: abs(i - mid))
 
-    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6, segs=None):
+    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=4, segs=None):
         """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
         cands = []
         for i in self.sample_frames(lo, hi, n_samples):
@@ -1898,7 +1911,7 @@ def _detector(weights):
     return _DET[weights]
 
 
-def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.45):
+def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=4, conf=0.45):
     """Self-check of a finished part: people who should not be there. Keep mode: anyone away
     from the kept person. Remove mode: a person seen where someone was removed."""
     cfg = PRESETS[st["preset"]]
@@ -1916,7 +1929,8 @@ def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.45):
         return False
 
     def flush():
-        res = det.predict(batch, classes=[0], conf=conf, imgsz=cfg["det_imgsz"], verbose=False,
+        res = det.predict(batch, classes=[0], conf=conf, imgsz=min(cfg["det_imgsz"], 640),
+                          verbose=False,
                           device=0 if DEVICE == "cuda" else "cpu")
         for g, r in zip(ids, res):
             for bx in r.boxes.xyxy.cpu().numpy().astype(np.float32):
@@ -1971,7 +1985,7 @@ def _apply_self_fix(st, p, viol, max_per_unit=3, max_repaint=0.0, min_left=3):
     a, b = st["parts"][p]
     made, repaint = 0, set()
     pf = sorted({int(v[0]) for v in viol if v[2]})
-    if pf and len(pf) * 3 <= max_repaint * (b - a):  # self-check looks at every 3rd frame
+    if pf and len(pf) * 4 <= max_repaint * (b - a):  # self-check looks at every 4th frame
         opts["seed"] = opts.get("seed", 42) + 1
         repaint = {i for g in pf for i in range(max(a, g - 12), min(b, g + 13))}
         made += 1
@@ -2171,9 +2185,11 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
         for i in range(lo, hi):
             labels[i] = unit_label(st, u).lower()
     chk = os.path.join(work, "check.mp4")
-    make_preview(video, d["final"], d["protect"], chk, fps, a, b, labels.get, w, h)
+    preview = _IO.submit(make_preview, video, d["final"], d["protect"], chk, fps, a, b,
+                         labels.get, w, h)
     S.done()
     return dict(a=a, b=b, video=video, w=w, h=h, fps=fps, us=us, ranges=ranges, opts=opts,
+                preview=preview,
                 steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags,
                 stride=stride)
 
@@ -2212,7 +2228,8 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
                                     steps=steps, seed=seed, stages=S))
         done_moving = False
         if moving and filler is not None:
-            for win in ((81, 49, 25) if big_gpu() else (49, 25)):
+            k = ctx.get("stride", 1)
+            for win in ((81 * k, 49 * k, 25 * k) if big_gpu() else (49 * k, 25 * k)):
                 try:
                     if ctx.get("mm_prev") is None:
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
@@ -2315,7 +2332,7 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=Tr
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]
             log(f"  Self-check: {len(viol)} sighting(s) remain - please check them")
             break
-        late = time.time() - st.get("t_start", time.time()) > 0.8 * TARGET_SECONDS
+        late = time.time() - st.get("t_start", time.time()) > 0.5 * TARGET_SECONDS
         made, repaint = (0, set()) if late else _apply_self_fix(st, p, viol)
         n_p = sum(1 for v in viol if v[2])
         log(f"  Self-check: {len(viol) - n_p} left-over person sighting(s), {n_p} figure(s) "
@@ -2326,6 +2343,8 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=Tr
             break
         rep["fixed"] = made
     st.setdefault("selfcheck", {})[p] = rep
+    if ctx.get("preview") is not None:
+        ctx["preview"].result()  # check video finished
     work = _work_dir(st, p)
     _copy_atomic(os.path.join(work, "part.mp4"), _part_file(st["job_dir"], p, ".mp4"))
     _copy_atomic(os.path.join(work, "check.mp4"), _part_file(st["job_dir"], p, "_check.mp4"))
