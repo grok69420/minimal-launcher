@@ -48,9 +48,12 @@ SAM2_MODELS = {
     "tiny": ("sam2.1_hiera_tiny.pt", "configs/sam2.1/sam2.1_hiera_t.yaml"),
 }
 PRESETS = {
-    "Best": dict(sam2="large", det="yolo11x.pt", det_imgsz=1280, pp_max_side=960),
-    "Balanced": dict(sam2="base_plus", det="yolo11x.pt", det_imgsz=960, pp_max_side=854),
-    "Fast": dict(sam2="small", det="yolo11m.pt", det_imgsz=640, pp_max_side=640),
+    "Best": dict(sam2="large", det="yolo11x.pt", det_imgsz=1280, pp_max_side=960,
+                 seg="yolo11x-seg.pt"),
+    "Balanced": dict(sam2="base_plus", det="yolo11x.pt", det_imgsz=960, pp_max_side=854,
+                     seg="yolo11x-seg.pt"),
+    "Fast": dict(sam2="small", det="yolo11m.pt", det_imgsz=640, pp_max_side=640,
+                 seg="yolo11m-seg.pt"),
 }
 PART_SECONDS = 45.0
 PAD = 3                # frames of temporal carry-over of the removal masks
@@ -377,17 +380,37 @@ class FFWriter:
 
 
 # ---------------------------------------------------------------- scan: scenes + people
-def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None):
-    """One streaming pass: colour-change score per frame (for scene cuts) + person boxes."""
+def _poly(p):
+    p = np.asarray(p, np.float32).reshape(-1, 1, 2)
+    if len(p) > 8:
+        p = cv2.approxPolyDP(p, 1.0, True)
+    return np.round(p.reshape(-1, 2)).astype(np.int16)
+
+
+def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_weights=None):
+    """One streaming pass: colour-change score per frame (for scene cuts) + person boxes
+    (+ person outlines when a segmentation model is given). Returns (scores, boxes, outlines
+    or None)."""
     from ultralytics import YOLO
-    model = YOLO(det_weights)
+    model = None
+    if seg_weights:
+        try:
+            model = YOLO(seg_weights)
+        except Exception as e:  # not downloadable -> boxes only, outlines made later
+            log(f"  outline model unavailable ({e.__class__.__name__}); using boxes only")
+    segs = [] if model is not None else None
+    model = model or YOLO(det_weights)
     batch = batch or (32 if DEVICE == "cuda" else 4)
     scores, boxes, buf, prev = [], [], [], None
 
     def flush():
         res = model.predict(buf, classes=[0], conf=conf, imgsz=imgsz, verbose=False,
                             device=0 if DEVICE == "cuda" else "cpu", half=DEVICE == "cuda")
-        boxes.extend(r.boxes.xyxy.cpu().numpy().astype(np.float32) for r in res)
+        for r in res:
+            boxes.append(r.boxes.xyxy.cpu().numpy().astype(np.float32))
+            if segs is not None:
+                xy = r.masks.xy if r.masks is not None else []
+                segs.append([_poly(p) for p in xy])
         buf.clear()
 
     for i, fr in enumerate(video.stream()):
@@ -402,7 +425,21 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None):
                 stages.step(i + 1, max(n_est, i + 1))
     if buf:
         flush()
-    return np.asarray(scores, np.float32), boxes
+    return np.asarray(scores, np.float32), boxes, segs
+
+
+def outline_masks(polys, boxes, h, w):
+    """Person masks from the outlines found while scanning (box if an outline is missing)."""
+    out = []
+    for k, b in enumerate(boxes):
+        m = np.zeros((h, w), np.uint8)
+        p = polys[k] if polys is not None and k < len(polys) else None
+        if p is not None and len(p) >= 3:
+            cv2.fillPoly(m, [p.reshape(-1, 1, 2).astype(np.int32)], 1)
+        if not m.any():
+            m[max(0, int(b[1])):int(b[3]), max(0, int(b[0])):int(b[2])] = 1
+        out.append(m > 0)
+    return out
 
 
 def shots_from_scores(score, min_len=4, ratio=3.0, min_score=12.0, win=4):
@@ -579,8 +616,16 @@ def track_target(pred, frames, seed_idx, box, out_dir, tmp, lo, hi, chunk=200, m
     flush_masks()
 
 
+def _segment(img_pred, frames, boxes, segs, ks, imgs):
+    """Masks of the detected people in frames ks: scan outlines, else SAM 2."""
+    if segs is not None:
+        return [outline_masks(segs[k], boxes[k], imgs[j].shape[0], imgs[j].shape[1])
+                for j, k in enumerate(ks)]
+    return segment_frames(img_pred, imgs, [boxes[k] for k in ks])
+
+
 def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, lo, hi,
-                keep_thr=0.3, stages=None):
+                keep_thr=0.3, stages=None, segs=None):
     """Per frame in [lo, hi): segment every detected person; the single detection that
     best matches the tracked person is skipped, all others go into the removal mask
     (and into an instance-label image used to seed tracking)."""
@@ -597,7 +642,7 @@ def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, l
             imgs = nxt.result()[1] if nxt is not None and nxt.result()[0] == ks else load(ks)[1]
             nk = list(range(ks[-1] + 1, min(hi, ks[-1] + 1 + SEG_BATCH)))
             nxt = _IO.submit(load, nk) if nk else None
-            got = segment_frames(img_pred, imgs, [boxes[k] for k in ks])
+            got = _segment(img_pred, frames, boxes, segs, ks, imgs)
             seg = dict(zip(ks, got))
         tgt = _read_mask(tgt_dir, i)
         other = np.zeros_like(tgt)
@@ -861,14 +906,15 @@ class ReID:
         mid = (lo + hi) / 2
         return sorted(idxs, key=lambda i: abs(i - mid))
 
-    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6):
+    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6, segs=None):
         """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
         cands = []
         for i in self.sample_frames(lo, hi, n_samples):
             if not len(boxes[i]):
                 continue
             img = cv2.imread(frames[i])
-            masks = segment_boxes(img_pred, img, boxes[i])
+            masks = (outline_masks(segs[i], boxes[i], img.shape[0], img.shape[1]) if segs is not None
+                     else segment_boxes(img_pred, img, boxes[i]))
             for k, d in enumerate(self.describe(img, boxes[i], masks)):
                 cands.append(dict(frame=i, k=k, box=boxes[i][k], face=self.face_sim(d),
                                   body=self.body_sim(d)))
@@ -1322,6 +1368,9 @@ def save_job(st):
     os.replace(p + ".tmp", p)
 
 
+OUTLINES_FILE = "outlines.pkl"
+
+
 def _attach(st, cache_root):
     st["cache"] = os.path.join(cache_root, st["name"])
     os.makedirs(st["cache"], exist_ok=True)
@@ -1336,6 +1385,11 @@ def _attach(st, cache_root):
     for u, (a, b, _) in enumerate(st["units"]):
         st["_unit_of"][a:b] = u
     st["_tracked"] = {}
+    st["_segs"] = None
+    op = os.path.join(st["job_dir"], OUTLINES_FILE)
+    if os.path.exists(op):
+        with open(op, "rb") as f:
+            st["_segs"] = pickle.load(f)
     return st
 
 
@@ -1362,8 +1416,12 @@ def create_job(src, jobs_root, cache_root, start=0.0, end=0.0, preset="Best", co
         _copy_atomic(audio, os.path.join(job_dir, "audio.m4a"))
     S.start(2)
     video = Video(master, fps, w, h, cache)
-    scores, boxes = scan(video, cfg["det"], cfg["det_imgsz"], conf,
-                         int(round(dur * fps_float(fps))), stages=S)
+    scores, boxes, segs = scan(video, cfg["det"], cfg["det_imgsz"], conf,
+                               int(round(dur * fps_float(fps))), stages=S,
+                               seg_weights=cfg.get("seg"))
+    if segs is not None:
+        with open(os.path.join(job_dir, OUTLINES_FILE), "wb") as f:
+            pickle.dump(segs, f)
     n = len(boxes)
     if n == 0:
         raise RuntimeError("No frames decoded - check the start/end times and the video file.")
@@ -1607,7 +1665,8 @@ def find_targets(st, reid, vid_pred, img_pred):
         lo, hi, _ = st["units"][u]
         found = []
         for r in refs:
-            res = r.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi)
+            res = r.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi,
+                                 segs=st.get("_segs"))
             if res is None:
                 continue
             seed = (int(res["frame"]), np.asarray(res["box"], np.float32))
@@ -1622,7 +1681,8 @@ def find_targets(st, reid, vid_pred, img_pred):
     return st
 
 
-def mask_removal(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, lo, hi, stages=None):
+def mask_removal(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, lo, hi, stages=None,
+                 segs=None):
     """Remove mode, per frame: the tracked people to remove, completed with their detections;
     every other detected person is protected (never erased)."""
     for d in (raw_dir, prot_dir):
@@ -1638,7 +1698,7 @@ def mask_removal(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, lo, hi, st
             imgs = nxt.result()[1] if nxt is not None and nxt.result()[0] == ks else load(ks)[1]
             nk = list(range(ks[-1] + 1, min(hi, ks[-1] + 1 + SEG_BATCH)))
             nxt = _IO.submit(load, nk) if nk else None
-            got = segment_frames(img_pred, imgs, [boxes[k] for k in ks])
+            got = _segment(img_pred, frames, boxes, segs, ks, imgs)
             seg = dict(zip(ks, got))
         rem = _read_mask(tgt_dir, i)
         prot = np.zeros_like(rem)
@@ -1681,7 +1741,8 @@ def find_person(st, reid, vid_pred, img_pred, photos=()):
     st["_video"].extract_many([i for u in todo for i in ReID.sample_frames(*st["units"][u][:2])])
     for t, u in enumerate(todo):
         lo, hi, _ = st["units"][u]
-        auto[u] = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi)
+        auto[u] = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi,
+                                    segs=st.get("_segs"))
         S.step(t + 1, len(todo))
     st["auto"] = auto
     save_job(st)
@@ -1972,13 +2033,14 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
         S.step(t + 1, len(us))
     S.start(1)
     if remove_mode:
-        mask_removal(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], a, b, stages=S)
+        mask_removal(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], a, b, stages=S,
+                     segs=st.get("_segs"))
         _track_extra(st, vid_pred, video, "keep_extra", us, work, d["protect"])
         os.makedirs(d["tracked"], exist_ok=True)
         _track_extra(st, vid_pred, video, "extra", us, work, d["tracked"], minus=d["protect"])
     else:
         mask_others(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], d["inst"], a, b,
-                    stages=S)
+                    stages=S, segs=st.get("_segs"))
         S.start(2)
         if opts.get("track_all"):  # slow: SAM 2 follows every other person
             track_others(vid_pred, video, d["inst"], d["protect"], d["tracked"],
