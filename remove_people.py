@@ -34,7 +34,8 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 if DEVICE == "cuda":  # faster maths on A100 / L4 at no visible quality cost
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-    torch.backends.cudnn.benchmark = True  # faster 3D convolutions in the fill model
+    # faster 3D convolutions in the fill model (each new input size is tuned once)
+    torch.backends.cudnn.benchmark = os.environ.get("KOP_CUDNN_BENCH", "1") == "1"
 
 
 def big_gpu():
