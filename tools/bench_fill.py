@@ -29,8 +29,11 @@ t = time.time()
 f = rp.MiniMaxFiller()
 print(f"model loaded in {time.time() - t:.1f} s", flush=True)
 out = None
-for steps, fw, fh, nf in [(8, 832, 480, 81), (8, 832, 480, 81), (6, 832, 480, 81),
-                          (4, 832, 480, 81), (6, 640, 368, 81), (6, 832, 480, 49)]:
+CONFIGS = [(6, 640, 368, 49), (6, 640, 368, 49), (4, 640, 368, 49), (4, 512, 288, 49),
+           (4, 512, 288, 81), (8, 832, 480, 49)]
+if os.environ.get("BENCH_CONFIGS"):  # e.g. "4x512x288x49,6x640x368x49"
+    CONFIGS = [tuple(int(v) for v in c.split("x")) for c in os.environ["BENCH_CONFIGS"].split(",")]
+for steps, fw, fh, nf in CONFIGS:
     torch.cuda.synchronize()
     torch.cuda.reset_peak_memory_stats()
     t = time.time()
