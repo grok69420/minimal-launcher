@@ -130,6 +130,38 @@ def _read_mask(d, i):
 
 def _write_mask(d, i, m):
     cv2.imwrite(_mpath(d, i), m.astype(np.uint8) * 255, [cv2.IMWRITE_PNG_COMPRESSION, 1])
+    _live_view(d, i, m)
+
+
+_PV = {"t": 0.0, "video": None, "remove": False}
+
+
+def _live_view(d, i, m):
+    """While masks are being made, now and then show the frame with the person kept (green)
+    and the people being removed (red) - so the live view is never empty."""
+    if _PREVIEW is None or _PV["video"] is None or time.time() - _PV["t"] < 1.5:
+        return
+    kind = os.path.basename(d)
+    if kind not in ("target", "raw", "tracked", "final"):
+        return
+    _PV["t"] = time.time()
+    try:
+        img = cv2.imread(_PV["video"].path(i))
+        if img is None or img.shape[:2] != m.shape:
+            return
+        red, green = np.array([0, 0, 235]), np.array([0, 210, 0])
+        if kind == "target":
+            col = red if _PV["remove"] else green
+            img[m] = (0.45 * img[m] + 0.55 * col).astype(np.uint8)
+        else:
+            img[m] = (0.45 * img[m] + 0.55 * red).astype(np.uint8)
+            prot = _mpath(os.path.join(os.path.dirname(d), "protect"), i)
+            if not _PV["remove"] and os.path.exists(prot):
+                k = cv2.imread(prot, cv2.IMREAD_GRAYSCALE) > 127
+                img[k] = (0.45 * img[k] + 0.55 * green).astype(np.uint8)
+        _PREVIEW(img)
+    except Exception:
+        pass
 
 
 def _bbox(mask):
@@ -1985,6 +2017,7 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
             find_person(st, reid, vid_pred, img_pred, photos)
     st["grow"] = grow
     save_job(st)
+    _PV.update(video=st["_video"], remove=st.get("mode") == "remove")
     TIMINGS.clear()
     t0 = time.time()
     todo = [p for p in range(len(st["parts"])) if not part_is_current(st, p, grow)]

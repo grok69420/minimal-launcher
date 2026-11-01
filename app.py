@@ -726,7 +726,8 @@ with gr.Blocks(title="Keep One Person") as demo:
     with gr.Column(visible=False) as p3:
         gr.Markdown("### Working on your video", elem_classes="step-head")
         work_md = gr.Markdown("Starting …")
-        live_img = gr.Image(label="Latest finished picture", interactive=False, type="numpy",
+        live_img = gr.Image(label="Live view: green = kept, red = being removed (then the "
+                                  "finished picture)", interactive=False, type="numpy",
                             height=360)
         go_btn = gr.Button("Try again ▶", size="sm")
 
