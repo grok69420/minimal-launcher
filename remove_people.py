@@ -820,7 +820,7 @@ class ReID:
                 out.append(f)
         return out
 
-    def _body(self, img, box, mask):
+    def _body(self, img, box, mask, embed=True):
         h, w = img.shape[:2]
         x1, y1 = max(0, int(box[0])), max(0, int(box[1]))
         x2, y2 = min(w, int(np.ceil(box[2]))), min(h, int(np.ceil(box[3])))
@@ -842,9 +842,29 @@ class ReID:
         col /= np.linalg.norm(col) + 1e-6
         masked = crop.copy()
         masked[m == 0] = 114
+        if not embed:
+            return col, masked
         e = self.emb.embed([masked], imgsz=224, verbose=False)[0].float().cpu().numpy()
         e /= np.linalg.norm(e) + 1e-6
         return col, e
+
+    def _bodies(self, img, boxes, masks):
+        """_body for every person of a frame with one batched embedding call."""
+        out = [self._body(img, b, m, embed=False) for b, m in zip(boxes, masks)]
+        crops = [o[1] for o in out if o is not None]
+        if not crops:
+            return out
+        es = self.emb.embed(crops, imgsz=224, verbose=False)
+        res, k = [], 0
+        for o in out:
+            if o is None:
+                res.append(None)
+                continue
+            e = es[k].float().cpu().numpy()
+            e /= np.linalg.norm(e) + 1e-6
+            res.append((o[0], e))
+            k += 1
+        return res
 
     def describe(self, img, boxes, masks):
         """[{'face': emb|None, 'body': (col, cnn)|None}] for each person."""
@@ -863,8 +883,9 @@ class ReID:
                 area = (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1])
                 if k not in owner or area > owner[k][0]:
                     owner[k] = (area, f.normed_embedding)
-        return [{"face": owner[k][1] if k in owner else None,
-                 "body": self._body(img, b, m)} for k, (b, m) in enumerate(zip(boxes, masks))]
+        bodies = self._bodies(img, boxes, masks)
+        return [{"face": owner[k][1] if k in owner else None, "body": bodies[k]}
+                for k in range(len(boxes))]
 
     def add_person(self, img, box, mask):
         d = self.describe(img, [box], [mask])[0]
@@ -985,11 +1006,12 @@ class MiniMaxFiller:
                                    cv2.COLOR_BGR2RGB) for im in imgs])
         m = np.stack([cv2.resize(k.astype(np.uint8), (fw, fh), interpolation=cv2.INTER_NEAREST)
                       for k in masks])[..., None]
-        out = self.pipe(images=torch.from_numpy(x).float() / 127.5 - 1.0,
-                        masks=torch.from_numpy(m).float(), num_frames=len(imgs), height=fh,
-                        width=fw, num_inference_steps=steps or self.steps,
-                        generator=torch.Generator(device="cuda").manual_seed(seed),
-                        iterations=dil).frames[0]
+        with _gpu_lock(_LOCK_ST[0]):  # one painting at a time on the GPU
+            out = self.pipe(images=torch.from_numpy(x).float() / 127.5 - 1.0,
+                            masks=torch.from_numpy(m).float(), num_frames=len(imgs), height=fh,
+                            width=fw, num_inference_steps=steps or self.steps,
+                            generator=torch.Generator(device="cuda").manual_seed(seed),
+                            iterations=dil).frames[0]
         return [cv2.cvtColor(np.clip(o * 255 + 0.5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
                 for o in out]
 
@@ -1802,7 +1824,7 @@ def _detector(weights):
     return _DET[weights]
 
 
-def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.35):
+def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.45):
     """Self-check of a finished part: people who should not be there. Keep mode: anyone away
     from the kept person. Remove mode: a person seen where someone was removed."""
     cfg = PRESETS[st["preset"]]
@@ -1946,14 +1968,19 @@ def choose_fill_level(st, elapsed):
     TARGET_SECONDS (estimated from the number of frames to paint)."""
     big = big_gpu()
     frames = fill_frames_estimate(st)
-    mask_s = st["n"] / (22.0 if big else 6.0)  # outlining speed measured on the A100
     scale = 1.0 if big else 0.35
+    # masks (tracking) of the parts run beside the painting; painting starts after the first part
+    first = st["parts"][0][1] - st["parts"][0][0] if st["parts"] else 0
+    mask_s = st["n"] / (25.0 if big else 6.0)
+
+    def est(lv):
+        paint = frames / (lv[3] * scale)
+        return elapsed + max(mask_s, first / (8.0 if big else 2.0) + paint) + 60
+
     for lv in FILL_LEVELS:
-        est = elapsed + mask_s + frames / (lv[3] * scale) + 45
-        if est <= TARGET_SECONDS:
-            return lv[0], est, frames
-    lv = FILL_LEVELS[-1]
-    return lv[0], elapsed + mask_s + frames / (lv[3] * scale) + 45, frames
+        if est(lv) <= TARGET_SECONDS:
+            return lv[0], est(lv), frames
+    return FILL_LEVELS[-1][0], est(FILL_LEVELS[-1]), frames
 
 
 def _work_dir(st, p):
@@ -1961,12 +1988,13 @@ def _work_dir(st, p):
 
 
 FILL_SLOTS = [1]
+_LOCK_ST = [None]
 
 
 @contextlib.contextmanager
 def _gpu_lock(st):
     """Limits how many parallel workers run the fill model at once (GPU memory)."""
-    if not WORKER:
+    if not WORKER or st is None:
         yield
         return
     files = [open(os.path.join(st["cache"], f"gpu_fill_{k}.lock"), "w") for k in range(FILL_SLOTS[0])]
@@ -2091,8 +2119,6 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
     filler, close_it = None, False
     use_ai = st.get("fill", "realistic") == "realistic" or opts.get("ai")
     offload = use_ai and not big_gpu()
-    lock = _gpu_lock(st)
-    lock.__enter__()  # one fill at a time when parts run in parallel
     if offload:
         _sam2_to(vid_pred, img_pred, "cpu")  # free GPU memory for the fill model
     try:
@@ -2126,13 +2152,11 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
             filler.close()
         if offload:
             _sam2_to(vid_pred, img_pred, DEVICE)
-    try:
-        if moving and not done_moving:
+    if moving and not done_moving:
+        with _gpu_lock(st):
             fills.append(inpaint(video, d["final"], flags, work, pp_dir, moving, w, h, pp_side,
                                  stages=S))
-            ov = 16
-    finally:
-        lock.__exit__(None, None, None)
+        ov = 16
     chs, results = _merge_fills(fills)
     S.start(5)
     out = os.path.join(work, "part.mp4")
@@ -2211,10 +2235,11 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=Tr
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]
             log(f"  Self-check: {len(viol)} sighting(s) remain - please check them")
             break
-        made, repaint = _apply_self_fix(st, p, viol)
+        late = time.time() - st.get("t_start", time.time()) > 0.8 * TARGET_SECONDS
+        made, repaint = (0, set()) if late else _apply_self_fix(st, p, viol)
         n_p = sum(1 for v in viol if v[2])
         log(f"  Self-check: {len(viol) - n_p} left-over person sighting(s), {n_p} figure(s) "
-            f"painted in; {'fixing this part' if made else 'nothing to change'}")
+            f"painted in; {'fixing this part' if made else 'no time to fix' if late else 'nothing to change'}")
         save_job(st)
         if not made:
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]
@@ -2478,13 +2503,10 @@ def _worker_main(job_dir, cache_root, sam2_dir, pp_dir, grow, wid, parts):
     set_progress(prog)
     set_preview(prev)
     _PV.update(video=st["_video"], remove=st.get("mode") == "remove")
-    ctxs = {}
-    for p in parts:  # first the masks of every part of this worker ...
+    _LOCK_ST[0] = st
+    for p in parts:
         cur["p"] = p
-        ctxs[p] = _part_masks(st, p, vid_pred, img_pred, grow, PAD)
-    for p in parts:  # ... then background, video and self-check
-        cur["p"] = p
-        process_part(st, p, vid_pred, img_pred, pp_dir, grow, ctx=ctxs.pop(p))
+        process_part(st, p, vid_pred, img_pred, pp_dir, grow)
         a, b = st["parts"][p]
         us = [u for u, (lo, hi, _) in enumerate(st["units"]) if a <= lo and hi <= b]
         res = {"extra": {u: st["extra"][u] for u in us if u in st.get("extra", {})},
@@ -2540,6 +2562,7 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
             find_person(st, reid, vid_pred, img_pred, photos)
             st.setdefault("prep", {})["Finding your person in every scene"] = round(time.time() - t, 1)
     st["grow"] = grow
+    st["t_start"] = time.time() - sum((st.get("prep") or {}).values())  # job clock
     save_job(st)
     _PV.update(video=st["_video"], remove=st.get("mode") == "remove")
     TIMINGS.clear()
