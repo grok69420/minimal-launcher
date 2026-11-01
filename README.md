@@ -1,26 +1,29 @@
 # Keep One Person
 
-Remove everyone from a video except the person you choose. Runs in Google Colab (free GPU).
+Remove people from a video as if they had never been there. Two ways:
+- **Keep one person** - everyone else is removed (optionally found from photos of the person).
+- **Remove some people** - click the people to remove; everyone else stays.
+
+The sound stays as it was. Runs in Google Colab (an A100 GPU with Colab Pro is recommended).
 
 **Start:** open
 [Keep_One_Person.ipynb in Colab](https://colab.research.google.com/github/grok69420/minimal-launcher/blob/keep-one-person/Keep_One_Person.ipynb)
-and press the ▶ play button. The notebook always downloads the latest version of the
-program from this branch.
+and press the ▶ play button. The notebook always downloads the latest version of the program
+from this branch.
+
+## Google Drive
+- `Keep One Person/` - put your video (and photos of the person to keep) here
+- `Keep One Person/Finished/` - finished videos and check videos appear here
+- `Keep One Person/In progress (automatic)/` - work in progress; long videos are processed in
+  parts of about 90 seconds, so an interrupted job can be continued from the app
 
 ## How it works
-1. Choose a video (upload, or a path on Google Drive for big files).
-2. Click the person to keep.
-3. For videos with several scenes, check that the right person is marked in each scene.
-4. The video is processed in parts of about 90 seconds; each finished part is saved to
-   Google Drive (folder `KeepOnePerson`), so an interrupted job can be continued.
+Scene cuts are detected; every chosen person is recognised again in each scene (face and
+clothing); SAM 2 tracks people pixel-accurately; the removed areas are filled with
+AI-generated background (MiniMax-Remover, zoomed in on small areas for sharpness; ProPainter
+as the fast or fallback fill); everything else keeps the original pixels, resolution and audio.
 
-Photos: put the video and some photos of the person in Google Drive, folder
-`KeepOnePerson_input` - the app finds the person by face in every scene by itself.
-
-Engines: YOLO11 (person detection), SAM 2.1 (tracking and segmentation),
-InsightFace (recognising the person), MiniMax-Remover (realistic, AI-generated
-background - default) and ProPainter (fast fill, also used automatically if the
-realistic fill cannot run).
+Engines: YOLO11, SAM 2.1, InsightFace, MiniMax-Remover, ProPainter.
 
 ## Files
 - `Keep_One_Person.ipynb` - one-button Colab notebook

@@ -47,10 +47,19 @@ JOB_FILE = "job.pkl"
 _PROGRESS = None
 
 
+_PREVIEW = None
+
+
 def set_progress(fn):
     """fn(fraction_or_None, text) - used by the web app to show progress."""
     global _PROGRESS
     _PROGRESS = fn
+
+
+def set_preview(fn):
+    """fn(bgr_frame) - receives finished frames now and then (live view in the app)."""
+    global _PREVIEW
+    _PREVIEW = fn
 
 
 def log(msg, frac=None):
@@ -770,10 +779,36 @@ def _pad_4k1(seq):
     return ext[:need]
 
 
+def crop_box(masks, w, h, margin=0.6, min_short=200, full_at=0.8):
+    """Area to give the fill model: the removed region plus context, in the model's aspect
+    ratio. Small regions are filled zoomed-in (sharper); large ones use the whole frame."""
+    u = np.zeros((h, w), bool)
+    for m in masks:
+        u |= m
+    if not u.any():
+        return 0, 0, w, h
+    x1, y1, x2, y2 = _bbox(u)
+    bw, bh = x2 - x1, y2 - y1
+    ar = (832 / 480) if w >= h else (480 / 832)
+    cw, ch = bw * (1 + 2 * margin), bh * (1 + 2 * margin)
+    if cw / ch < ar:
+        cw = ch * ar
+    else:
+        ch = cw / ar
+    s = max(1.0, min_short / min(cw, ch))
+    cw, ch = cw * s, ch * s
+    if cw >= full_at * w or ch >= full_at * h:
+        return 0, 0, w, h
+    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+    X1 = int(np.clip(cx - cw / 2, 0, w - cw))
+    Y1 = int(np.clip(cy - ch / 2, 0, h - ch))
+    return X1, Y1, X1 + int(cw), Y1 + int(ch)
+
+
 def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=49, overlap=8,
                    stages=None):
-    """Same output format as inpaint(): (chunks, {chunk: folder of filled frames})."""
-    fw, fh = fill_size(w, h)
+    """Same output format as inpaint(): (chunks, {chunk: (folder, extension)}); the folder
+    holds full-size frames with the removed areas filled in."""
     chs = plan_chunks(ranges, window, overlap)
     todo = [c for c, (a, b, _, _) in enumerate(chs) if any(flags[i] for i in range(a, b))]
     results = {}
@@ -781,13 +816,20 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         a, b, _, _ = chs[c]
         seq = list(range(a, b))
         ext = _pad_4k1(seq)
-        out = filler.fill([cv2.imread(frames[g]) for g in ext],
-                          [_read_mask(final_dir, g) for g in ext], fw, fh)
+        imgs = [cv2.imread(frames[g]) for g in ext]
+        masks = [_read_mask(final_dir, g) for g in ext]
+        x1, y1, x2, y2 = crop_box(masks, w, h)
+        fw, fh = fill_size(x2 - x1, y2 - y1)
+        out = filler.fill([im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks],
+                          fw, fh)
         d = os.path.join(work, "mm_out", f"c{c:04d}")
         os.makedirs(d, exist_ok=True)
         for j in range(len(seq)):
-            cv2.imwrite(os.path.join(d, f"{j:04d}.png"), out[j])
-        results[c] = d
+            full = imgs[j].copy()
+            full[y1:y2, x1:x2] = cv2.resize(out[j], (x2 - x1, y2 - y1),
+                                            interpolation=cv2.INTER_LANCZOS4)
+            cv2.imwrite(os.path.join(d, f"{j:04d}.jpg"), full, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        results[c] = (d, ".jpg")
         if stages:
             stages.step(t + 1, len(todo))
     return chs, results
@@ -872,7 +914,7 @@ def inpaint(frames, final_dir, flags, work, pp_dir, ranges, w, h, max_side=960, 
         if not ok:
             raise RuntimeError("ProPainter ran out of memory at every fallback size. "
                                "Choose the Fast quality setting.")
-        results[c] = os.path.join(out_root, name, "frames")
+        results[c] = (os.path.join(out_root, name, "frames"), ".png")
         shutil.rmtree(fin)
         shutil.rmtree(min_)
         if stages:
@@ -890,7 +932,8 @@ def _inpainted_frame(g, chs, results, overlap, size):
             wgt *= min(1.0, (g - a + 1) / (overlap + 1))
         if b < sb:
             wgt *= min(1.0, (b - g) / (overlap + 1))
-        img = cv2.imread(os.path.join(results[c], f"{g - a:04d}.png")).astype(np.float32)
+        folder, ext = results[c]
+        img = cv2.imread(os.path.join(folder, f"{g - a:04d}{ext}")).astype(np.float32)
         img = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
         acc = img * wgt if acc is None else acc + img * wgt
         wsum += wgt
@@ -910,7 +953,13 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
             a = np.maximum(cv2.GaussianBlur(m, (0, 0), feather_px), m) if feather_px > 0 else m
             a[_read_mask(prot_dir, g)] = 0.0
             out = orig.astype(np.float32) * (1 - a[..., None]) + inp * a[..., None]
-            wr.write(np.clip(out + 0.5, 0, 255).astype(np.uint8))
+            orig = np.clip(out + 0.5, 0, 255).astype(np.uint8)
+            wr.write(orig)
+        if _PREVIEW is not None and (g - lo) % 12 == 0:
+            try:
+                _PREVIEW(orig)
+            except Exception:
+                pass
         if stages:
             stages.step(g - lo + 1, hi - lo)
     wr.close()
@@ -1104,6 +1153,141 @@ def anchors_from_photos(st, reid, img_pred, max_anchors=3, min_face=0.45):
     return len(found)
 
 
+# ---------------------------------------------------------------- mode: remove some people
+def _iou(a, b):
+    x1, y1, x2, y2 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    ua = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / ua if ua > 0 else 0.0
+
+
+def removal_seeds(st, u):
+    """People to remove in scene piece u: the user's choice there, else the search result."""
+    if u in st.get("rseeds", {}):
+        return st["rseeds"][u]
+    return (st.get("rauto") or {}).get(u, [])
+
+
+def toggle_removal(st, img_pred, frame_idx, x, y, reset_search=True):
+    """Click on a person: add them to the people to remove, or take them off again.
+    Returns (mask, added) or (None, None) if nobody is there."""
+    box, mask = person_at(img_pred, st["_video"][frame_idx], st["boxes"][frame_idx], x, y)
+    if box is None:
+        return None, None
+    u = int(st["_unit_of"][frame_idx])
+    cur = list(removal_seeds(st, u))
+    same = [k for k, (f, b) in enumerate(cur) if f == frame_idx and _iou(b, box) > 0.5]
+    if same:
+        cur.pop(same[0])
+        added = False
+    else:
+        cur.append((int(frame_idx), np.asarray(box, np.float32)))
+        added = True
+    st.setdefault("rseeds", {})[u] = cur
+    if reset_search:
+        st["rauto"] = None
+    save_job(st)
+    return mask, added
+
+
+def clear_removal(st, frame_idx, reset_search=False):
+    st.setdefault("rseeds", {})[int(st["_unit_of"][frame_idx])] = []
+    if reset_search:
+        st["rauto"] = None
+    save_job(st)
+
+
+def _ensure_removal(st, vid_pred, u):
+    """Masks of everyone to remove in scene piece u (each person tracked, then combined)."""
+    lo, hi, _ = st["units"][u]
+    seeds = removal_seeds(st, u)
+    tgt = os.path.join(st["cache"], "target")
+    os.makedirs(tgt, exist_ok=True)
+    key = ["remove"] + [_seed_key(s) for s in seeds]
+    if st["_tracked"].get(u, "none") == key and all(os.path.exists(_mpath(tgt, i)) for i in range(lo, hi)):
+        return
+    for i in range(lo, hi):
+        _write_mask(tgt, i, np.zeros((st["h"], st["w"]), bool))
+    if seeds:
+        st["_video"].ensure(lo, hi)
+    one = os.path.join(st["cache"], "target_one")
+    for f, box in seeds:
+        shutil.rmtree(one, ignore_errors=True)
+        track_target(vid_pred, st["_video"], f, box, one, os.path.join(st["cache"], "tmp_track"),
+                     lo, hi)
+        for i in range(lo, hi):
+            _write_mask(tgt, i, _read_mask(tgt, i) | _read_mask(one, i))
+    shutil.rmtree(one, ignore_errors=True)
+    st["_tracked"][u] = key
+
+
+def find_targets(st, reid, vid_pred, img_pred):
+    """Find every chosen person again in the other scenes (each one separately)."""
+    import copy
+    picks = [(u, f, b) for u, lst in st.get("rseeds", {}).items() for f, b in lst]
+    if not picks:
+        raise ValueError("Click on the people to remove first.")
+    S = Stages(["Learning what each person looks like", "Searching every scene"])
+    S.start(0)
+    refs = []
+    one = os.path.join(st["cache"], "target_one")
+    for t, (u, f, b) in enumerate(picks):
+        lo, hi, _ = st["units"][u]
+        st["_video"].ensure(lo, hi)
+        shutil.rmtree(one, ignore_errors=True)
+        track_target(vid_pred, st["_video"], f, b, one, os.path.join(st["cache"], "tmp_track"), lo, hi)
+        r = copy.copy(reid)
+        r.reset()
+        good = [i for i in range(lo, hi) if _read_mask(one, i).sum() >= 400]
+        for i in [good[int(round(x))] for x in np.linspace(0, len(good) - 1, min(6, len(good)))]:
+            m = _read_mask(one, i)
+            r.add_person(cv2.imread(st["_video"][i]), _bbox(m), m)
+        refs.append(r)
+        S.step(t + 1, len(picks))
+    shutil.rmtree(one, ignore_errors=True)
+    S.start(1)
+    auto = {}
+    todo = [u for u in range(len(st["units"])) if u not in st.get("rseeds", {})]
+    for t, u in enumerate(todo):
+        lo, hi, _ = st["units"][u]
+        found = []
+        for r in refs:
+            res = r.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi)
+            if res is None:
+                continue
+            seed = (int(res["frame"]), np.asarray(res["box"], np.float32))
+            if not any(f == seed[0] and _iou(b, seed[1]) > 0.5 for f, b in found):
+                found.append(seed)
+        auto[u] = found
+        S.step(t + 1, len(todo))
+    st["rauto"] = auto
+    save_job(st)
+    n = sum(1 for u in range(len(st["units"])) if removal_seeds(st, u))
+    log(f"People to remove were found in {n} of {len(st['units'])} scene piece(s).", 1.0)
+    return st
+
+
+def mask_removal(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, lo, hi, stages=None):
+    """Remove mode, per frame: the tracked people to remove, completed with their detections;
+    every other detected person is protected (never erased)."""
+    for d in (raw_dir, prot_dir):
+        os.makedirs(d, exist_ok=True)
+    for i in range(lo, hi):
+        rem = _read_mask(tgt_dir, i)
+        prot = np.zeros_like(rem)
+        if len(boxes[i]):
+            for m in segment_boxes(img_pred, cv2.imread(frames[i]), boxes[i]):
+                if rem.any() and (m & rem).sum() >= 0.3 * max(m.sum(), 1):
+                    rem |= m
+                else:
+                    prot |= m
+        prot &= ~rem
+        _write_mask(raw_dir, i, rem)
+        _write_mask(prot_dir, i, prot)
+        if stages:
+            stages.step(i - lo + 1, hi - lo)
+
+
 def find_person(st, reid, vid_pred, img_pred, photos=()):
     """Find the kept person in every scene piece the user did not decide."""
     if not any(v is not None for v in st["seeds"].values()):
@@ -1148,7 +1332,11 @@ def _part_done_file(job_dir, p):
 def _part_signature(st, p, grow, pad):
     a, b = st["parts"][p]
     us = [u for u, (lo, hi, _) in enumerate(st["units"]) if a <= lo and hi <= b]
-    return {"range": [a, b], "seeds": [_seed_key(scene_seed(st, u)) for u in us],
+    if st.get("mode") == "remove":
+        seeds = [[_seed_key(x) for x in removal_seeds(st, u)] for u in us]
+    else:
+        seeds = [_seed_key(scene_seed(st, u)) for u in us]
+    return {"range": [a, b], "mode": st.get("mode", "keep"), "seeds": seeds,
             "grow": grow, "pad": pad, "preset": st["preset"], "fill": st.get("fill", "realistic")}
 
 
@@ -1165,7 +1353,9 @@ def part_is_current(st, p, grow=None, pad=2):
 
 def final_path(job_dir, st, check=False):
     base = os.path.splitext(st["src"])[0]
-    return os.path.join(job_dir, f"{base}_one_person{'_check' if check else ''}.mp4")
+    out_dir = st.get("out_dir") or job_dir
+    what = "people removed" if st.get("mode") == "remove" else "one person"
+    return os.path.join(out_dir, f"{base} - {what}{' - check' if check else ''}.mp4")
 
 
 def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2):
@@ -1182,20 +1372,27 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2):
     shutil.rmtree(work, ignore_errors=True)
     d = {k: os.path.join(work, k) for k in ("raw", "protect", "inst", "tracked", "final")}
     tgt = os.path.join(st["cache"], "target")
-    S = Stages(["Tracking your person", "Outlining everyone else", "Tracking everyone else",
-                "Building masks", "Rebuilding background", "Writing video"],
-               outer=(p, len(st["parts"])))
+    remove_mode = st.get("mode") == "remove"
+    S = Stages(["Tracking the people to remove" if remove_mode else "Tracking your person",
+                "Outlining everyone", "Tracking everyone else", "Building masks",
+                "Rebuilding background", "Writing video"], outer=(p, len(st["parts"])))
     S.start(0)
     video.ensure(a, b)
     for t, u in enumerate(us):
-        _ensure_target(st, vid_pred, u, scene_seed(st, u))
+        if remove_mode:
+            _ensure_removal(st, vid_pred, u)
+        else:
+            _ensure_target(st, vid_pred, u, scene_seed(st, u))
         S.step(t + 1, len(us))
     S.start(1)
-    mask_others(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], d["inst"], a, b,
-                stages=S)
-    S.start(2)
-    track_others(vid_pred, video, d["inst"], d["protect"], d["tracked"],
-                 os.path.join(work, "tmp_track"), ranges, stages=S)
+    if remove_mode:
+        mask_removal(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], a, b, stages=S)
+    else:
+        mask_others(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], d["inst"], a, b,
+                    stages=S)
+        S.start(2)
+        track_others(vid_pred, video, d["inst"], d["protect"], d["tracked"],
+                     os.path.join(work, "tmp_track"), ranges, stages=S)
     S.start(3)
     flags = finalize_masks(d["raw"], d["tracked"], d["protect"], d["final"], ranges, pad,
                            max(1, round(grow * max(h, w))))
@@ -1287,10 +1484,16 @@ def join_parts(st):
 def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
     """Erase everyone except the kept person, part by part (finished parts are skipped,
     so this also resumes an interrupted job). Returns (video, check video) paths."""
-    if not any(v is not None for v in st["seeds"].values()):
-        raise ValueError("Click on the person to keep first.")
-    if st["auto"] is None and len(st["units"]) > len(st["seeds"]):
-        find_person(st, reid, vid_pred, img_pred, photos)
+    if st.get("mode") == "remove":
+        if not any(st.get("rseeds", {}).values()):
+            raise ValueError("Click on the people to remove first.")
+        if st.get("rauto") is None and len(st["units"]) > len(st.get("rseeds", {})):
+            find_targets(st, reid, vid_pred, img_pred)
+    else:
+        if not any(v is not None for v in st["seeds"].values()):
+            raise ValueError("Click on the person to keep first.")
+        if st["auto"] is None and len(st["units"]) > len(st["seeds"]):
+            find_person(st, reid, vid_pred, img_pred, photos)
     st["grow"] = grow
     save_job(st)
     todo = [p for p in range(len(st["parts"])) if not part_is_current(st, p, grow)]
@@ -1305,7 +1508,8 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
         log("Joining parts and adding audio ...", 0.99)
         out, chk = join_parts(st)
     else:
-        out, chk = local, local.replace("_one_person.mp4", "_one_person_check.mp4")
+        chk = os.path.join(st["cache"], os.path.basename(final_path(st["job_dir"], st, True)))
+        out = local
         for src_, dst in ((final, out), (final_path(st["job_dir"], st, True), chk)):
             if not os.path.exists(dst):
                 _copy_atomic(src_, dst)
