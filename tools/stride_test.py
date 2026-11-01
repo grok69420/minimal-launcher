@@ -59,7 +59,7 @@ for stride in (1, 2, 3):
     rp.flush_masks()
     dt = time.time() - t
     print(f"stride {stride}: {n / dt:.1f} frames/s ({len(chs)} piece(s))", flush=True)
-    outs[stride] = [cv2.imread(os.path.join(res[0][0], f"{g:04d}.jpg")) for g in range(n)]
+    outs[stride] = [rp._inpainted_frame(g, chs, res, 8, (w, h)) for g in range(n)]
 
 
 def comp(img, g):
