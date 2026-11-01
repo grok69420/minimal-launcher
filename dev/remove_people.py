@@ -897,6 +897,8 @@ class ReID:
 
     def reset(self):
         self.ref_faces, self.ref_bodies = [], []
+        self._seen = {}  # frame -> (descriptions, H, W): a second search reuses them
+
 
     def _faces(self, img):
         if self.face is None:
@@ -1019,14 +1021,20 @@ class ReID:
                      closeups=True):
         """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
         cands = []
+        seen = getattr(self, "_seen", None)
+        if seen is None:
+            seen = self._seen = {}
         for i in self.sample_frames(lo, hi, n_samples):
             if not len(boxes[i]):
                 continue
-            img = cv2.imread(frames[i])
-            masks = (outline_masks(segs[i], boxes[i], img.shape[0], img.shape[1]) if segs is not None
-                     else segment_boxes(img_pred, img, boxes[i]))
-            H, W = img.shape[:2]
-            for k, d in enumerate(self.describe(img, boxes[i], masks)):
+            key = (getattr(frames, "dir", id(frames)), i)
+            if key not in seen:
+                img = cv2.imread(frames[i])
+                masks = (outline_masks(segs[i], boxes[i], img.shape[0], img.shape[1])
+                         if segs is not None else segment_boxes(img_pred, img, boxes[i]))
+                seen[key] = (self.describe(img, boxes[i], masks), img.shape[0], img.shape[1])
+            descs, H, W = seen[key]
+            for k, d in enumerate(descs):
                 b = boxes[i][k]
                 cands.append(dict(frame=i, k=k, box=b, face=self.face_sim(d), body=self.body_sim(d),
                                   emb=d["face"], n=len(boxes[i]),
@@ -1066,6 +1074,7 @@ MM_WEIGHTS = os.environ.get("KOP_MM_WEIGHTS", "/content/repos/minimax_weights")
 
 
 _FILL_AREA = [832 * 480]
+MM_FAST = os.environ.get("KOP_MM_FAST", "1") == "1"
 
 
 def fill_size(w, h, area=None):
@@ -1101,6 +1110,15 @@ class MiniMaxFiller:
 
     def fill(self, imgs, masks, fw, fh, dil=2, seed=42, steps=None):
         """imgs: BGR frames, masks: bool arrays; len must be 4k+1. Returns BGR frames (fw x fh)."""
+        if MM_FAST:
+            try:
+                with _gpu_lock(_LOCK_ST[0]):  # one painting at a time on the GPU
+                    return self._fill_gpu(imgs, masks, fw, fh, dil, seed, steps or self.steps)
+            except torch.cuda.OutOfMemoryError:
+                raise
+            except Exception:
+                traceback.print_exc()
+                log("  (fast painting path failed - using the standard one)")
         x = np.stack([cv2.cvtColor(cv2.resize(im, (fw, fh), interpolation=cv2.INTER_AREA),
                                    cv2.COLOR_BGR2RGB) for im in imgs])
         m = np.stack([cv2.resize(k.astype(np.uint8), (fw, fh), interpolation=cv2.INTER_NEAREST)
@@ -1113,6 +1131,48 @@ class MiniMaxFiller:
                             iterations=dil).frames[0]
         return [cv2.cvtColor(np.clip(o * 255 + 0.5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
                 for o in out]
+
+    @torch.no_grad()
+    def _fill_gpu(self, imgs, masks, fw, fh, dil, seed, steps):
+        """Same result as the model's own pipeline, but every step stays on the GPU (the
+        pipeline resizes and widens the masks on the CPU, ~15 % of its time) and both
+        pictures are encoded in one batch."""
+        p, dev, F_ = self.pipe, "cuda", torch.nn.functional
+        n = len(imgs)
+        x = torch.from_numpy(np.stack(imgs)).to(dev, non_blocking=True)  # n,H,W,3 BGR uint8
+        x = x.flip(-1).permute(0, 3, 1, 2).half()  # n,3,H,W RGB
+        if x.shape[-2:] != (fh, fw):
+            x = F_.interpolate(x, size=(fh, fw), mode="bilinear", antialias=True, align_corners=False)
+        x = (x / 127.5 - 1.0).clamp_(-1, 1)
+        m = torch.from_numpy(np.stack(masks).view(np.uint8)).to(dev, non_blocking=True).half()
+        if m.shape[-2:] != (fh, fw):
+            m = F_.interpolate(m[:, None], size=(fh, fw), mode="nearest")[:, 0]
+        for _ in range(dil):  # = scipy binary_dilation (4-neighbour cross), as the pipeline does
+            q = F_.pad(m[None], (1, 1, 1, 1))[0]
+            m = torch.maximum(torch.maximum(q[:, 1:-1, 1:-1], q[:, :-2, 1:-1]),
+                              torch.maximum(torch.maximum(q[:, 2:, 1:-1], q[:, 1:-1, :-2]), q[:, 1:-1, 2:]))
+        img = x.permute(1, 0, 2, 3)[None]  # 1,3,n,h,w
+        m3 = m[None, None].expand(1, 3, n, fh, fw)
+        vae = p.vae
+        mean = torch.tensor(vae.config.latents_mean).view(1, -1, 1, 1, 1).to(dev, torch.float16)
+        istd = 1.0 / torch.tensor(vae.config.latents_std).view(1, -1, 1, 1, 1).to(dev, torch.float16)
+        enc = vae.encode(torch.cat([img * (1 - m3), 2 * m3 - 1.0], 0)).latent_dist.mode()
+        enc = (enc - mean) * istd
+        masked_lat, mask_lat = enc[0:1], enc[1:2]
+        p.scheduler.set_timesteps(steps, device=dev)
+        g = torch.Generator(device=dev).manual_seed(seed)
+        lat = torch.randn((1, 16, (n - 1) // p.vae_scale_factor_temporal + 1,
+                           fh // p.vae_scale_factor_spatial, fw // p.vae_scale_factor_spatial),
+                          generator=g, device=dev, dtype=torch.float16)
+        for t in p.scheduler.timesteps:
+            inp = torch.cat([lat.to(torch.float16), masked_lat, mask_lat], dim=1)
+            noise = p.transformer(hidden_states=inp.half(), timestep=t.expand(1))[0]
+            lat = p.scheduler.step(noise, t, lat, return_dict=False)[0]
+        lat = lat.half() / istd + mean
+        video = vae.decode(lat, return_dict=False)[0]  # 1,3,n,h,w in [-1, 1]
+        out = ((video[0].permute(1, 2, 3, 0).float().clamp(-1, 1) + 1) * 127.5 + 0.5).byte()
+        out = out.flip(-1).cpu().numpy()  # n,h,w,3 BGR
+        return [np.ascontiguousarray(o) for o in out]
 
     def close(self):
         del self.pipe

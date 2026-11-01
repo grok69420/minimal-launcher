@@ -34,18 +34,26 @@ imgs = [rng.integers(0, 255, (H, W, 3), dtype=np.uint8) for _ in range(F)]
 masks = [np.zeros((H, W), bool) for _ in range(F)]
 for m in masks:
     m[H // 4:3 * H // 4, W // 3:2 * W // 3] = True
-f.fill(imgs, masks, W, H, steps=S)  # warm-up
-for rep in range(2):
+outs = {}
+for fast in (False, True):
+    rp.MM_FAST = fast
+    f.fill(imgs, masks, W, H, steps=S)  # warm-up
     T.clear()
     torch.cuda.synchronize()
     t = time.time()
     out = f.fill(imgs, masks, W, H, steps=S)
     torch.cuda.synchronize()
     tot = time.time() - t
-    print(f"--- {W}x{H}, {F} frames, {S} steps: {tot:.2f} s = {F / tot:.1f} frames/s")
+    outs[fast] = out
+    print(f"--- {'GPU-only path' if fast else 'model pipeline'} {W}x{H}, {F} frames, {S} steps: "
+          f"{tot:.2f} s = {F / tot:.1f} frames/s")
     for k, v in T.items():
         print(f"  {k:26s} {v:6.2f} s ({100 * v / tot:4.1f} %)")
     print(f"  {'other (resize, copies)':26s} {tot - sum(T.values()):6.2f} s")
+d = np.abs(np.stack(outs[True]).astype(np.int16) - np.stack(outs[False]))
+mk = np.stack(masks)
+print(f"difference between the two paths: inside removed area mean {d[mk].mean():.2f}, "
+      f"99th percentile {np.percentile(d[mk], 99):.0f} (0-255)")
 
 sh = rp.sharpener()
 if sh is not None:
