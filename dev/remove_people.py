@@ -1139,7 +1139,11 @@ class MiniMaxFiller:
         if MM_FAST:
             try:
                 with _gpu_lock(_LOCK_ST[0]):  # one painting at a time on the GPU
-                    return self._fill_gpu(imgs, masks, fw, fh, dil, seed, steps or self.steps)
+                    try:
+                        return self._fill_gpu(imgs, masks, fw, fh, dil, seed, steps or self.steps)
+                    finally:  # give the memory back: the other parts (processes) need it too
+                        if WORKER:
+                            torch.cuda.empty_cache()
             except torch.cuda.OutOfMemoryError:
                 raise
             except Exception:
@@ -1194,7 +1198,7 @@ class MiniMaxFiller:
             noise = p.transformer(hidden_states=inp.half(), timestep=t.expand(1))[0]
             lat = p.scheduler.step(noise, t, lat, return_dict=False)[0]
         if self.tae is not None:  # tiny decoder: works on the model's own latents, gives [0, 1]
-            video = self.tae.decode_video(lat.half().permute(0, 2, 1, 3, 4), parallel=True,
+            video = self.tae.decode_video(lat.half().permute(0, 2, 1, 3, 4), parallel=n <= 49,
                                           show_progress_bar=False)[0, :n]  # n,3,h,w
             out = (video.permute(0, 2, 3, 1).float().clamp(0, 1) * 255 + 0.5).byte()
         else:
@@ -2481,6 +2485,8 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     preview = _IO.submit(make_preview, video, d["final"], d["protect"], chk, fps, a, b,
                          labels.get, w, h)
     S.done()
+    if WORKER and DEVICE == "cuda":  # tracking memory back to the GPU pool for the painting
+        torch.cuda.empty_cache()
     return dict(a=a, b=b, video=video, w=w, h=h, fps=fps, us=us, ranges=ranges, opts=opts,
                 preview=preview,
                 steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags,
@@ -2528,7 +2534,8 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
         done_moving = False
         if moving and filler is not None:
             k = ctx.get("stride", 1)
-            for win in ((81 * k, 49 * k, 25 * k) if big_gpu() else (49 * k, 25 * k)):
+            # 49 painted frames per piece: 81 at 832x480 ran out of memory with 3 parts at once
+            for win in (49 * k, 25 * k, 13 * k):
                 try:
                     if ctx.get("mm_prev") is None:
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
