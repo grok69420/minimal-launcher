@@ -57,6 +57,7 @@ PRESETS = {
 }
 PART_SECONDS = 30.0
 SCAN_IOU = 0.8
+SCAN_THREADS = int(os.environ.get("KOP_SCAN_THREADS", "2"))
 PAD = 4                # frames of temporal carry-over of the removal masks
 GROW = 0.016           # removal masks are widened by this share of the picture size (hair, blur)
 WORKER = False         # True inside a parallel worker process
@@ -68,9 +69,11 @@ FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
 # pattern, so every level paints at 832x480; the faster levels paint every 2nd / 3rd frame
 # and make the frames between by following the camera movement (no smearing).
 FILL_LEVELS = [("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
-               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True)]
-FILL_EFFICIENCY = 0.55  # share of that speed reached while the other parts use the GPU too
-TARGET_SECONDS = 15 * 60  # the whole job should take at most this long
+               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True),
+               ("fastest", 832 * 480, 6, 20.0, 4, True)]
+FILL_EFFICIENCY = 0.72  # share of that speed reached with tracking etc. sharing the GPU (measured)
+# the engine's share of the 15 minutes; the rest is starting Colab, setup, upload and clicks
+TARGET_SECONDS = 12 * 60
 JOB_FILE = "job.pkl"
 
 # ---------------------------------------------------------------- logging / progress
@@ -471,21 +474,49 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
         except Exception as e:  # not downloadable -> boxes only, outlines made later
             log(f"  outline model unavailable ({e.__class__.__name__}); using boxes only")
     segs = [] if model is not None else None
+    weights = seg_weights if model is not None else det_weights
     model = model or YOLO(det_weights)
     batch = batch or (32 if DEVICE == "cuda" else 4)
     scores, boxes, buf, prev = [], [], [], None
+    # two copies of the model work on alternate batches in threads, so reading the video, the
+    # GPU work and turning masks into outlines (CPU) overlap instead of waiting for each other
+    models = [model]
+    if DEVICE == "cuda" and SCAN_THREADS > 1:
+        try:
+            models += [YOLO(weights) for _ in range(SCAN_THREADS - 1)]
+        except Exception:
+            pass
+    pool = ThreadPoolExecutor(len(models))
+    pending = []
 
-    def flush():
+    def predict(m, frames):
         # iou 0.8: in crowds people overlap a lot; the usual 0.7 throws away real people
-        res = model.predict(buf, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz, verbose=False,
-                            device=0 if DEVICE == "cuda" else "cpu",
-                            quantize=16 if DEVICE == "cuda" else None)
+        res = m.predict(frames, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz, verbose=False,
+                        device=0 if DEVICE == "cuda" else "cpu",
+                        quantize=16 if DEVICE == "cuda" else None)
+        out = []
         for r in res:
-            boxes.append(r.boxes.xyxy.cpu().numpy().astype(np.float32))
+            bx = r.boxes.xyxy.cpu().numpy().astype(np.float32)
+            sg = None
             if segs is not None:
                 xy = r.masks.xy if r.masks is not None else []
-                segs.append([_poly(p) for p in xy])
+                sg = [_poly(p) for p in xy]
+            out.append((bx, sg))
+        return out
+
+    def collect(keep=0):
+        while len(pending) > keep:
+            for bx, sg in pending.pop(0).result():
+                boxes.append(bx)
+                if segs is not None:
+                    segs.append(sg)
+
+    def flush():
+        pending.append(pool.submit(predict, models[flush.k % len(models)], list(buf)))
+        flush.k += 1
         buf.clear()
+        collect(keep=len(models))
+    flush.k = 0
 
     for i, fr in enumerate(video.stream()):
         sm = cv2.cvtColor(cv2.resize(fr, (128, 72), interpolation=cv2.INTER_AREA),
@@ -499,6 +530,8 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
                 stages.step(i + 1, max(n_est, i + 1))
     if buf:
         flush()
+    collect()
+    pool.shutdown()
     return np.asarray(scores, np.float32), boxes, segs
 
 

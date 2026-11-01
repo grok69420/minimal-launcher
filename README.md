@@ -33,19 +33,20 @@ clothing); SAM 2 tracks people pixel-accurately. Removed areas are filled in two
   never uncovered are painted by AI.
 - **Moving camera**: AI-generated background (MiniMax-Remover at its own size, 832x480 - smaller
   sizes made a checkerboard pattern; ProPainter as the fallback). The faster levels paint every
-  2nd or 3rd frame; the frames between are the painted frames moved along with the camera
+  2nd, 3rd or 4th frame; the frames between are the painted frames moved along with the camera
   (measured on the background), then cross-faded - no smearing.
 
 **Finding people:** the scan looks at every frame at 1280 pixels and keeps people who overlap
 in crowds; on 7 sample frames of a crowded music video it found 184 people where the previous
 version found 100.
 
-**Speed (measured on a Colab A100, 4.6-minute music video with up to 30+ dancers):** 14.3
-minutes of processing (scan 3.5 min, finding the person 1.3 min, removing and painting 9.6
-min, three parts at a time). Add the setup and upload: the app opens while the AI models are
-still downloading, and the scan starts as soon as the upload is finished. The background
-painting level is chosen automatically to finish as soon as possible; choose *Sharpest
-background* under More options for every frame painted with extra care (takes longer).
+**Speed (measured on a Colab A100, 4.6-minute music video with up to 30+ dancers):** 12.5
+minutes of processing (scan 2.3 min, finding the person 1.3 min, removing and painting 8.9
+min, three parts at a time). Add starting Colab, the setup and the upload: the app opens
+while the AI models are still downloading, and the scan starts as soon as the upload is
+finished. The background painting level is chosen automatically so the processing takes
+about 12 minutes; choose *Sharpest background* under More options for every frame painted
+with extra care (takes longer).
 
 **Limits:** where a crowd covers the background in every frame of a shot, there is no real
 background to recover - the painted area is invented and looks soft there. Steady shots and

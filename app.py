@@ -281,7 +281,8 @@ def _done_text(st):
     if st.get("fill_level"):
         what = {"sharpest": "every frame painted, extra care", "sharp": "every frame painted",
                 "balanced": "every 2nd frame painted, the frames between follow the camera",
-                "fast": "every 3rd frame painted, the frames between follow the camera"}
+                "fast": "every 3rd frame painted, the frames between follow the camera",
+                "fastest": "every 4th frame painted, the frames between follow the camera"}
         lines.append(f"🎨 Background painting: **{st['fill_level']}**"
                      + (f" - {what[st['fill_level']]}" if st['fill_level'] in what else "")
                      + (" (chosen to finish in about 15 minutes)" if st.get("fill_auto") else "."))
