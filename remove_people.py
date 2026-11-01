@@ -29,6 +29,14 @@ import numpy as np
 import torch
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+if DEVICE == "cuda":  # faster maths on A100 / L4 at no visible quality cost
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+
+def big_gpu():
+    """A100 / L4 class GPU (more than 20 GB): keep data on the GPU, use longer windows."""
+    return DEVICE == "cuda" and torch.cuda.get_device_properties(0).total_memory > 20e9
 SAM2_MODELS = {
     "large": ("sam2.1_hiera_large.pt", "configs/sam2.1/sam2.1_hiera_l.yaml"),
     "base_plus": ("sam2.1_hiera_base_plus.pt", "configs/sam2.1/sam2.1_hiera_b+.yaml"),
@@ -48,6 +56,7 @@ _PROGRESS = None
 
 
 _PREVIEW = None
+TIMINGS = {}  # seconds spent per stage (shown to the user; shows which step is slow)
 
 
 def set_progress(fn):
@@ -85,9 +94,17 @@ class Stages:
         return f"Part {self.outer[0] + 1}/{self.outer[1]} · " if self.outer else ""
 
     def start(self, i):
+        self.done()
+        self._t = time.time()
         self.i = i
         log(f"{self._pre()}{i + 1}/{len(self.names)} {self.names[i]} ...",
             self._f(i / len(self.names)))
+
+    def done(self):
+        if getattr(self, "_t", None) is not None:
+            k = self.names[self.i]
+            TIMINGS[k] = TIMINGS.get(k, 0.0) + time.time() - self._t
+            self._t = None
 
     def step(self, j, total):
         every = max(1, total // 20)
@@ -112,7 +129,7 @@ def _read_mask(d, i):
 
 
 def _write_mask(d, i, m):
-    cv2.imwrite(_mpath(d, i), m.astype(np.uint8) * 255)
+    cv2.imwrite(_mpath(d, i), m.astype(np.uint8) * 255, [cv2.IMWRITE_PNG_COMPRESSION, 1])
 
 
 def _bbox(mask):
@@ -263,10 +280,11 @@ class FFWriter:
 
 
 # ---------------------------------------------------------------- scan: scenes + people
-def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=8):
+def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None):
     """One streaming pass: colour-change score per frame (for scene cuts) + person boxes."""
     from ultralytics import YOLO
     model = YOLO(det_weights)
+    batch = batch or (16 if DEVICE == "cuda" else 4)
     scores, boxes, buf, prev = [], [], [], None
 
     def flush():
@@ -359,6 +377,26 @@ def segment_boxes(img_pred, img_bgr, boxes):
     return out
 
 
+def segment_frames(img_pred, imgs_bgr, boxes_list):
+    """Masks for the boxes of several frames at once (same result as segment_boxes)."""
+    idx = [k for k, b in enumerate(boxes_list) if len(b)]
+    out = [[] for _ in boxes_list]
+    if not idx:
+        return out
+    with torch.inference_mode(), _autocast():
+        img_pred.set_image_batch([cv2.cvtColor(imgs_bgr[k], cv2.COLOR_BGR2RGB) for k in idx])
+        ms, _, _ = img_pred.predict_batch(box_batch=[np.asarray(boxes_list[k], np.float32) for k in idx],
+                                          multimask_output=False)
+    for k, m in zip(idx, ms):
+        m = m[:, None] if m.ndim == 3 and len(boxes_list[k]) > 1 else m
+        m = m[None] if m.ndim == 3 else m
+        out[k] = [mm[0] > 0.5 for mm in m]
+    return out
+
+
+SEG_BATCH = 8 if DEVICE == "cuda" else 2
+
+
 def person_at(img_pred, frame_path, boxes, x, y):
     """The person under a click: (box, mask). Prefers a detected person whose mask
     contains the click; otherwise segments from the click point itself."""
@@ -391,7 +429,8 @@ def _track_seq(pred, frames, idxs, seeds, tmp, on_frame):
     for j, g in enumerate(idxs):
         os.symlink(os.path.abspath(frames[g]), os.path.join(tmp, f"{j:05d}.jpg"))
     with torch.inference_mode(), _autocast():
-        st = pred.init_state(tmp, offload_video_to_cpu=True, offload_state_to_cpu=True)
+        off = not big_gpu()
+        st = pred.init_state(tmp, offload_video_to_cpu=off, offload_state_to_cpu=off)
         for k, (kind, arr) in enumerate(seeds):
             if kind == "box":
                 pred.add_new_points_or_box(st, frame_idx=0, obj_id=k + 1, box=arr)
@@ -444,13 +483,18 @@ def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, l
     (and into an instance-label image used to seed tracking)."""
     for d in (raw_dir, prot_dir, inst_dir):
         os.makedirs(d, exist_ok=True)
+    seg = {}
     for i in range(lo, hi):
+        if i not in seg:
+            ks = list(range(i, min(hi, i + SEG_BATCH)))
+            got = segment_frames(img_pred, [cv2.imread(frames[k]) for k in ks], [boxes[k] for k in ks])
+            seg = dict(zip(ks, got))
         tgt = _read_mask(tgt_dir, i)
         other = np.zeros_like(tgt)
         prot = tgt.copy()
         inst = []
         if len(boxes[i]):
-            masks = segment_boxes(img_pred, cv2.imread(frames[i]), boxes[i])
+            masks = seg[i]
             scores = [(m & tgt).sum() / max(m.sum(), 1) for m in masks]
             keep = int(np.argmax(scores)) if tgt.any() and max(scores) >= keep_thr else -1
             for k, m in enumerate(masks):
@@ -735,7 +779,7 @@ def fill_size(w, h, area=832 * 480):
 class MiniMaxFiller:
     """Generates realistic background where people were removed (diffusion model)."""
 
-    def __init__(self, code_dir=MM_CODE, weights=MM_WEIGHTS, steps=12):
+    def __init__(self, code_dir=MM_CODE, weights=MM_WEIGHTS, steps=8):
         if code_dir not in sys.path:
             sys.path.insert(0, code_dir)
         from diffusers.models import AutoencoderKLWan
@@ -749,7 +793,7 @@ class MiniMaxFiller:
         self.pipe = Minimax_Remover_Pipeline(transformer=tr, vae=vae, scheduler=sch).to("cuda")
         self.steps = steps
 
-    def fill(self, imgs, masks, fw, fh, dil=2):
+    def fill(self, imgs, masks, fw, fh, dil=2, seed=42, steps=None):
         """imgs: BGR frames, masks: bool arrays; len must be 4k+1. Returns BGR frames (fw x fh)."""
         x = np.stack([cv2.cvtColor(cv2.resize(im, (fw, fh), interpolation=cv2.INTER_AREA),
                                    cv2.COLOR_BGR2RGB) for im in imgs])
@@ -757,8 +801,8 @@ class MiniMaxFiller:
                       for k in masks])[..., None]
         out = self.pipe(images=torch.from_numpy(x).float() / 127.5 - 1.0,
                         masks=torch.from_numpy(m).float(), num_frames=len(imgs), height=fh,
-                        width=fw, num_inference_steps=self.steps,
-                        generator=torch.Generator(device="cuda").manual_seed(42),
+                        width=fw, num_inference_steps=steps or self.steps,
+                        generator=torch.Generator(device="cuda").manual_seed(seed),
                         iterations=dil).frames[0]
         return [cv2.cvtColor(np.clip(o * 255 + 0.5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
                 for o in out]
@@ -806,12 +850,16 @@ def crop_box(masks, w, h, margin=0.6, min_short=200, full_at=0.8):
 
 
 def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=49, overlap=8,
-                   stages=None):
+                   stages=None, seed=42, reuse=None, changed=None, steps=None):
     """Same output format as inpaint(): (chunks, {chunk: (folder, extension)}); the folder
     holds full-size frames with the removed areas filled in."""
     chs = plan_chunks(ranges, window, overlap)
     todo = [c for c, (a, b, _, _) in enumerate(chs) if any(flags[i] for i in range(a, b))]
     results = {}
+    if reuse and reuse[0] == chs and changed is not None:  # only repaint what changed
+        keep = [c for c in todo if c in reuse[1] and not any(i in changed for i in range(*chs[c][:2]))]
+        results.update({c: reuse[1][c] for c in keep})
+        todo = [c for c in todo if c not in keep]
     for t, c in enumerate(todo):
         a, b, _, _ = chs[c]
         seq = list(range(a, b))
@@ -821,8 +869,8 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         x1, y1, x2, y2 = crop_box(masks, w, h)
         fw, fh = fill_size(x2 - x1, y2 - y1)
         out = filler.fill([im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks],
-                          fw, fh)
-        d = os.path.join(work, "mm_out", f"c{c:04d}")
+                          fw, fh, seed=seed, steps=steps)
+        d = os.path.join(work, "mm_out", f"c{c:04d}_s{seed}")
         os.makedirs(d, exist_ok=True)
         for j in range(len(seq)):
             full = imgs[j].copy()
@@ -833,6 +881,133 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         if stages:
             stages.step(t + 1, len(todo))
     return chs, results
+
+
+def is_static(frames, final_dir, prot_dir, lo, hi, samples=12, max_shift=1.0, max_diff=7.0):
+    """True when the camera does not move in frames [lo, hi) (tripod, presentation, interview)."""
+    if hi - lo < 8:
+        return False
+    idx = sorted(set(np.linspace(lo, hi - 1, min(samples, hi - lo)).round().astype(int).tolist()))
+    prev = None
+    shifts, diffs = [], []
+    for i in idx:
+        img = cv2.imread(frames[i])
+        sw = 320
+        sh = max(8, int(round(img.shape[0] * sw / img.shape[1])))
+        g = cv2.cvtColor(cv2.resize(img, (sw, sh), interpolation=cv2.INTER_AREA),
+                         cv2.COLOR_BGR2GRAY).astype(np.float32)
+        busy = cv2.resize((_read_mask(final_dir, i) | _read_mask(prot_dir, i)).astype(np.uint8),
+                          (sw, sh), interpolation=cv2.INTER_NEAREST)
+        busy = cv2.dilate(busy, np.ones((7, 7), np.uint8)) > 0
+        if prev is not None:
+            (dx, dy), _ = cv2.phaseCorrelate(prev[0], g)
+            shifts.append(float(np.hypot(dx, dy)))
+            free = ~(busy | prev[1])
+            if free.sum() > 100:
+                diffs.append(float(np.abs(g - prev[0])[free].mean()))
+        prev = (g, busy)
+    return bool(shifts) and max(shifts) <= max_shift and (not diffs or np.median(diffs) <= max_diff)
+
+
+def fill_holes(img, holes, filler=None, steps=None, seed=42):
+    """Fill pixels that were never visible (a person who never moved): AI fill if available,
+    otherwise classic inpainting."""
+    if not holes.any():
+        return img
+    h, w = holes.shape
+    holes = cv2.dilate(holes.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    if filler is not None:
+        try:
+            x1, y1, x2, y2 = crop_box([holes], w, h)
+            fw, fh = fill_size(x2 - x1, y2 - y1)
+            out = filler.fill([img[y1:y2, x1:x2]], [holes[y1:y2, x1:x2]], fw, fh, steps=steps,
+                              seed=seed)[0]
+            res = img.copy()
+            patch = cv2.resize(out, (x2 - x1, y2 - y1), interpolation=cv2.INTER_LANCZOS4)
+            hm = holes[y1:y2, x1:x2]
+            res[y1:y2, x1:x2][hm] = patch[hm]
+            return res
+        except Exception:
+            traceback.print_exc()
+    return smooth_fill(img, holes)
+
+
+def smooth_fill(img, holes):
+    """Fallback fill without AI: smooth colours pulled in from all around the hole
+    (push-pull pyramid). Looks natural on walls and skies; never streaky."""
+    known = (~holes).astype(np.float32)
+    if not known.any():
+        return img
+    pyr = [(img.astype(np.float32) * known[..., None], known)]
+    while min(pyr[-1][1].shape) > 8:
+        i_, w_ = pyr[-1]
+        pyr.append((cv2.pyrDown(i_), cv2.pyrDown(w_)))
+    i_, w_ = pyr[-1]
+    est = i_ / np.maximum(w_, 1e-6)[..., None]
+    if (w_ < 1e-6).any():
+        est[w_ < 1e-6] = img[~holes].mean(0)
+    for i_, w_ in reversed(pyr[:-1]):
+        up = cv2.resize(est, (w_.shape[1], w_.shape[0]), interpolation=cv2.INTER_LINEAR)
+        a = np.clip(w_ * 2, 0, 1)[..., None]  # trust pixels that are (mostly) known
+        est = i_ / np.maximum(w_, 1e-6)[..., None] * a + up * (1 - a)
+    out = img.copy()
+    out[holes] = np.clip(est[holes] + 0.5, 0, 255).astype(np.uint8)
+    return out
+
+
+def plate_fill(frames, final_dir, prot_dir, flags, ranges, w, h, filler=None, window=120,
+               samples=40, steps=None, seed=42, stages=None, overlap=8):
+    """Steady camera: build a clean picture of the empty background from the moments when each
+    pixel was not covered by anyone, and reuse it in every frame (sharp, no flicker, fast)."""
+    chs = plan_chunks(ranges, window, overlap)  # overlapping windows cross-fade, no jumps
+    results = {}
+    by_range = {}
+    for c, (a, b, sa, sb) in enumerate(chs):
+        by_range.setdefault((sa, sb), []).append(c)
+    done = 0
+    for (sa, sb), cs in by_range.items():
+        if not any(flags[i] for i in range(sa, sb)):
+            continue
+        acc_u = np.zeros((h, w, 3), np.float64)
+        cnt_u = np.zeros((h, w), np.float64)
+        per = {}
+        for c in cs:
+            a, b = chs[c][:2]
+            lo2, hi2 = max(sa, a - window // 2), min(sb, b + window // 2)
+            idx = sorted(set(np.linspace(lo2, hi2 - 1, min(samples, hi2 - lo2)).round().astype(int).tolist()))
+            acc = np.zeros((h, w, 3), np.float64)
+            cnt = np.zeros((h, w), np.float64)
+            for i in idx:
+                busy = cv2.dilate((_read_mask(final_dir, i) | _read_mask(prot_dir, i)).astype(np.uint8),
+                                  np.ones((7, 7), np.uint8)) > 0
+                free = ~busy
+                acc[free] += cv2.imread(frames[i])[free]
+                cnt[free] += 1
+            per[c] = (acc, cnt)
+            acc_u += acc
+            cnt_u += cnt
+        unit_plate = (acc_u / np.maximum(cnt_u, 1)[..., None]).astype(np.uint8)
+        unit_plate = fill_holes(unit_plate, cnt_u == 0, filler, steps, seed)
+        for c in cs:
+            acc, cnt = per[c]
+            pl = (acc / np.maximum(cnt, 1)[..., None]).astype(np.uint8)
+            hole = cnt == 0
+            pl[hole] = unit_plate[hole]
+            results[c] = ("plate", pl)
+            done += 1
+            if stages:
+                stages.step(done, len(chs))
+    return chs, results
+
+
+def _merge_fills(parts):
+    """Combine (chunks, results) from several fill methods into one."""
+    chs, res = [], {}
+    for c_list, r in parts:
+        off = len(chs)
+        chs += c_list
+        res.update({k + off: v for k, v in r.items()})
+    return chs, res
 
 
 def _sam2_to(vid_pred, img_pred, device):
@@ -933,8 +1108,11 @@ def _inpainted_frame(g, chs, results, overlap, size):
         if b < sb:
             wgt *= min(1.0, (b - g) / (overlap + 1))
         folder, ext = results[c]
-        img = cv2.imread(os.path.join(folder, f"{g - a:04d}{ext}")).astype(np.float32)
-        img = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
+        if isinstance(folder, str) and folder == "plate":  # steady camera: clean background
+            img = ext.astype(np.float32)
+        else:
+            img = cv2.imread(os.path.join(folder, f"{g - a:04d}{ext}")).astype(np.float32)
+            img = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
         acc = img * wgt if acc is None else acc + img * wgt
         wsum += wgt
     return acc / wsum
@@ -947,13 +1125,25 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
         orig = cv2.imread(frames[g])
         if not flags.get(g):
             wr.write(orig)
-        else:
+        else:  # blend only around the removed area (fast), matching the frame's brightness
             inp = _inpainted_frame(g, chs, results, overlap, (w, h))
-            m = _read_mask(final_dir, g).astype(np.float32)
+            mb = _read_mask(final_dir, g)
+            x1, y1, x2, y2 = (int(v) for v in _bbox(mb))
+            pd = 4 * feather_px + 2
+            x1, y1, x2, y2 = max(0, x1 - pd), max(0, y1 - pd), min(w, x2 + pd), min(h, y2 + pd)
+            mm = mb[y1:y2, x1:x2]
+            m = mm.astype(np.float32)
             a = np.maximum(cv2.GaussianBlur(m, (0, 0), feather_px), m) if feather_px > 0 else m
-            a[_read_mask(prot_dir, g)] = 0.0
-            out = orig.astype(np.float32) * (1 - a[..., None]) + inp * a[..., None]
-            orig = np.clip(out + 0.5, 0, 255).astype(np.uint8)
+            pr = _read_mask(prot_dir, g)[y1:y2, x1:x2]
+            a[pr] = 0.0
+            o = orig[y1:y2, x1:x2].astype(np.float32)
+            f = inp[y1:y2, x1:x2]
+            ring = (cv2.dilate(mm.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0) & ~mm & ~pr
+            if ring.sum() > 50:
+                f = f * np.clip((o[ring].mean(0) + 1) / (f[ring].mean(0) + 1), 0.85, 1.18)
+            orig = orig.copy()
+            orig[y1:y2, x1:x2] = np.clip(o * (1 - a[..., None]) + f * a[..., None] + 0.5, 0,
+                                         255).astype(np.uint8)
             wr.write(orig)
         if _PREVIEW is not None and (g - lo) % 12 == 0:
             try:
@@ -1272,11 +1462,16 @@ def mask_removal(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, lo, hi, st
     every other detected person is protected (never erased)."""
     for d in (raw_dir, prot_dir):
         os.makedirs(d, exist_ok=True)
+    seg = {}
     for i in range(lo, hi):
+        if i not in seg:
+            ks = list(range(i, min(hi, i + SEG_BATCH)))
+            got = segment_frames(img_pred, [cv2.imread(frames[k]) for k in ks], [boxes[k] for k in ks])
+            seg = dict(zip(ks, got))
         rem = _read_mask(tgt_dir, i)
         prot = np.zeros_like(rem)
         if len(boxes[i]):
-            for m in segment_boxes(img_pred, cv2.imread(frames[i]), boxes[i]):
+            for m in seg[i]:
                 if rem.any() and (m & rem).sum() >= 0.3 * max(m.sum(), 1):
                     rem |= m
                 else:
@@ -1336,7 +1531,10 @@ def _part_signature(st, p, grow, pad):
         seeds = [[_seed_key(x) for x in removal_seeds(st, u)] for u in us]
     else:
         seeds = [_seed_key(scene_seed(st, u)) for u in us]
-    return {"range": [a, b], "mode": st.get("mode", "keep"), "seeds": seeds,
+    extra = [[_seed_key(x) for x in st.get(k, {}).get(u, [])] for k in ("extra", "keep_extra")
+             for u in us]
+    return {"range": [a, b], "mode": st.get("mode", "keep"), "seeds": seeds, "extra": extra,
+            "opts": st.get("part_opts", {}).get(p, {}), "steps": st.get("steps"),
             "grow": grow, "pad": pad, "preset": st["preset"], "fill": st.get("fill", "realistic")}
 
 
@@ -1358,16 +1556,159 @@ def final_path(job_dir, st, check=False):
     return os.path.join(out_dir, f"{base} - {what}{' - check' if check else ''}.mp4")
 
 
-def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2):
+_DET = {}
+
+
+def _detector(weights):
+    if weights not in _DET:
+        from ultralytics import YOLO
+        _DET.clear()
+        _DET[weights] = YOLO(weights)
+    return _DET[weights]
+
+
+def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.35):
+    """Self-check of a finished part: people who should not be there. Keep mode: anyone away
+    from the kept person. Remove mode: a person seen where someone was removed."""
+    cfg = PRESETS[st["preset"]]
+    det, w, h = _detector(cfg["det"]), st["w"], st["h"]
+    remove_mode = st.get("mode") == "remove"
+    out, batch, ids = [], [], []
+
+    def kept_nearby(g, bx):  # tracking dropout of the kept person must not count
+        for dg in range(1, 46):
+            for gg in (g - dg, g + dg):
+                if a <= gg < b:
+                    pr = _read_mask(prot_dir, gg)
+                    if pr.any():
+                        return _iou(bx, _bbox(pr)) > 0.3
+        return False
+
+    def flush():
+        res = det.predict(batch, classes=[0], conf=conf, imgsz=cfg["det_imgsz"], verbose=False,
+                          device=0 if DEVICE == "cuda" else "cpu")
+        for g, r in zip(ids, res):
+            for bx in r.boxes.xyxy.cpu().numpy().astype(np.float32):
+                x1, y1 = max(0, int(bx[0])), max(0, int(bx[1]))
+                x2, y2 = min(w, int(bx[2])), min(h, int(bx[3]))
+                if x2 - x1 < 4 or y2 - y1 < 4:
+                    continue
+                pr = _read_mask(prot_dir, g)
+                if remove_mode:
+                    if (_read_mask(final_dir, g)[y1:y2, x1:x2].mean() > 0.5
+                            and pr[y1:y2, x1:x2].mean() < 0.3):
+                        out.append((g, bx))
+                    continue
+                if pr[y1:y2, x1:x2].mean() >= 0.15:
+                    continue
+                if pr.any() and _iou(bx, _bbox(pr)) >= 0.2:
+                    continue
+                if not pr.any() and kept_nearby(g, bx):
+                    continue
+                out.append((g, bx))
+        batch.clear()
+        ids.clear()
+
+    proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", part_mp4, "-f", "rawvideo",
+                             "-pix_fmt", "bgr24", "-vsync", "passthrough", "-"],
+                            stdout=subprocess.PIPE, bufsize=10 ** 8)
+    try:
+        for g in range(a, b):
+            buf = proc.stdout.read(w * h * 3)
+            if len(buf) < w * h * 3:
+                break
+            if (g - a) % stride == 0:
+                batch.append(np.frombuffer(buf, np.uint8).reshape(h, w, 3).copy())
+                ids.append(g)
+                if len(batch) == 8:
+                    flush()
+        if batch:
+            flush()
+    finally:
+        proc.stdout.close()
+        proc.wait()
+    return out
+
+
+def _apply_self_fix(st, p, viol, max_per_unit=3):
+    """Turn self-check findings into fixes for this part. Returns how many fixes were made."""
+    opts = st.setdefault("part_opts", {}).setdefault(p, {})
+    if st.get("mode") == "remove":  # leftovers where people were removed: wider masks, repaint
+        opts["grow_mult"] = round(opts.get("grow_mult", 1.0) * 1.4, 3)
+        opts["seed"] = opts.get("seed", 42) + 1
+        return 1
+    made = 0
+    groups = {}
+    for g, bx in viol:  # same person seen in several frames -> one fix
+        u = int(st["_unit_of"][g])
+        gl = groups.setdefault(u, [])
+        for grp in gl:
+            if _iou(grp[-1][1], bx) > 0.3:
+                grp.append((g, bx))
+                break
+        else:
+            gl.append([(g, bx)])
+    for u, gl in groups.items():
+        cur = st.setdefault("extra", {}).setdefault(u, [])
+        for grp in sorted(gl, key=len, reverse=True)[:max_per_unit]:
+            g, bx = grp[len(grp) // 2]
+            if not any(f == g and _iou(b2, bx) > 0.5 for f, b2 in cur):
+                cur.append((int(g), np.asarray(bx, np.float32)))
+                made += 1
+    if made:
+        opts["grow_mult"] = round(opts.get("grow_mult", 1.0) * 1.15, 3)
+    return made
+
+
+def _track_extra(st, vid_pred, video, key, us, work, dst, minus=None):
+    """Track people the user or the self-check pointed out (st[key][unit] = seeds) and add
+    them to the masks in dst (minus the pixels in `minus`)."""
+    one = os.path.join(work, "extra_one")
+    for u in us:
+        lo, hi, _ = st["units"][u]
+        for f, box in st.get(key, {}).get(u, []):
+            shutil.rmtree(one, ignore_errors=True)
+            track_target(vid_pred, video, f, box, one, os.path.join(work, "tmp_track"), lo, hi)
+            os.makedirs(dst, exist_ok=True)
+            for i in range(lo, hi):
+                m = _read_mask(one, i)
+                if minus:
+                    m &= ~_read_mask(minus, i)
+                if os.path.exists(_mpath(dst, i)):
+                    m |= _read_mask(dst, i)
+                _write_mask(dst, i, m)
+
+
+_FILL = {}
+
+
+def _get_filler():
+    """(fill model or None, close after use). On big GPUs it stays loaded between parts."""
+    if not big_gpu():
+        return MiniMaxFiller(), True
+    if "mm" not in _FILL:
+        try:
+            _FILL["mm"] = MiniMaxFiller()
+        except Exception:
+            _FILL["mm"] = None
+            raise
+    if _FILL["mm"] is None:
+        raise RuntimeError("fill model unavailable")
+    return _FILL["mm"], False
+
+
+def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
+    """Masks, fill and composite for one part, left in the part work folder.
+    Returns the self-check findings (empty if all is well or not checked)."""
     a, b = st["parts"][p]
     video, w, h, fps = st["_video"], st["w"], st["h"], st["fps"]
     us = [u for u, (lo, hi, _) in enumerate(st["units"]) if a <= lo and hi <= b]
     ranges = [tuple(st["units"][u][:2]) for u in us]
+    opts = st.get("part_opts", {}).get(p, {})
+    grow_eff = grow * opts.get("grow_mult", 1.0)
+    steps, seed = opts.get("steps") or st.get("steps"), opts.get("seed", 42)
     cfg = PRESETS[st["preset"]]
-    pp_side = cfg["pp_max_side"]
-    if DEVICE == "cuda" and st["preset"] == "Best" and \
-            torch.cuda.get_device_properties(0).total_memory > 20e9:
-        pp_side = 1280  # L4 / A100 have room for sharper fills
+    pp_side = 1280 if (st["preset"] == "Best" and big_gpu()) else cfg["pp_max_side"]
     work = os.path.join(st["cache"], "part_work")
     shutil.rmtree(work, ignore_errors=True)
     d = {k: os.path.join(work, k) for k in ("raw", "protect", "inst", "tracked", "final")}
@@ -1375,7 +1716,8 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2):
     remove_mode = st.get("mode") == "remove"
     S = Stages(["Tracking the people to remove" if remove_mode else "Tracking your person",
                 "Outlining everyone", "Tracking everyone else", "Building masks",
-                "Rebuilding background", "Writing video"], outer=(p, len(st["parts"])))
+                "Rebuilding background", "Writing video", "Checking the result"],
+               outer=(p, len(st["parts"])))
     S.start(0)
     video.ensure(a, b)
     for t, u in enumerate(us):
@@ -1387,15 +1729,20 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2):
     S.start(1)
     if remove_mode:
         mask_removal(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], a, b, stages=S)
+        _track_extra(st, vid_pred, video, "keep_extra", us, work, d["protect"])
+        os.makedirs(d["tracked"], exist_ok=True)
+        _track_extra(st, vid_pred, video, "extra", us, work, d["tracked"], minus=d["protect"])
     else:
         mask_others(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], d["inst"], a, b,
                     stages=S)
         S.start(2)
         track_others(vid_pred, video, d["inst"], d["protect"], d["tracked"],
                      os.path.join(work, "tmp_track"), ranges, stages=S)
+        # people the self-check or the user pointed out
+        _track_extra(st, vid_pred, video, "extra", us, work, d["tracked"], minus=d["protect"])
     S.start(3)
     flags = finalize_masks(d["raw"], d["tracked"], d["protect"], d["final"], ranges, pad,
-                           max(1, round(grow * max(h, w))))
+                           max(1, round(grow_eff * max(h, w))))
     labels = {}
     for u in us:
         lo, hi, _ = st["units"][u]
@@ -1406,55 +1753,197 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2):
     S.start(4)
     if DEVICE == "cuda":
         torch.cuda.empty_cache()
-    chs = results = None
-    ov = 16
-    if st.get("fill", "realistic") == "realistic":
-        big = DEVICE == "cuda" and torch.cuda.get_device_properties(0).total_memory > 20e9
+    need = [r for r in ranges if any(flags[i] for i in range(*r))]
+    static = [] if opts.get("no_plate") else [
+        r for r in need if is_static(video, d["final"], d["protect"], *r)]
+    st.setdefault("plate_ranges", {})[p] = static
+    moving = [r for r in need if r not in static]
+    if static or moving:
+        log(f"  {len(static)} steady-camera and {len(moving)} moving-camera scene piece(s) to fill")
+    fills, ov = [], 16
+    filler, close_it = None, False
+    use_ai = st.get("fill", "realistic") == "realistic" or opts.get("ai")
+    offload = use_ai and not big_gpu()
+    if offload:
         _sam2_to(vid_pred, img_pred, "cpu")  # free GPU memory for the fill model
-        filler = None
-        try:
-            filler = MiniMaxFiller()
-            for win in ((81, 49, 25) if big else (49, 25)):
+    try:
+        if use_ai:
+            try:
+                filler, close_it = _get_filler()
+            except Exception as e:  # missing model, download problem ... -> fast fill instead
+                traceback.print_exc()
+                log(f"  realistic fill unavailable ({e.__class__.__name__}); using the fast fill")
+        if static:
+            fills.append(plate_fill(video, d["final"], d["protect"], flags, static, w, h, filler,
+                                    steps=steps, seed=seed, stages=S))
+        done_moving = False
+        if moving and filler is not None:
+            for win in ((81, 49, 25) if big_gpu() else (49, 25)):
                 try:
                     shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
-                    chs, results = fill_realistic(video, d["final"], flags, work, ranges, w, h,
-                                                  filler, window=win, overlap=8, stages=S)
-                    ov = 8
+                    fills.append(fill_realistic(video, d["final"], flags, work, moving, w, h, filler,
+                                                window=win, overlap=8, stages=S, seed=seed,
+                                                steps=steps))
+                    ov, done_moving = 8, True
                     break
                 except torch.cuda.OutOfMemoryError:
                     torch.cuda.empty_cache()
-                    log(f"  GPU memory full; retrying with shorter pieces")
-        except Exception as e:  # missing model, download problem ... -> fast fill instead
-            traceback.print_exc()
-            log(f"  realistic fill unavailable ({e.__class__.__name__}); using the fast fill")
-        finally:
-            if filler is not None:
-                filler.close()
+                    log("  GPU memory full; retrying with shorter pieces")
+    finally:
+        if filler is not None and close_it:
+            filler.close()
+        if offload:
             _sam2_to(vid_pred, img_pred, DEVICE)
-    if results is None:
-        chs, results = inpaint(video, d["final"], flags, work, pp_dir, ranges, w, h, pp_side,
-                               stages=S)
+    if moving and not done_moving:
+        fills.append(inpaint(video, d["final"], flags, work, pp_dir, moving, w, h, pp_side,
+                             stages=S))
         ov = 16
+    chs, results = _merge_fills(fills)
     S.start(5)
     out = os.path.join(work, "part.mp4")
     composite(video, d["final"], d["protect"], flags, chs, results, out, fps, a, b, w, h,
               overlap=ov, stages=S)
-    _copy_atomic(out, _part_file(st["job_dir"], p, ".mp4"))
-    _copy_atomic(chk, _part_file(st["job_dir"], p, "_check.mp4"))
+    viol = []
+    if check:
+        S.start(6)
+        viol = verify_part(st, out, a, b, d["protect"], d["final"])
+    S.done()
+    return viol
+
+
+def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=2, self_check=True):
+    a, b = st["parts"][p]
+    rep = {"found": 0, "fixed": 0, "left": []}
+    for rnd in range(2 if self_check else 1):
+        viol = _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check=self_check)
+        if rnd == 0:
+            rep["found"] = len(viol)
+        if not viol:
+            break
+        frames = sorted({int(g) for g, _ in viol})
+        if rnd == 1:  # still there after the automatic fix: show to the user
+            rep["left"] = frames[::max(1, len(frames) // 5)][:5]
+            log(f"  Self-check: {len(viol)} sighting(s) remain - please check them")
+            break
+        made = _apply_self_fix(st, p, viol)
+        log(f"  Self-check: {len(viol)} sighting(s) of people who should be gone; "
+            f"{'fixing this part' if made else 'nothing to change'}")
+        save_job(st)
+        if not made:
+            rep["left"] = frames[::max(1, len(frames) // 5)][:5]
+            break
+        rep["fixed"] = made
+    st.setdefault("selfcheck", {})[p] = rep
+    work = os.path.join(st["cache"], "part_work")
+    _copy_atomic(os.path.join(work, "part.mp4"), _part_file(st["job_dir"], p, ".mp4"))
+    _copy_atomic(os.path.join(work, "check.mp4"), _part_file(st["job_dir"], p, "_check.mp4"))
     with open(_part_file(st["job_dir"], p, ".json") + ".tmp", "w") as f:
         json.dump(_part_signature(st, p, grow, pad), f)
     os.replace(_part_file(st["job_dir"], p, ".json") + ".tmp", _part_file(st["job_dir"], p, ".json"))
     # free local disk: this part's frames and masks are no longer needed
     shutil.rmtree(work, ignore_errors=True)
-    video.drop(a, b)
-    for u in us:
-        lo, hi, _ = st["units"][u]
-        for i in range(lo, hi):
-            try:
-                os.remove(_mpath(tgt, i))
-            except FileNotFoundError:
-                pass
-        st["_tracked"].pop(u, None)
+    st["_video"].drop(a, b)
+    tgt = os.path.join(st["cache"], "target")
+    for u, (lo, hi, _) in enumerate(st["units"]):
+        if a <= lo and hi <= b:
+            for i in range(lo, hi):
+                try:
+                    os.remove(_mpath(tgt, i))
+                except FileNotFoundError:
+                    pass
+            st["_tracked"].pop(u, None)
+
+
+# ---------------------------------------------------------------- feedback (fix & learn)
+def part_of(st, frame):
+    return next(k for k, (a, b) in enumerate(st["parts"]) if a <= frame < b)
+
+
+def log_feedback(st, fb_dir, kind, frame=None, x=None, y=None, text=""):
+    """Append one feedback record (and a marked snapshot) to the feedback log."""
+    fb_dir = fb_dir or os.path.join(os.path.dirname(st["job_dir"]), "Feedback")
+    os.makedirs(fb_dir, exist_ok=True)
+    rec = dict(time=time.strftime("%Y-%m-%d %H:%M:%S"), job=st["name"], video=st["src"],
+               mode=st.get("mode", "keep"), kind=kind, frame=frame, x=x, y=y, text=text,
+               second=None if frame is None else round(frame / fps_float(st["fps"]), 2))
+    with open(os.path.join(fb_dir, "feedback.jsonl"), "a") as f:
+        f.write(json.dumps(rec) + "\n")
+    if frame is not None and x is not None:
+        img = cv2.imread(st["_video"][frame])
+        r = max(12, img.shape[1] // 60)
+        cv2.circle(img, (int(x), int(y)), r, (0, 0, 255), max(3, r // 4))
+        os.makedirs(os.path.join(fb_dir, "pictures"), exist_ok=True)
+        cv2.imwrite(os.path.join(fb_dir, "pictures", f"{st['name']}_{frame:06d}_{kind}.jpg"), img)
+
+
+def add_feedback(st, img_pred, kind, frame, x=None, y=None, text="", fb_dir=None):
+    """Apply one correction from the user to the job (the affected part is redone on the
+    next run) and log it. kind: person | smudge | edges | note. Returns a message."""
+    frame = int(frame)
+    u, p = int(st["_unit_of"][frame]), part_of(st, frame)
+    opts = st.setdefault("part_opts", {}).setdefault(p, {})
+    if kind == "person":
+        box, _ = person_at(img_pred, st["_video"][frame], st["boxes"][frame], x, y)
+        if box is None:
+            return None
+        seed = (frame, np.asarray(box, np.float32))
+        if st.get("mode") == "remove":
+            st.setdefault("rseeds", {})[u] = list(removal_seeds(st, u)) + [seed]
+        else:
+            st.setdefault("extra", {}).setdefault(u, []).append(seed)
+        opts["grow_mult"] = round(opts.get("grow_mult", 1.0) * 1.2, 3)
+        msg = "remove the person there"
+    elif kind == "wrong":  # this person should stay
+        box, _ = person_at(img_pred, st["_video"][frame], st["boxes"][frame], x, y)
+        if box is None:
+            return None
+        if st.get("mode") == "remove":
+            st.setdefault("keep_extra", {}).setdefault(u, []).append(
+                (frame, np.asarray(box, np.float32)))
+        else:
+            set_keeper(st, img_pred, frame, x, y, reset_search=False)
+        msg = "keep that person"
+    elif kind == "smudge":
+        opts["steps"] = min(24, (opts.get("steps") or st.get("steps") or 8) + 6)
+        opts["seed"] = opts.get("seed", 42) + 1
+        opts["ai"] = True
+        opts["smudge"] = opts.get("smudge", 0) + 1
+        if opts["smudge"] >= 2:  # still smudged: switch method (video model instead of plate)
+            opts["no_plate"] = True
+        msg = "repaint that area more carefully"
+    elif kind == "edges":
+        opts["grow_mult"] = round(opts.get("grow_mult", 1.0) * 1.5, 3)
+        msg = "remove a wider area around people there"
+    else:
+        msg = "note saved"
+    log_feedback(st, fb_dir, kind, frame, x, y, text)
+    save_job(st)
+    return msg
+
+
+def learned_defaults(fb_dir):
+    """Settings that adapt to the user's past corrections (the more often a problem was
+    reported, the more the defaults lean against it)."""
+    counts = {}
+    path = os.path.join(fb_dir or "", "feedback.jsonl")
+    if fb_dir and os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                try:
+                    k = json.loads(line)["kind"]
+                except Exception:
+                    continue
+                counts[k] = counts.get(k, 0) + 1
+    e, pz, sm = (min(counts.get(k, 0), 3) for k in ("edges", "person", "smudge"))
+    notes = []
+    if e:
+        notes.append(f"wider edges (+{round((1.25 ** e - 1) * 100)}%)")
+    if pz:
+        notes.append("finds more people")
+    if sm:
+        notes.append("more careful painting")
+    return dict(grow=round(0.012 * 1.25 ** e, 4), conf=max(0.15, 0.25 - 0.05 * min(pz, 2)),
+                steps=8 + 4 * min(sm, 2), notes=notes, counts=counts)
 
 
 def join_parts(st):
@@ -1496,6 +1985,8 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
             find_person(st, reid, vid_pred, img_pred, photos)
     st["grow"] = grow
     save_job(st)
+    TIMINGS.clear()
+    t0 = time.time()
     todo = [p for p in range(len(st["parts"])) if not part_is_current(st, p, grow)]
     if todo and len(todo) < len(st["parts"]):
         log(f"{len(st['parts']) - len(todo)} of {len(st['parts'])} part(s) already done; "
@@ -1513,5 +2004,7 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
         for src_, dst in ((final, out), (final_path(st["job_dir"], st, True), chk)):
             if not os.path.exists(dst):
                 _copy_atomic(src_, dst)
+    st["timings"] = dict(TIMINGS, total=time.time() - t0, parts_done=len(todo))
+    save_job(st)
     log(f"Done: {final}", 1.0)
     return out, chk

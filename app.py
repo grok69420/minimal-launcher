@@ -6,6 +6,7 @@ Google Drive > Keep One Person > Finished  finished videos appear here
 Steps: 1 your video (+ photos) -> 2 who to keep (skipped when photos work) -> 3 check
 scenes -> working (live view) -> done. Unfinished videos can be continued later."""
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -32,6 +33,9 @@ LEGACY_JOBS = os.path.join(os.path.dirname(DRIVE_ROOT), "KeepOnePerson")
 FILLS = ["Realistic (AI-painted background)", "Fast (smoother, quicker)"]
 MODES = ["Keep one person - remove everyone else", "Remove some people - keep everyone else"]
 GREEN, RED = np.array([0, 220, 0]), np.array([0, 0, 235])
+FB_KINDS = {"A person is still here": "person", "Smudged or blurry here": "smudge",
+            "Outline or shadow of a person is visible": "edges",
+            "Wrong person - this one should stay": "wrong"}
 
 
 def is_remove(st):
@@ -89,10 +93,12 @@ def job_choices():
 
 # ---------------------------------------------------------------- models
 def auto_preset(seconds):
-    """Best on big GPUs (A100/L4) or short videos, Balanced for long videos on small GPUs."""
-    if rp.DEVICE == "cuda" and torch.cuda.get_device_properties(0).total_memory > 20e9:
-        return "Best"
+    """Best for videos up to 3 minutes, Balanced (faster) for longer ones."""
     return "Best" if seconds <= 180 else "Balanced"
+
+
+def fb_dir():
+    return os.path.join(DRIVE_ROOT if drive_ok() else CACHE, "Feedback")
 
 
 def models(preset):
@@ -128,6 +134,11 @@ def _dur(sec):
 
 def _mmss(sec):
     return f"{int(sec // 60)}:{int(sec % 60):02d}"
+
+
+def _took(sec):
+    sec = int(round(sec))
+    return f"{sec // 60} min {sec % 60} s" if sec >= 60 else f"{sec} s"
 
 
 def _progress_to(progress):
@@ -224,10 +235,30 @@ def _check_text(st, by_photo=False):
             "it. **Right?** Press **Start**.")
 
 
-def _done_text():
+def _done_text(st):
     where = ("Saved in your Google Drive › **Keep One Person › Finished**." if drive_ok()
              else "Download it below.")
-    return f"### ✅ Finished!\n{where}"
+    fps = rp.fps_float(st["fps"])
+    lines = ["### ✅ Finished!", where]
+    t = st.get("timings") or {}
+    if t.get("parts_done"):
+        lines.append(f"⏱ Took **{_took(t['total'])}** for {_took(st['n'] / fps)} of video.")
+    sc = list((st.get("selfcheck") or {}).values())
+    left = sorted(g for r in sc for g in r.get("left", []))
+    if left:
+        when = ", ".join(_mmss(g / fps) for g in left[:5])
+        lines.append(f"⚠️ The self-check still sees someone at **{when}** - please look there, "
+                     "and if so press **No, fix something**.")
+    elif any(r.get("fixed") for r in sc):
+        lines.append("🔎 The self-check found leftover people and fixed them automatically.")
+    elif sc:
+        lines.append("🔎 Self-check: no leftover people found.")
+    steps = {k: v for k, v in t.items() if k not in ("total", "parts_done") and v >= 1}
+    if steps:
+        lines.append("<small>Time per step: " + " · ".join(
+            f"{k.lower()} {_took(v)}" for k, v in sorted(steps.items(), key=lambda kv: -kv[1]))
+            + "</small>")
+    return "\n\n".join(lines)
 
 
 # ---------------------------------------------------------------- live view while working
@@ -293,6 +324,9 @@ def on_page():
                 "photos there - they will show up here.")
     else:
         note = "⚠️ Google Drive is not connected: if Colab disconnects, unfinished work is lost."
+    ld = rp.learned_defaults(fb_dir())
+    if ld["notes"]:
+        note += "\n\n🧠 Learned from your corrections: " + ", ".join(ld["notes"]) + "."
     found = (f"📁 **In your Google Drive › Keep One Person:** {len(vids)} video(s) and "
              f"{len(pics)} photo(s) of the person.") if vids else ""
     return (gr.update(visible=bool(ch)), gr.update(choices=ch, value=ch[0][1] if ch else None),
@@ -321,8 +355,10 @@ def on_next1(video, path, start, end, photos=None, fill=None, mode=None, progres
         if end:
             secs = min(secs, end - (start or 0))
         preset = auto_preset(secs)
-        st = rp.create_job(src, jobs_root(), CACHE, start or 0, end or 0, preset, 0.25,
+        ld = rp.learned_defaults(fb_dir())  # adapts to the corrections you made before
+        st = rp.create_job(src, jobs_root(), CACHE, start or 0, end or 0, preset, ld["conf"],
                            PART_SECONDS)
+        st["grow"], st["steps"] = ld["grow"], ld["steps"]
         st["fill"] = "fast" if (fill or "").startswith("Fast") else "realistic"
         st["mode"] = "remove" if (mode or "").startswith("Remove") else "keep"
         st["out_dir"] = out_root()
@@ -486,14 +522,23 @@ def on_start(st):
         except StopIteration as stop:
             res = stop.value
             break
-        yield keep + [txt, img] + [gr.update()] * 5
+        yield keep + [txt, img] + [gr.update()] * 8
     out, chk = res
-    yield [st, out, gr.update(value=out), gr.update(value=chk), _done_text(), "", None] + show(4)
+    st["_out"] = out
+    st["_ver"] = st.get("_ver", 0) + 1
+    disp = os.path.join(os.path.dirname(out), f"view_{st['_ver']}.mp4")
+    try:
+        os.link(out, disp)  # new name so the player never shows an older version
+    except OSError:
+        disp = out
+    st["_fixes"] = []
+    yield [st, disp, gr.update(value=out), gr.update(value=chk), _done_text(st), "", None] + \
+        show(4) + [gr.update(visible=False), "", gr.update(interactive=False)]
 
 
 def on_maybe_start(st):
     if st is None or not st.pop("_go", False):
-        yield [gr.update()] * 12
+        yield [gr.update()] * 15
         return
     yield from on_start(st)
 
@@ -519,6 +564,64 @@ def on_continue(job_dir, progress=gr.Progress()):
     st["_go"] = True
     return [st, render(st, i), gr.update(maximum=st["n"] - 1, value=i), "", _frame_note(st, i),
             gr.update(interactive=False)] + show(3)
+
+
+# ---------------------------------------------------------------- screen 4: done + fixes
+def _out_frame(st, i, mark=None):
+    """Picture number i of the finished video (exact), optionally with a marked spot."""
+    fps = rp.fps_float(st["fps"])
+    png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, (i - 0.5) / fps):.4f}",
+                          "-i", st["_out"], "-frames:v", "1", "-f", "image2pipe", "-vcodec",
+                          "png", "-"], capture_output=True).stdout
+    img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        img = cv2.imread(st["_video"][i])
+    for (x, y) in (mark or []):
+        r = max(14, img.shape[1] // 50)
+        cv2.circle(img, (int(x), int(y)), r, (0, 220, 255), max(3, r // 4))
+    s = min(1.0, MAX_VIEW / max(img.shape[:2]))
+    st["_fb_scale"] = s
+    if s < 1:
+        img = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+
+def on_perfect(st):
+    _need(st)
+    rp.log_feedback(st, fb_dir(), "perfect")
+    return "🙏 Thanks - noted.", gr.update(visible=False)
+
+
+def on_fix_open(st):
+    _need(st)
+    left = sorted(g for r in (st.get("selfcheck") or {}).values() for g in r.get("left", []))
+    i = left[0] if left else 0
+    return (gr.update(visible=True), _out_frame(st, i),
+            gr.update(maximum=st["n"] - 1, value=i), "")
+
+
+def on_fb_slide(st, i):
+    return _out_frame(st, int(i))
+
+
+def on_fb_click(st, i, kind, note, evt: gr.SelectData):
+    _need(st)
+    i = int(i)
+    x, y = evt.index[0] / st["_fb_scale"], evt.index[1] / st["_fb_scale"]
+    try:
+        _, img_pred, _ = models(st["preset"])
+        msg = rp.add_feedback(st, img_pred, FB_KINDS.get(kind, "note"), i, x, y, note or "",
+                              fb_dir())
+    except Exception as e:
+        _fail(e)
+    if msg is None:
+        return (st, _out_frame(st, i), "No person found there - click directly on the person.",
+                gr.update(interactive=bool(st.get("_fixes"))), gr.update())
+    fps = rp.fps_float(st["fps"])
+    st.setdefault("_fixes", []).append(f"{_mmss(i / fps)} - {msg}")
+    lst = "**Fixes to make:**\n" + "\n".join(f"{k + 1}. {t}" for k, t in enumerate(st["_fixes"]))
+    lst += "\n\nAdd more, or press **Redo with these fixes** (only the affected parts are redone)."
+    return st, _out_frame(st, i, [(x, y)]), lst, gr.update(interactive=True), ""
 
 
 def on_restart():
@@ -600,12 +703,29 @@ with gr.Blocks(title="Keep One Person") as demo:
         done_md = gr.Markdown()
         out_vid = gr.Video(show_label=False)
         dl_btn = gr.DownloadButton("⬇ Download the video", variant="primary", size="lg")
+        gr.Markdown("### Is it right?", elem_classes="step-head")
+        with gr.Row():
+            ok_btn = gr.Button("✅ Yes, perfect")
+            fix_btn = gr.Button("✏️ No, fix something", variant="primary")
+        thanks_md = gr.Markdown()
+        with gr.Column(visible=False) as fb_box:
+            gr.Markdown("**1.** Move the slider to the problem. **2.** Choose what is wrong. "
+                        "**3.** Click on that spot in the picture.")
+            fb_sl = gr.Slider(0, 1, step=1, value=0, label="Moment in the video")
+            fb_kind = gr.Radio(list(FB_KINDS), value=list(FB_KINDS)[0], show_label=False)
+            fb_view = gr.Image(show_label=False, interactive=False, type="numpy")
+            fb_note = gr.Textbox(label="Anything else? (optional - type it before clicking)",
+                                 placeholder="e.g. the shadow on the left wall is still there")
+            fb_list = gr.Markdown()
+            redo_btn = gr.Button("Redo with these fixes ▶", variant="primary", size="lg",
+                                 interactive=False)
         chk_btn = gr.DownloadButton("Download the check video (red = removed, green = kept)",
                                     size="sm")
         new_btn = gr.Button("Make another video")
 
     steps = [p0, p1, p2, p3, p4]
-    run_outs = [state, out_vid, dl_btn, chk_btn, done_md, work_md, live_img] + steps
+    run_outs = [state, out_vid, dl_btn, chk_btn, done_md, work_md, live_img] + steps + \
+        [fb_box, fb_list, redo_btn]
 
     demo.load(on_page, None,
               [resume_box, resume_dd, store_note, drive_box, drive_md, drive_dd, upload_acc])
@@ -628,6 +748,12 @@ with gr.Blocks(title="Keep One Person") as demo:
     resume_btn.click(on_continue, [resume_dd],
                      [state, view, frame_sl, head1, note1, next2] + steps).then(
         on_maybe_start, [state], run_outs)
+    ok_btn.click(on_perfect, [state], [thanks_md, fb_box])
+    fix_btn.click(on_fix_open, [state], [fb_box, fb_view, fb_sl, thanks_md])
+    fb_sl.release(on_fb_slide, [state, fb_sl], [fb_view])
+    fb_view.select(on_fb_click, [state, fb_sl, fb_kind, fb_note],
+                   [state, fb_view, fb_list, redo_btn, fb_note])
+    redo_btn.click(lambda: show(3), None, steps).then(on_start, [state], run_outs)
     new_btn.click(on_restart, None, [state, vid_in, photos_in, resume_box, resume_dd] + steps)
 
 if __name__ == "__main__":
