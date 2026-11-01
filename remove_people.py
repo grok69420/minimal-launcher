@@ -62,9 +62,11 @@ OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers sh
 FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
 FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
 # background painting quality levels: (name, working area, steps, frames/s on an A100)
-# (fps measured on the A100 for 81-frame pieces: 3.1 / 7.9 / 14.1)
-FILL_LEVELS = [("sharpest", 832 * 480, 8, 3.1), ("sharp", 640 * 368, 5, 7.9),
-               ("fast", 512 * 288, 4, 14.0)]
+# (fps measured on the A100 for 81-frame pieces: 3.1 / 7.9 / 14.1; "fastest" paints every
+# second frame and blends the frames between)
+FILL_LEVELS = [("sharpest", 832 * 480, 8, 3.1, 1), ("sharp", 640 * 368, 5, 7.9, 1),
+               ("fast", 512 * 288, 4, 14.0, 1), ("fastest", 512 * 288, 4, 26.0, 2)]
+FILL_EFFICIENCY = 0.55  # share of that speed reached while the other parts use the GPU too
 TARGET_SECONDS = 15 * 60  # the whole job should take at most this long
 JOB_FILE = "job.pkl"
 
@@ -1097,7 +1099,7 @@ def crop_box(masks, w, h, margin=0.6, min_short=200, full_at=0.8):
 
 
 def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=49, overlap=8,
-                   stages=None, seed=42, reuse=None, changed=None, steps=None):
+                   stages=None, seed=42, reuse=None, changed=None, steps=None, stride=1):
     """Same output format as inpaint(): (chunks, {chunk: (folder, extension)}); the folder
     holds full-size frames with the removed areas filled in."""
     chs = plan_chunks(ranges, window, overlap)
@@ -1107,9 +1109,15 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         keep = [c for c in todo if c in reuse[1] and not any(i in changed for i in range(*chs[c][:2]))]
         results.update({c: reuse[1][c] for c in keep})
         todo = [c for c in todo if c not in keep]
+    def painted(a, b):  # the frames given to the model (every `stride`-th, ends included)
+        sub = list(range(a, b))[::stride]
+        if sub[-1] != b - 1:
+            sub.append(b - 1)
+        return sub
+
     def load(c):
         a, b, _, _ = chs[c]
-        ext = _pad_4k1(list(range(a, b)))
+        ext = _pad_4k1(painted(a, b))
         return [cv2.imread(frames[g]) for g in ext], [_read_mask(final_dir, g) for g in ext]
 
     def save(path, img, patch, box):
@@ -1130,8 +1138,17 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
                           fw, fh, seed=seed, steps=steps)
         d = os.path.join(work, "mm_out", f"c{c:04d}_s{seed}")
         os.makedirs(d, exist_ok=True)
-        for j in range(b - a):
-            writes.append(_IO.submit(save, os.path.join(d, f"{j:04d}.jpg"), imgs[j], out[j],
+        sub = painted(a, b)
+        pos = {g: k for k, g in enumerate(sub)}
+        for j, g in enumerate(range(a, b)):
+            if g in pos:
+                patch, base = out[pos[g]], imgs[pos[g]]
+            else:  # between two painted frames: blend them
+                k = max(k for k, x in enumerate(sub) if x < g)
+                t = (g - sub[k]) / (sub[k + 1] - sub[k])
+                patch = cv2.addWeighted(out[k], 1 - t, out[k + 1], t, 0)
+                base = cv2.imread(frames[g])
+            writes.append(_IO.submit(save, os.path.join(d, f"{j:04d}.jpg"), base, patch,
                                      (x1, y1, x2, y2)))
         results[c] = (d, ".jpg")
         if stages:
@@ -1369,8 +1386,10 @@ def _inpainted_frame(g, chs, results, overlap, size):
         if isinstance(folder, str) and folder == "plate":  # steady camera: clean background
             img = ext.astype(np.float32)
         else:
-            img = cv2.imread(os.path.join(folder, f"{g - a:04d}{ext}")).astype(np.float32)
-            img = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
+            img = cv2.imread(os.path.join(folder, f"{g - a:04d}{ext}"))
+            if (img.shape[1], img.shape[0]) != tuple(size):
+                img = cv2.resize(img, size, interpolation=cv2.INTER_LANCZOS4)
+            img = img.astype(np.float32)
         acc = img * wgt if acc is None else acc + img * wgt
         wsum += wgt
     return acc / wsum
@@ -1378,31 +1397,42 @@ def _inpainted_frame(g, chs, results, overlap, size):
 
 def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo, hi, w, h,
               overlap=16, feather_px=6, stages=None):
-    wr = FFWriter(out_mp4, w, h, fps)
-    for g in range(lo, hi):
+    """Final frames of the part: the painted background blended in where people were removed.
+    Several frames are prepared at once in threads; they are written in order."""
+    def make(g):
         orig = cv2.imread(frames[g])
         if not flags.get(g):
-            wr.write(orig)
-        else:  # blend only around the removed area (fast), matching the frame's brightness
-            inp = _inpainted_frame(g, chs, results, overlap, (w, h))
-            mb = _read_mask(final_dir, g)
-            x1, y1, x2, y2 = (int(v) for v in _bbox(mb))
-            pd = 4 * feather_px + 2
-            x1, y1, x2, y2 = max(0, x1 - pd), max(0, y1 - pd), min(w, x2 + pd), min(h, y2 + pd)
-            mm = mb[y1:y2, x1:x2]
-            m = mm.astype(np.float32)
-            a = np.maximum(cv2.GaussianBlur(m, (0, 0), feather_px), m) if feather_px > 0 else m
-            pr = _read_mask(prot_dir, g)[y1:y2, x1:x2]
-            a[pr] = 0.0
-            o = orig[y1:y2, x1:x2].astype(np.float32)
-            f = inp[y1:y2, x1:x2]
-            ring = (cv2.dilate(mm.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0) & ~mm & ~pr
-            if ring.sum() > 50:
-                f = f * np.clip((o[ring].mean(0) + 1) / (f[ring].mean(0) + 1), 0.85, 1.18)
-            orig = orig.copy()
-            orig[y1:y2, x1:x2] = np.clip(o * (1 - a[..., None]) + f * a[..., None] + 0.5, 0,
-                                         255).astype(np.uint8)
-            wr.write(orig)
+            return orig
+        # blend only around the removed area (fast), matching the frame's brightness
+        inp = _inpainted_frame(g, chs, results, overlap, (w, h))
+        mb = _read_mask(final_dir, g)
+        x1, y1, x2, y2 = (int(v) for v in _bbox(mb))
+        pd = 4 * feather_px + 2
+        x1, y1, x2, y2 = max(0, x1 - pd), max(0, y1 - pd), min(w, x2 + pd), min(h, y2 + pd)
+        mm = mb[y1:y2, x1:x2]
+        m = mm.astype(np.float32)
+        a = np.maximum(cv2.GaussianBlur(m, (0, 0), feather_px), m) if feather_px > 0 else m
+        pr = _read_mask(prot_dir, g)[y1:y2, x1:x2]
+        a[pr] = 0.0
+        o = orig[y1:y2, x1:x2].astype(np.float32)
+        f = inp[y1:y2, x1:x2]
+        ring = (cv2.dilate(mm.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0) & ~mm & ~pr
+        if ring.sum() > 50:
+            f = f * np.clip((o[ring].mean(0) + 1) / (f[ring].mean(0) + 1), 0.85, 1.18)
+        orig = orig.copy()
+        orig[y1:y2, x1:x2] = np.clip(o * (1 - a[..., None]) + f * a[..., None] + 0.5, 0,
+                                     255).astype(np.uint8)
+        return orig
+
+    wr = FFWriter(out_mp4, w, h, fps)
+    pool = ThreadPoolExecutor(max(1, min(3, (os.cpu_count() or 2) // 4)))
+    futs, nxt = {}, lo
+    for g in range(lo, hi):
+        while nxt < hi and nxt < g + 12:
+            futs[nxt] = pool.submit(make, nxt)
+            nxt += 1
+        orig = futs.pop(g).result()
+        wr.write(orig)
         if _PREVIEW is not None and (g - lo) % 12 == 0:
             try:
                 _PREVIEW(orig)
@@ -1410,6 +1440,7 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
                 pass
         if stages:
             stages.step(g - lo + 1, hi - lo)
+    pool.shutdown()
     wr.close()
 
 
@@ -1929,7 +1960,7 @@ def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.45):
     return out
 
 
-def _apply_self_fix(st, p, viol, max_per_unit=3, max_repaint=0.35):
+def _apply_self_fix(st, p, viol, max_per_unit=3, max_repaint=0.0, min_left=3):
     """Turn self-check findings into fixes for this part. Left-over people are tracked and
     removed; figures painted into the background are painted again with wider masks (only
     when they are in a limited share of the part, to keep the time). Returns (fixes made,
@@ -1942,6 +1973,8 @@ def _apply_self_fix(st, p, viol, max_per_unit=3, max_repaint=0.35):
         opts["seed"] = opts.get("seed", 42) + 1
         repaint = {i for g in pf for i in range(max(a, g - 12), min(b, g + 13))}
         made += 1
+    if sum(1 for v in viol if not v[2]) < min_left:  # a stray detection or two: not worth a redo
+        return made, repaint
     groups = {}
     for g, bx, painted in viol:  # same person seen in several frames -> one fix
         if painted:
@@ -2015,7 +2048,7 @@ def choose_fill_level(st, elapsed):
     mask_s = st["n"] / (25.0 if big else 6.0)
 
     def est(lv):
-        paint = frames / (lv[3] * scale)
+        paint = frames / (lv[3] * scale * FILL_EFFICIENCY)
         return elapsed + max(mask_s, first / (8.0 if big else 2.0) + paint) + 60
 
     for lv in FILL_LEVELS:
@@ -2087,6 +2120,7 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     opts = st.get("part_opts", {}).get(p, {})
     grow_eff = grow * opts.get("grow_mult", 1.0)
     lv = _fill_level(st, opts)
+    stride = lv[4] if len(lv) > 4 else 1
     steps = opts.get("steps") or st.get("steps") or lv[2]
     seed = opts.get("seed", 42)
     _FILL_AREA[0] = lv[1]
@@ -2137,7 +2171,8 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     make_preview(video, d["final"], d["protect"], chk, fps, a, b, labels.get, w, h)
     S.done()
     return dict(a=a, b=b, video=video, w=w, h=h, fps=fps, us=us, ranges=ranges, opts=opts,
-                steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags)
+                steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags,
+                stride=stride)
 
 
 def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
@@ -2180,7 +2215,8 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
                     res = fill_realistic(video, d["final"], flags, work, moving, w, h, filler,
                                          window=win, overlap=8, stages=S, seed=seed, steps=steps,
-                                         reuse=ctx.get("mm_prev"), changed=ctx.get("changed"))
+                                         reuse=ctx.get("mm_prev"), changed=ctx.get("changed"),
+                                         stride=ctx.get("stride", 1))
                     ctx["mm_prev"] = res
                     fills.append(res)
                     ov, done_moving = 8, True
