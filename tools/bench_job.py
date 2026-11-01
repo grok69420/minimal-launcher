@@ -8,7 +8,7 @@ import shutil
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.environ.get("KOP_ENGINE", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import remove_people as rp  # noqa: E402
 
 ROOT = "/content/drive/MyDrive/Keep One Person/In progress (automatic)"
@@ -24,7 +24,8 @@ shutil.rmtree(OUT, ignore_errors=True)
 vid, img = rp.load_sam2("/content/repos/sam2", rp.PRESETS[old["preset"]]["sam2"])
 reid = rp.ReID(emb_weights="yolo11s-cls.pt")
 t0 = time.time()
-st = rp.create_job(src, OUT + "/jobs", OUT + "/cache", 0, 0, old["preset"], 0.25, rp.PART_SECONDS)
+LD = rp.learned_defaults("/nonexistent")  # the settings a first-time user gets
+st = rp.create_job(src, OUT + "/jobs", OUT + "/cache", 0, 0, old["preset"], LD["conf"], rp.PART_SECONDS)
 st.update(mode=old.get("mode", "keep"), fill=old.get("fill", "realistic"), out_dir=OUT + "/out")
 for u, s in old["seeds"].items():  # the same clicks, mapped by frame number
     if s is not None:
@@ -35,7 +36,7 @@ for u, lst in old.get("rseeds", {}).items():
 photos = sorted(glob.glob(os.path.join(old_dir, "photos", "*")))
 rp.save_job(st)
 out, chk = rp.remove_others(st, reid, vid, img, "/content/repos/ProPainter",
-                            old.get("grow", 0.012), photos)
+                            LD["grow"], photos)
 total = time.time() - t0
 print("\nRESULT", out)
 print(f"TOTAL {total / 60:.1f} min for {st['n'] / rp.fps_float(st['fps']) / 60:.1f} min of video")

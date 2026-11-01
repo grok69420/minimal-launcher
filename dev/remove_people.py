@@ -50,25 +50,25 @@ SAM2_MODELS = {
 PRESETS = {
     "Best": dict(sam2="large", det="yolo11x.pt", det_imgsz=1280, pp_max_side=960,
                  seg="yolo11x-seg.pt"),
-    "Balanced": dict(sam2="base_plus", det="yolo11x.pt", det_imgsz=960, pp_max_side=854,
+    "Balanced": dict(sam2="base_plus", det="yolo11x.pt", det_imgsz=1280, pp_max_side=854,
                      seg="yolo11x-seg.pt"),
     "Fast": dict(sam2="small", det="yolo11m.pt", det_imgsz=640, pp_max_side=640,
                  seg="yolo11m-seg.pt"),
 }
 PART_SECONDS = 30.0
+SCAN_IOU = 0.8
 PAD = 4                # frames of temporal carry-over of the removal masks
 GROW = 0.016           # removal masks are widened by this share of the picture size (hair, blur)
 WORKER = False         # True inside a parallel worker process
 OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
 FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
 FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
-# background painting quality levels: (name, working area, steps, frames/s on an A100)
-# (fps measured on the A100 for 81-frame pieces: 3.1 / 7.9 / 14.1; "fastest" paints every
-# second frame and blends the frames between)
-FILL_LEVELS = [("sharpest", 832 * 480, 8, 3.1, 1), ("sharp", 640 * 368, 5, 7.9, 1),
-               ("fast", 512 * 288, 4, 14.0, 1)]
-# ("fastest", every second frame painted, frames between blended) smeared moving
-# backgrounds - removed after feedback
+# background painting quality levels: (name, working area, steps, frames/s on an A100, stride,
+# tiny decoder). Below the model's own size (832x480) the painting shows a checkerboard
+# pattern, so every level paints at 832x480; the faster levels paint every 2nd / 3rd frame
+# and make the frames between by following the camera movement (no smearing).
+FILL_LEVELS = [("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
+               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True)]
 FILL_EFFICIENCY = 0.55  # share of that speed reached while the other parts use the GPU too
 TARGET_SECONDS = 15 * 60  # the whole job should take at most this long
 JOB_FILE = "job.pkl"
@@ -476,7 +476,8 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
     scores, boxes, buf, prev = [], [], [], None
 
     def flush():
-        res = model.predict(buf, classes=[0], conf=conf, imgsz=imgsz, verbose=False,
+        # iou 0.8: in crowds people overlap a lot; the usual 0.7 throws away real people
+        res = model.predict(buf, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz, verbose=False,
                             device=0 if DEVICE == "cuda" else "cpu",
                             quantize=16 if DEVICE == "cuda" else None)
         for r in res:
@@ -1118,6 +1119,9 @@ class MiniMaxFiller:
         if not on:
             self.tae = None
             return
+        if getattr(self, "_tae", None) is not None:
+            self.tae = self._tae
+            return
         d = os.path.dirname(TAE_WEIGHTS)
         os.makedirs(d, exist_ok=True)
         for name in ("taehv.py", "taew2_1.pth"):
@@ -1128,7 +1132,7 @@ class MiniMaxFiller:
         if d not in sys.path:
             sys.path.insert(0, d)
         from taehv import TAEHV
-        self.tae = TAEHV(TAE_WEIGHTS).to("cuda", torch.float16).eval()
+        self.tae = self._tae = TAEHV(TAE_WEIGHTS).to("cuda", torch.float16).eval()
 
     def fill(self, imgs, masks, fw, fh, dil=2, seed=42, steps=None):
         """imgs: BGR frames, masks: bool arrays; len must be 4k+1. Returns BGR frames (fw x fh)."""
@@ -1208,7 +1212,7 @@ class MiniMaxFiller:
 
 SR_URL = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
 SR_WEIGHTS = os.environ.get("KOP_SR", "/content/repos/realesr-general-x4v3.pth")
-SHARPEN = os.environ.get("KOP_SHARPEN", "1") == "1"
+SHARPEN = os.environ.get("KOP_SHARPEN", "0") == "1"  # off: it sharpened the painting's flaws too
 
 
 class _SRNet(torch.nn.Module):
@@ -1344,6 +1348,25 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         img[y1:y2, x1:x2] = patch
         cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
+    def between(path, g, k, t, sub, imgs, masks, out, box, fw, fh):
+        """Frame g between painted frames sub[k] and sub[k+1]: both paintings are moved with
+        the camera to frame g, then cross-faded (blending without moving them smears)."""
+        base = cv2.imread(frames[g])
+        mg = _read_mask(final_dir, g)
+        x1, y1, x2, y2 = box
+        P = np.array([[fw / (x2 - x1), 0, -x1 * fw / (x2 - x1)],
+                      [0, fh / (y2 - y1), -y1 * fh / (y2 - y1)], [0, 0, 1]])
+        Pi = np.linalg.inv(P)
+        warped = []
+        for kk in (k, k + 1):
+            H = camera_motion(imgs[kk], base, masks[kk], mg)
+            o = out[kk]
+            if H is not None:
+                o = cv2.warpPerspective(o, P @ H @ Pi, (fw, fh), flags=cv2.INTER_LINEAR,
+                                        borderMode=cv2.BORDER_REPLICATE)
+            warped.append(o)
+        save(path, base, cv2.addWeighted(warped[0], 1 - t, warped[1], t, 0), box)
+
     writes = []
     nxt = _IO.submit(load, todo[0]) if todo else None
     for t, c in enumerate(todo):
@@ -1362,21 +1385,44 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         sub = painted(a, b)
         pos = {g: k for k, g in enumerate(sub)}
         for j, g in enumerate(range(a, b)):
+            path = os.path.join(d, f"{j:04d}.jpg")
             if g in pos:
-                patch, base = out[pos[g]], imgs[pos[g]]
-            else:  # between two painted frames: blend them
+                writes.append(_IO.submit(save, path, imgs[pos[g]], out[pos[g]], (x1, y1, x2, y2)))
+            else:  # between two painted frames
                 k = max(k for k, x in enumerate(sub) if x < g)
                 t = (g - sub[k]) / (sub[k + 1] - sub[k])
-                patch = cv2.addWeighted(out[k], 1 - t, out[k + 1], t, 0)
-                base = cv2.imread(frames[g])
-            writes.append(_IO.submit(save, os.path.join(d, f"{j:04d}.jpg"), base, patch,
-                                     (x1, y1, x2, y2)))
+                writes.append(_IO.submit(between, path, g, k, t, sub, imgs, masks, out,
+                                         (x1, y1, x2, y2), fw, fh))
         results[c] = (d, ".jpg")
         if stages:
             stages.step(t + 1, len(todo))
     for f in writes:
         f.result()
     return chs, results
+
+
+def camera_motion(a_img, b_img, a_mask, b_mask, size=480):
+    """How the picture moves from frame a to frame b (3x3, in full-size pixels), measured on
+    the background only (people masked out). None when it cannot be measured reliably."""
+    h, w = a_img.shape[:2]
+    s = size / max(h, w)
+    sw, sh = max(8, int(round(w * s))), max(8, int(round(h * s)))
+    ga = cv2.cvtColor(cv2.resize(a_img, (sw, sh), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+    gb = cv2.cvtColor(cv2.resize(b_img, (sw, sh), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
+    busy = cv2.resize((a_mask | b_mask).view(np.uint8), (sw, sh), interpolation=cv2.INTER_NEAREST)
+    free = cv2.erode((1 - busy).astype(np.uint8), np.ones((5, 5), np.uint8))
+    pts = cv2.goodFeaturesToTrack(ga, 400, 0.01, 6, mask=free)
+    if pts is None or len(pts) < 12:
+        return None
+    nb, ok, _ = cv2.calcOpticalFlowPyrLK(ga, gb, pts, None, winSize=(21, 21), maxLevel=3)
+    ok = ok.ravel() == 1
+    if ok.sum() < 12:
+        return None
+    H, inl = cv2.findHomography(pts[ok], nb[ok], cv2.RANSAC, 2.0)
+    if H is None or inl is None or inl.sum() < 10:
+        return None
+    S = np.diag([s, s, 1.0])
+    return np.linalg.inv(S) @ H @ S
 
 
 def is_static(frames, final_dir, prot_dir, lo, hi, samples=12, max_shift=1.0, max_diff=7.0):
@@ -2383,6 +2429,7 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     grow_eff = grow * opts.get("grow_mult", 1.0)
     lv = _fill_level(st, opts)
     stride = lv[4] if len(lv) > 4 else 1
+    tae = bool(lv[5]) if len(lv) > 5 else False
     steps = opts.get("steps") or st.get("steps") or lv[2]
     seed = opts.get("seed", 42)
     _FILL_AREA[0] = lv[1]
@@ -2437,7 +2484,7 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     return dict(a=a, b=b, video=video, w=w, h=h, fps=fps, us=us, ranges=ranges, opts=opts,
                 preview=preview,
                 steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags,
-                stride=stride)
+                stride=stride, tae=tae)
 
 
 def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
@@ -2466,6 +2513,12 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
         if use_ai:
             try:
                 filler, close_it = _get_filler()
+                if hasattr(filler, "use_tae"):
+                    try:
+                        filler.use_tae(ctx.get("tae", False))
+                    except Exception:  # tiny decoder not available: the normal one is used
+                        traceback.print_exc()
+                        filler.use_tae(False)
             except Exception as e:  # missing model, download problem ... -> fast fill instead
                 traceback.print_exc()
                 log(f"  realistic fill unavailable ({e.__class__.__name__}); using the fast fill")
@@ -2703,7 +2756,7 @@ def learned_defaults(fb_dir):
         notes.append("finds more people")
     if sm:
         notes.append("more careful painting")
-    return dict(grow=round(GROW * 1.25 ** e, 4), conf=max(0.12, 0.2 - 0.04 * min(pz, 2)),
+    return dict(grow=round(GROW * 1.25 ** e, 4), conf=max(0.10, 0.15 - 0.025 * min(pz, 2)),
                 extra_steps=4 * min(sm, 2), notes=notes, counts=counts)
 
 
