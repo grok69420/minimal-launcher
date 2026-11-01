@@ -336,6 +336,31 @@ def on_page():
             gr.update(open=True))
 
 
+def on_video_uploaded(path):
+    """Show a picture and the details of the uploaded video (any format: the browser cannot
+    play every video, e.g. H.265 phone videos, but the app reads them all)."""
+    if not path:
+        return "", gr.update(value=None, visible=False)
+    try:
+        fps, has_audio, dur, w, h = rp.probe(path)
+        codec = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                "stream=codec_name", "-of", "csv=p=0", path],
+                               capture_output=True, text=True).stdout.strip().upper()
+        png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{min(1.0, dur / 2):.2f}", "-i", path,
+                              "-frames:v", "1", "-vf", "scale=-2:360", "-f", "image2pipe",
+                              "-vcodec", "png", "-"], capture_output=True).stdout
+        img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+    except Exception:
+        return ("⚠️ This file could not be read as a video. Please choose another file.",
+                gr.update(value=None, visible=False))
+    info = (f"✅ **Video ready:** {os.path.basename(path)} · {_mmss(dur)} · {w}×{h} · "
+            f"{rp.fps_float(fps):.0f} fps · {codec or 'video'} · "
+            f"{'with sound' if has_audio else 'no sound'}. Press **Next**.")
+    if img is None:
+        return info, gr.update(value=None, visible=False)
+    return info, gr.update(value=cv2.cvtColor(img, cv2.COLOR_BGR2RGB), visible=True)
+
+
 def on_use_drive(vid_path, fill, start, end, mode, progress=gr.Progress()):
     vids, pics = drive_inputs()
     return on_next1(None, vid_path or (vids[0] if vids else None), start, end, pics, fill,
@@ -655,7 +680,13 @@ with gr.Blocks(title="Keep One Person") as demo:
             drive_dd = gr.Dropdown(show_label=False, choices=[], visible=False)
             drive_btn = gr.Button("Start with these files ▶", variant="primary", size="lg")
         with gr.Accordion("Upload your video (and photos)", open=True) as upload_acc:
-            vid_in = gr.Video(label="Your video", sources=["upload"], height=230)
+            vid_in = gr.File(label="Your video (any format: mp4, mov, mkv, avi, phone videos ...)",
+                             file_types=["video", ".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v",
+                                         ".mts", ".m2ts", ".3gp", ".wmv", ".flv", ".mpg"],
+                             type="filepath")
+            vid_info = gr.Markdown()
+            vid_thumb = gr.Image(show_label=False, interactive=False, type="numpy", height=240,
+                                 visible=False)
             photos_in = gr.File(label="Photos of the person to keep (optional, 'Keep one person' "
                                       "only - with photos the app finds them by itself)", file_count="multiple",
                                 file_types=["image"], type="filepath")
@@ -731,6 +762,7 @@ with gr.Blocks(title="Keep One Person") as demo:
               [resume_box, resume_dd, store_note, drive_box, drive_md, drive_dd, upload_acc])
     n1_outs = [state, view, frame_sl, head1, note1, next2, gal, head2] + steps
     drive_btn.click(on_use_drive, [drive_dd, fill_in, start_in, end_in, mode_in], n1_outs)
+    vid_in.change(on_video_uploaded, [vid_in], [vid_info, vid_thumb])
     next1.click(on_next1, [vid_in, path_in, start_in, end_in, photos_in, fill_in, mode_in],
                 n1_outs)
     back_btn.click(lambda st, i: on_move(st, i, -1), [state, frame_sl], [view, frame_sl, note1])
