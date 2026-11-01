@@ -1075,6 +1075,9 @@ MM_WEIGHTS = os.environ.get("KOP_MM_WEIGHTS", "/content/repos/minimax_weights")
 
 _FILL_AREA = [832 * 480]
 MM_FAST = os.environ.get("KOP_MM_FAST", "1") == "1"
+TAE = os.environ.get("KOP_TAE", "0") == "1"
+TAE_URL = "https://github.com/madebyollin/taehv/raw/main/"
+TAE_WEIGHTS = os.environ.get("KOP_TAE_WEIGHTS", "/content/repos/taehv/taew2_1.pth")
 
 
 def fill_size(w, h, area=None):
@@ -1107,6 +1110,25 @@ class MiniMaxFiller:
         sch = UniPCMultistepScheduler.from_pretrained(os.path.join(weights, "scheduler"))
         self.pipe = Minimax_Remover_Pipeline(transformer=tr, vae=vae, scheduler=sch).to("cuda")
         self.steps = steps
+        self.tae = None  # optional tiny decoder (much faster, slightly softer)
+        if TAE:
+            self.use_tae()
+
+    def use_tae(self, on=True):
+        if not on:
+            self.tae = None
+            return
+        d = os.path.dirname(TAE_WEIGHTS)
+        os.makedirs(d, exist_ok=True)
+        for name in ("taehv.py", "taew2_1.pth"):
+            if not os.path.exists(os.path.join(d, name)):
+                subprocess.run(["wget", "-q", "-O", os.path.join(d, name + ".part"),
+                                TAE_URL + name], check=True)
+                os.replace(os.path.join(d, name + ".part"), os.path.join(d, name))
+        if d not in sys.path:
+            sys.path.insert(0, d)
+        from taehv import TAEHV
+        self.tae = TAEHV(TAE_WEIGHTS).to("cuda", torch.float16).eval()
 
     def fill(self, imgs, masks, fw, fh, dil=2, seed=42, steps=None):
         """imgs: BGR frames, masks: bool arrays; len must be 4k+1. Returns BGR frames (fw x fh)."""
@@ -1156,9 +1178,8 @@ class MiniMaxFiller:
         vae = p.vae
         mean = torch.tensor(vae.config.latents_mean).view(1, -1, 1, 1, 1).to(dev, torch.float16)
         istd = 1.0 / torch.tensor(vae.config.latents_std).view(1, -1, 1, 1, 1).to(dev, torch.float16)
-        enc = vae.encode(torch.cat([img * (1 - m3), 2 * m3 - 1.0], 0)).latent_dist.mode()
-        enc = (enc - mean) * istd
-        masked_lat, mask_lat = enc[0:1], enc[1:2]
+        masked_lat = (vae.encode(img * (1 - m3)).latent_dist.mode() - mean) * istd
+        mask_lat = (vae.encode(2 * m3 - 1.0).latent_dist.mode() - mean) * istd
         p.scheduler.set_timesteps(steps, device=dev)
         g = torch.Generator(device=dev).manual_seed(seed)
         lat = torch.randn((1, 16, (n - 1) // p.vae_scale_factor_temporal + 1,
@@ -1168,9 +1189,14 @@ class MiniMaxFiller:
             inp = torch.cat([lat.to(torch.float16), masked_lat, mask_lat], dim=1)
             noise = p.transformer(hidden_states=inp.half(), timestep=t.expand(1))[0]
             lat = p.scheduler.step(noise, t, lat, return_dict=False)[0]
-        lat = lat.half() / istd + mean
-        video = vae.decode(lat, return_dict=False)[0]  # 1,3,n,h,w in [-1, 1]
-        out = ((video[0].permute(1, 2, 3, 0).float().clamp(-1, 1) + 1) * 127.5 + 0.5).byte()
+        if self.tae is not None:  # tiny decoder: works on the model's own latents, gives [0, 1]
+            video = self.tae.decode_video(lat.half().permute(0, 2, 1, 3, 4), parallel=True,
+                                          show_progress_bar=False)[0, :n]  # n,3,h,w
+            out = (video.permute(0, 2, 3, 1).float().clamp(0, 1) * 255 + 0.5).byte()
+        else:
+            lat = lat.half() / istd + mean
+            video = vae.decode(lat, return_dict=False)[0]  # 1,3,n,h,w in [-1, 1]
+            out = ((video[0].permute(1, 2, 3, 0).float().clamp(-1, 1) + 1) * 127.5 + 0.5).byte()
         out = out.flip(-1).cpu().numpy()  # n,h,w,3 BGR
         return [np.ascontiguousarray(o) for o in out]
 
