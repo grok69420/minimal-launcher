@@ -30,7 +30,7 @@ PART_SECONDS = float(os.environ.get("KOP_PART_SECONDS", rp.PART_SECONDS))
 CKPT_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/"
 LEGACY_INPUT = os.path.join(os.path.dirname(DRIVE_ROOT), "KeepOnePerson_input")
 LEGACY_JOBS = os.path.join(os.path.dirname(DRIVE_ROOT), "KeepOnePerson")
-FILLS = ["Realistic (AI-painted background)", "Fast (smoother, quicker)"]
+FILLS = ["Automatic - done in about 15 minutes", "Sharpest background - takes longer"]
 MODES = ["Keep one person - remove everyone else", "Remove some people - keep everyone else"]
 GREEN, RED = np.array([0, 220, 0]), np.array([0, 0, 235])
 FB_KINDS = {"A person is still here": "person", "Smudged or blurry here": "smudge",
@@ -246,6 +246,9 @@ def _done_text(st):
         par = f", {t['workers']} parts at the same time" if t.get("workers", 1) > 1 else ""
         lines.append(f"⏱ Took **{_took(prep + t['total'])}** for {_took(st['n'] / fps)} of video "
                      f"(preparing {_took(prep)}, removing {_took(t['total'])}{par}).")
+    if st.get("fill_level"):
+        lines.append(f"🎨 Background painting: **{st['fill_level']}**"
+                     + (" (chosen to finish in about 15 minutes)" if st.get("fill_auto") else "."))
     sc = list((st.get("selfcheck") or {}).values())
     left = sorted(g for r in sc for g in r.get("left", []))
     if left:
@@ -389,7 +392,9 @@ def on_next1(video, path, start, end, photos=None, fill=None, mode=None, progres
                            PART_SECONDS)
         st["grow"] = ld["grow"]
         st["steps"] = (rp.FILL_STEPS[preset] + ld["extra_steps"]) if ld["extra_steps"] else None
-        st["fill"] = "fast" if (fill or "").startswith("Fast") else "realistic"
+        st["fill"] = "realistic"
+        if (fill or "").startswith("Sharpest"):
+            st["fill_level"] = "sharpest"
         st["mode"] = "remove" if (mode or "").startswith("Remove") else "keep"
         st["out_dir"] = out_root()
         rp.save_job(st)
@@ -702,7 +707,7 @@ with gr.Blocks(title="Keep One Person") as demo:
             with gr.Row():
                 start_in = gr.Number(label="Only from second", value=0, minimum=0)
                 end_in = gr.Number(label="…to second (0 = to the end)", value=0, minimum=0)
-            fill_in = gr.Radio(FILLS, value=FILLS[0], label="How to fill where people were")
+            fill_in = gr.Radio(FILLS, value=FILLS[0], label="Speed")
         store_note = gr.Markdown()
 
     with gr.Column(visible=False) as p1:

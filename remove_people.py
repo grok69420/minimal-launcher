@@ -34,8 +34,8 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 if DEVICE == "cuda":  # faster maths on A100 / L4 at no visible quality cost
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-    # faster 3D convolutions in the fill model (each new input size is tuned once)
-    torch.backends.cudnn.benchmark = os.environ.get("KOP_CUDNN_BENCH", "1") == "1"
+    # cuDNN autotuning: measured on the A100 - no faster for the fill model, only adds tuning time
+    torch.backends.cudnn.benchmark = os.environ.get("KOP_CUDNN_BENCH", "0") == "1"
 
 
 def big_gpu():
@@ -58,6 +58,11 @@ WORKER = False         # True inside a parallel worker process
 OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
 FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
 FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
+# background painting quality levels: (name, working area, steps, frames/s on an A100)
+# (fps measured on the A100 for 81-frame pieces: 3.1 / 7.9 / 14.1)
+FILL_LEVELS = [("sharpest", 832 * 480, 8, 3.1), ("sharp", 640 * 368, 5, 7.9),
+               ("fast", 512 * 288, 4, 14.0)]
+TARGET_SECONDS = 15 * 60  # the whole job should take at most this long
 JOB_FILE = "job.pkl"
 
 # ---------------------------------------------------------------- logging / progress
@@ -995,26 +1000,37 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         keep = [c for c in todo if c in reuse[1] and not any(i in changed for i in range(*chs[c][:2]))]
         results.update({c: reuse[1][c] for c in keep})
         todo = [c for c in todo if c not in keep]
+    def load(c):
+        a, b, _, _ = chs[c]
+        ext = _pad_4k1(list(range(a, b)))
+        return [cv2.imread(frames[g]) for g in ext], [_read_mask(final_dir, g) for g in ext]
+
+    def save(path, img, patch, box):
+        x1, y1, x2, y2 = box
+        img = img.copy()
+        img[y1:y2, x1:x2] = cv2.resize(patch, (x2 - x1, y2 - y1), interpolation=cv2.INTER_LANCZOS4)
+        cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+    writes = []
+    nxt = _IO.submit(load, todo[0]) if todo else None
     for t, c in enumerate(todo):
         a, b, _, _ = chs[c]
-        seq = list(range(a, b))
-        ext = _pad_4k1(seq)
-        imgs = [cv2.imread(frames[g]) for g in ext]
-        masks = [_read_mask(final_dir, g) for g in ext]
+        imgs, masks = nxt.result()
+        nxt = _IO.submit(load, todo[t + 1]) if t + 1 < len(todo) else None
         x1, y1, x2, y2 = crop_box(masks, w, h)
         fw, fh = fill_size(x2 - x1, y2 - y1)
         out = filler.fill([im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks],
                           fw, fh, seed=seed, steps=steps)
         d = os.path.join(work, "mm_out", f"c{c:04d}_s{seed}")
         os.makedirs(d, exist_ok=True)
-        for j in range(len(seq)):
-            full = imgs[j].copy()
-            full[y1:y2, x1:x2] = cv2.resize(out[j], (x2 - x1, y2 - y1),
-                                            interpolation=cv2.INTER_LANCZOS4)
-            cv2.imwrite(os.path.join(d, f"{j:04d}.jpg"), full, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        for j in range(b - a):
+            writes.append(_IO.submit(save, os.path.join(d, f"{j:04d}.jpg"), imgs[j], out[j],
+                                     (x1, y1, x2, y2)))
         results[c] = (d, ".jpg")
         if stages:
             stages.step(t + 1, len(todo))
+    for f in writes:
+        f.result()
     return chs, results
 
 
@@ -1791,8 +1807,7 @@ def verify_part(st, part_mp4, a, b, prot_dir, final_dir, stride=3, conf=0.35):
 def _apply_self_fix(st, p, viol, max_per_unit=3):
     """Turn self-check findings into fixes for this part. Returns how many fixes were made."""
     opts = st.setdefault("part_opts", {}).setdefault(p, {})
-    if st.get("mode") == "remove":  # leftovers where people were removed: wider masks, repaint
-        opts["grow_mult"] = round(opts.get("grow_mult", 1.0) * 1.4, 3)
+    if st.get("mode") == "remove":  # something person-like painted in: repaint those moments
         opts["seed"] = opts.get("seed", 42) + 1
         return 1
     made = 0
@@ -1813,8 +1828,6 @@ def _apply_self_fix(st, p, viol, max_per_unit=3):
             if not any(f == g and _iou(b2, bx) > 0.5 for f, b2 in cur):
                 cur.append((int(g), np.asarray(bx, np.float32)))
                 made += 1
-    if made:
-        opts["grow_mult"] = round(opts.get("grow_mult", 1.0) * 1.15, 3)
     return made
 
 
@@ -1837,22 +1850,74 @@ def _track_extra(st, vid_pred, video, key, us, work, dst, minus=None):
                 _write_mask(dst, i, m)
 
 
+def _fill_level(st, opts=None):
+    name = (opts or {}).get("fill_level") or st.get("fill_level")
+    for lv in FILL_LEVELS:
+        if lv[0] == name:
+            return lv
+    return {"Best": FILL_LEVELS[0], "Balanced": FILL_LEVELS[1]}.get(st["preset"], FILL_LEVELS[2])
+
+
+def fill_frames_estimate(st):
+    """Frames that will need background painting (from the people found while scanning)."""
+    n = 0
+    for u, (lo, hi, _) in enumerate(st["units"]):
+        if st.get("mode") == "remove":
+            if removal_seeds(st, u):
+                n += sum(1 for i in range(lo, hi) if len(st["boxes"][i]))
+        else:
+            k = 1 if scene_seed(st, u) is not None else 0
+            n += sum(1 for i in range(lo, hi) if len(st["boxes"][i]) > k)
+    return n
+
+
+def choose_fill_level(st, elapsed):
+    """The sharpest background painting that still lets the whole job finish within
+    TARGET_SECONDS (estimated from the number of frames to paint)."""
+    big = big_gpu()
+    frames = fill_frames_estimate(st)
+    mask_s = st["n"] / (22.0 if big else 6.0)  # outlining speed measured on the A100
+    scale = 1.0 if big else 0.35
+    for lv in FILL_LEVELS:
+        est = elapsed + mask_s + frames / (lv[3] * scale) + 45
+        if est <= TARGET_SECONDS:
+            return lv[0], est, frames
+    lv = FILL_LEVELS[-1]
+    return lv[0], elapsed + mask_s + frames / (lv[3] * scale) + 45, frames
+
+
 def _work_dir(st, p):
     return os.path.join(st["cache"], f"part_work_{p:04d}")
 
 
+FILL_SLOTS = [1]
+
+
 @contextlib.contextmanager
 def _gpu_lock(st):
-    """Only one parallel worker at a time runs the fill model (GPU memory)."""
+    """Limits how many parallel workers run the fill model at once (GPU memory)."""
     if not WORKER:
         yield
         return
-    with open(os.path.join(st["cache"], "gpu_fill.lock"), "w") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+    files = [open(os.path.join(st["cache"], f"gpu_fill_{k}.lock"), "w") for k in range(FILL_SLOTS[0])]
+    got = None
+    try:
+        while got is None:
+            for f in files:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    got = f
+                    break
+                except BlockingIOError:
+                    continue
+            if got is None:
+                time.sleep(0.3)
+        yield
+    finally:
+        if got is not None:
+            fcntl.flock(got, fcntl.LOCK_UN)
+        for f in files:
+            f.close()
 
 
 _FILL = {}
@@ -1873,18 +1938,19 @@ def _get_filler():
     return _FILL["mm"], False
 
 
-def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
-    """Masks, fill and composite for one part, left in the part work folder.
-    Returns the self-check findings (empty if all is well or not checked)."""
+def _part_masks(st, p, vid_pred, img_pred, grow, pad):
+    """First half of a part: tracking, outlines and final masks (in the part work folder).
+    Returns what the second half needs."""
     a, b = st["parts"][p]
     video, w, h, fps = st["_video"], st["w"], st["h"], st["fps"]
     us = [u for u, (lo, hi, _) in enumerate(st["units"]) if a <= lo and hi <= b]
     ranges = [tuple(st["units"][u][:2]) for u in us]
     opts = st.get("part_opts", {}).get(p, {})
     grow_eff = grow * opts.get("grow_mult", 1.0)
-    steps = opts.get("steps") or st.get("steps") or FILL_STEPS.get(st["preset"], 8)
+    lv = _fill_level(st, opts)
+    steps = opts.get("steps") or st.get("steps") or lv[2]
     seed = opts.get("seed", 42)
-    _FILL_AREA[0] = FILL_AREA.get(st["preset"], 832 * 480)
+    _FILL_AREA[0] = lv[1]
     cfg = PRESETS[st["preset"]]
     pp_side = 1280 if (st["preset"] == "Best" and big_gpu()) else cfg["pp_max_side"]
     work = _work_dir(st, p)
@@ -1929,6 +1995,17 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
             labels[i] = unit_label(st, u).lower()
     chk = os.path.join(work, "check.mp4")
     make_preview(video, d["final"], d["protect"], chk, fps, a, b, labels.get, w, h)
+    S.done()
+    return dict(a=a, b=b, video=video, w=w, h=h, fps=fps, us=us, ranges=ranges, opts=opts,
+                steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags)
+
+
+def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
+    """Second half of a part: rebuild the background, write the part video, self-check.
+    Returns the self-check findings (empty if all is well or not checked)."""
+    a, b, video, w, h, fps = (ctx[k] for k in ("a", "b", "video", "w", "h", "fps"))
+    ranges, opts, steps, seed = ctx["ranges"], ctx["opts"], ctx["steps"], ctx["seed"]
+    pp_side, work, d, S, flags = ctx["pp_side"], ctx["work"], ctx["d"], ctx["S"], ctx["flags"]
     S.start(4)
     if DEVICE == "cuda":
         torch.cuda.empty_cache()
@@ -1961,10 +2038,13 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
         if moving and filler is not None:
             for win in ((81, 49, 25) if big_gpu() else (49, 25)):
                 try:
-                    shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
-                    fills.append(fill_realistic(video, d["final"], flags, work, moving, w, h, filler,
-                                                window=win, overlap=8, stages=S, seed=seed,
-                                                steps=steps))
+                    if ctx.get("mm_prev") is None:
+                        shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
+                    res = fill_realistic(video, d["final"], flags, work, moving, w, h, filler,
+                                         window=win, overlap=8, stages=S, seed=seed, steps=steps,
+                                         reuse=ctx.get("mm_prev"), changed=ctx.get("changed"))
+                    ctx["mm_prev"] = res
+                    fills.append(res)
                     ov, done_moving = 8, True
                     break
                 except torch.cuda.OutOfMemoryError:
@@ -1995,11 +2075,51 @@ def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check):
     return viol
 
 
-def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=True):
+def _part_remask(st, p, ctx, vid_pred, viol, grow, pad):
+    """After the self-check: add the people it found to the existing masks; only the
+    moments that changed are painted again."""
+    a, b, video, w, h, d, work, us, ranges, S = (ctx[k] for k in (
+        "a", "b", "video", "w", "h", "d", "work", "us", "ranges", "S"))
+    opts = st.get("part_opts", {}).get(p, {})
+    S.start(2)
+    if st.get("mode") == "remove":
+        changed = {i for g, _ in viol for i in range(max(a, g - 12), min(b, g + 13))}
+    else:
+        shutil.rmtree(d["tracked"], ignore_errors=True)
+        os.makedirs(d["tracked"], exist_ok=True)
+        _track_extra(st, vid_pred, video, "extra", us, work, d["tracked"], minus=d["protect"])
+        flush_masks()
+        changed = {i for i in range(a, b) if os.path.exists(_mpath(d["tracked"], i))
+                   and _read_mask(d["tracked"], i).any()}
+    S.start(3)
+    grow_eff = grow * opts.get("grow_mult", 1.0)
+    ctx["flags"] = finalize_masks(d["raw"], d["tracked"], d["protect"], d["final"], ranges, pad,
+                                  max(1, round(grow_eff * max(h, w))))
+    if changed:  # the check video shows the added people too
+        labels = {i: unit_label(st, u).lower() for u in us for i in range(*st["units"][u][:2])}
+        make_preview(video, d["final"], d["protect"], os.path.join(work, "check.mp4"), ctx["fps"],
+                     a, b, labels.get, w, h)
+    S.done()
+    ctx.update(changed=changed, seed=opts.get("seed", 42))
+    return ctx
+
+
+def _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check, ctx=None):
+    """Masks, fill and composite for one part (ctx: masks made beforehand)."""
+    ctx = ctx or _part_masks(st, p, vid_pred, img_pred, grow, pad)
+    return _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check)
+
+
+def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=True, ctx=None):
     a, b = st["parts"][p]
     rep = {"found": 0, "fixed": 0, "left": []}
+    viol = []
     for rnd in range(2 if self_check else 1):
-        viol = _build_part(st, p, vid_pred, img_pred, pp_dir, grow, pad, check=self_check)
+        if rnd == 0:
+            ctx = ctx or _part_masks(st, p, vid_pred, img_pred, grow, pad)
+        else:
+            ctx = _part_remask(st, p, ctx, vid_pred, viol, grow, pad)
+        viol = _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check=self_check)
         if rnd == 0:
             rep["found"] = len(viol)
         if not viol:
@@ -2093,6 +2213,9 @@ def add_feedback(st, img_pred, kind, frame, x=None, y=None, text="", fb_dir=None
         opts["seed"] = opts.get("seed", 42) + 1
         opts["ai"] = True
         opts["smudge"] = opts.get("smudge", 0) + 1
+        names = [lv[0] for lv in FILL_LEVELS]
+        cur = names.index(_fill_level(st, opts)[0])
+        opts["fill_level"] = names[max(0, cur - 1)]
         if opts["smudge"] >= 2:  # still smudged: switch method (video model instead of plate)
             opts["no_plate"] = True
         msg = "repaint that area more carefully"
@@ -2272,9 +2395,13 @@ def _worker_main(job_dir, cache_root, sam2_dir, pp_dir, grow, wid, parts):
     set_progress(prog)
     set_preview(prev)
     _PV.update(video=st["_video"], remove=st.get("mode") == "remove")
-    for p in parts:
+    ctxs = {}
+    for p in parts:  # first the masks of every part of this worker ...
         cur["p"] = p
-        process_part(st, p, vid_pred, img_pred, pp_dir, grow)
+        ctxs[p] = _part_masks(st, p, vid_pred, img_pred, grow, PAD)
+    for p in parts:  # ... then background, video and self-check
+        cur["p"] = p
+        process_part(st, p, vid_pred, img_pred, pp_dir, grow, ctx=ctxs.pop(p))
         a, b = st["parts"][p]
         us = [u for u, (lo, hi, _) in enumerate(st["units"]) if a <= lo and hi <= b]
         res = {"extra": {u: st["extra"][u] for u in us if u in st.get("extra", {})},
@@ -2338,6 +2465,12 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=0.012, photos=()):
     if todo and len(todo) < len(st["parts"]):
         log(f"{len(st['parts']) - len(todo)} of {len(st['parts'])} part(s) already done; "
             f"processing {len(todo)}.")
+    if todo and not st.get("fill_level") and st.get("fill", "realistic") == "realistic":
+        name, est, frames = choose_fill_level(st, sum((st.get("prep") or {}).values()))
+        st["fill_level"], st["fill_auto"] = name, True
+        log(f"Background painting: {name} ({frames} frames to paint; about "
+            f"{round(est / 60)} min in total)")
+        save_job(st)
     n_w = n_workers(len(todo))
     if n_w > 1:
         run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow)
