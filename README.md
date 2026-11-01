@@ -34,6 +34,11 @@ clothing); SAM 2 tracks people pixel-accurately. Removed areas are filled in two
 - **Moving camera**: AI-generated background (MiniMax-Remover, zoomed in on small areas for
   sharpness; ProPainter as the fast or fallback fill).
 
+**Speed:** on a Colab A100 a 4.6-minute music video with a dozen dancers to remove took
+13.5 minutes in total (measured). Parts are processed three at a time, and the background
+painting quality is chosen automatically so the whole job finishes in about 15 minutes
+(choose *Sharpest background* under More options for the best painting, which takes longer).
+
 After each part a **self-check** looks for people who should be gone and fixes the part once
 automatically; anything still found is pointed out on the finished screen. Everything else
 keeps the original pixels, resolution and audio. The finished screen shows how long each

@@ -975,7 +975,7 @@ class ReID:
         return float(np.mean(sims[:3]))
 
     @staticmethod
-    def sample_frames(lo, hi, n_samples=4):
+    def sample_frames(lo, hi, n_samples=6):
         """Frames to look at in [lo, hi): the middle first, then spread out."""
         inner = list(range(lo + 1, hi - 1)) if hi - lo > 4 else list(range(lo, hi))
         idxs = sorted(set(inner[int(round(t))] for t in
@@ -983,7 +983,7 @@ class ReID:
         mid = (lo + hi) / 2
         return sorted(idxs, key=lambda i: abs(i - mid))
 
-    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=4, segs=None):
+    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6, segs=None):
         """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
         cands = []
         for i in self.sample_frames(lo, hi, n_samples):
