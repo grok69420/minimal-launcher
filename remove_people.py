@@ -251,7 +251,7 @@ def make_master(src, out, fps, start=0.0, end=0.0):
     subprocess.run(["ffmpeg", "-v", "error", "-y"] + _trim_args(start, end) +
                    ["-i", src, "-map", "0:v:0", "-vf",
                     f"fps={fps},scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264",
-                    "-preset", "fast", "-crf", "14", "-g", "30", "-pix_fmt", "yuv420p", "-an",
+                    "-preset", "veryfast", "-crf", "14", "-g", "30", "-pix_fmt", "yuv420p", "-an",
                     tmp], check=True)
     os.replace(tmp, out)
 
@@ -296,6 +296,31 @@ class Video:
         if any(not os.path.exists(self.path(i)) for i in range(a, b)):
             self.extract(a, b)
 
+    def extract_many(self, idxs):
+        """Decode the video once and keep only the frames in idxs (much faster than seeking
+        to hundreds of single frames)."""
+        want = {int(i) for i in idxs if not os.path.exists(self.path(int(i)))}
+        if not want:
+            return
+        last, size, jobs = max(want), self.w * self.h * 3, []
+        p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", self.master, "-frames:v", str(last + 1),
+                              "-f", "rawvideo", "-pix_fmt", "bgr24", "-vsync", "passthrough", "-"],
+                             stdout=subprocess.PIPE, bufsize=10 ** 8)
+        try:
+            for i in range(last + 1):
+                buf = p.stdout.read(size)
+                if len(buf) < size:
+                    break
+                if i in want:
+                    img = np.frombuffer(buf, np.uint8).reshape(self.h, self.w, 3).copy()
+                    jobs.append(_IO.submit(cv2.imwrite, self.path(i), img,
+                                           [cv2.IMWRITE_JPEG_QUALITY, 95]))
+        finally:
+            p.stdout.close()
+            p.wait()
+        for j in jobs:
+            j.result()
+
     def drop(self, a, b):
         for i in range(a, b):
             try:
@@ -332,7 +357,7 @@ class FFWriter:
             if duration:  # video length decides; audio is trimmed to it, never the reverse
                 cmd += ["-t", f"{duration:.3f}"]
         cmd += ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264",
-                "-preset", "medium", "-crf", str(crf), "-pix_fmt", "yuv420p",
+                "-preset", "fast", "-crf", str(crf), "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart", path]
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
@@ -350,12 +375,12 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None):
     """One streaming pass: colour-change score per frame (for scene cuts) + person boxes."""
     from ultralytics import YOLO
     model = YOLO(det_weights)
-    batch = batch or (16 if DEVICE == "cuda" else 4)
+    batch = batch or (32 if DEVICE == "cuda" else 4)
     scores, boxes, buf, prev = [], [], [], None
 
     def flush():
         res = model.predict(buf, classes=[0], conf=conf, imgsz=imgsz, verbose=False,
-                            device=0 if DEVICE == "cuda" else "cpu")
+                            device=0 if DEVICE == "cuda" else "cpu", half=DEVICE == "cuda")
         boxes.extend(r.boxes.xyxy.cpu().numpy().astype(np.float32) for r in res)
         buf.clear()
 
@@ -812,13 +837,19 @@ class ReID:
                        for c, e in self.ref_bodies), reverse=True)
         return float(np.mean(sims[:3]))
 
-    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=8):
-        """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
+    @staticmethod
+    def sample_frames(lo, hi, n_samples=6):
+        """Frames to look at in [lo, hi): the middle first, then spread out."""
         inner = list(range(lo + 1, hi - 1)) if hi - lo > 4 else list(range(lo, hi))
         idxs = sorted(set(inner[int(round(t))] for t in
                           np.linspace(0, len(inner) - 1, min(n_samples, len(inner)))))
+        mid = (lo + hi) / 2
+        return sorted(idxs, key=lambda i: abs(i - mid))
+
+    def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6):
+        """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
         cands = []
-        for i in idxs:
+        for i in self.sample_frames(lo, hi, n_samples):
             if not len(boxes[i]):
                 continue
             img = cv2.imread(frames[i])
@@ -826,6 +857,8 @@ class ReID:
             for k, d in enumerate(self.describe(img, boxes[i], masks)):
                 cands.append(dict(frame=i, k=k, box=boxes[i][k], face=self.face_sim(d),
                                   body=self.body_sim(d)))
+            if any(c["face"] is not None and c["face"] >= self.FACE_MATCH for c in cands):
+                break  # the face decides; no need to look further
         if not cands:
             return None
         faced = [c for c in cands if c["face"] is not None and c["face"] >= self.FACE_MATCH]
@@ -1539,6 +1572,7 @@ def find_targets(st, reid, vid_pred, img_pred):
     S.start(1)
     auto = {}
     todo = [u for u in range(len(st["units"])) if u not in st.get("rseeds", {})]
+    st["_video"].extract_many([i for u in todo for i in ReID.sample_frames(*st["units"][u][:2])])
     for t, u in enumerate(todo):
         lo, hi, _ = st["units"][u]
         found = []
@@ -1614,6 +1648,7 @@ def find_person(st, reid, vid_pred, img_pred, photos=()):
     S.start(1)
     auto = {}
     todo = [u for u in range(len(st["units"])) if u not in st["seeds"]]
+    st["_video"].extract_many([i for u in todo for i in ReID.sample_frames(*st["units"][u][:2])])
     for t, u in enumerate(todo):
         lo, hi, _ = st["units"][u]
         auto[u] = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi)
