@@ -68,7 +68,10 @@ FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
 # tiny decoder). Below the model's own size (832x480) the painting shows a checkerboard
 # pattern, so every level paints at 832x480; the faster levels paint every 2nd / 3rd frame
 # and make the frames between by following the camera movement (no smearing).
-FILL_LEVELS = [("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
+# "film": SVOR (also removes shadows/reflections), real background from other frames, matched
+# grain - for the best result, no time limit; never chosen automatically.
+FILL_LEVELS = [("film", 832 * 480, 20, 0.5, 1, False, "svor"),
+               ("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
                ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True),
                ("fastest", 832 * 480, 6, 20.0, 4, True)]
 FILL_EFFICIENCY = 0.72  # share of that speed reached with tracking etc. sharing the GPU (measured)
@@ -1839,10 +1842,138 @@ def _inpainted_frame(g, chs, results, overlap, size):
     return out
 
 
+class CameraPath:
+    """Camera movement between neighbouring frames of each scene piece (measured on the
+    background only), so any frame of a shot can be laid over any other."""
+
+    def __init__(self, frames, final_dir, prot_dir, ranges, threads=6):
+        self.frames, self.final, self.prot = frames, final_dir, prot_dir
+        self.unit = {}
+        jobs = []
+        for r, (a, b) in enumerate(ranges):
+            for i in range(a, b):
+                self.unit[i] = r
+            jobs += [(i, i + 1) for i in range(a, b - 1)]
+        self.step = {}
+
+        def measure(ij):
+            i, j = ij
+            return ij, camera_motion(cv2.imread(frames[i]), cv2.imread(frames[j]),
+                                     self.busy(i), self.busy(j))
+        with ThreadPoolExecutor(threads) as ex:
+            for (i, j), H in ex.map(measure, jobs):
+                self.step[i] = H
+
+    def busy(self, i):
+        m = _read_mask(self.final, i)
+        if os.path.exists(_mpath(self.prot, i)):
+            m = m | _read_mask(self.prot, i)
+        return m
+
+    def between(self, j, g):
+        """3x3 that moves frame j onto frame g, or None (other scene, or not measurable)."""
+        if self.unit.get(j) != self.unit.get(g):
+            return None
+        H = np.eye(3)
+        if j < g:
+            for i in range(j, g):
+                if self.step.get(i) is None:
+                    return None
+                H = self.step[i] @ H
+        else:  # j -> j-1 -> ... -> g
+            for i in range(j - 1, g - 1, -1):
+                if self.step.get(i) is None:
+                    return None
+                H = np.linalg.inv(self.step[i]) @ H
+        return H
+
+
+def real_fill(path, g, orig, hole, painted, prot, gate=True, reach=36, step=3, tol=20):
+    """Puts real background into the removed area where it can be seen in other frames of
+    the shot (moved along with the camera). Only pixels that were free of people there, that
+    line up with this frame around the area, and (gate) agree with the painting in their
+    overall colour are used - so no misplaced shadows or ghosts. Returns (frame, share)."""
+    h, w = hole.shape
+    need = hole & ~prot
+    total = int(need.sum())
+    if total < 50:
+        return painted, 0.0
+    out = painted.copy()
+    taken = np.zeros_like(hole)
+    ring_src = cv2.dilate(hole.view(np.uint8), np.ones((31, 31), np.uint8)) > 0
+    ring_src &= ~hole & ~prot
+    blur_p = cv2.GaussianBlur(painted, (0, 0), 4).astype(np.int16) if gate else None
+    order = sorted((j for d in range(step, reach + 1, step) for j in (g - d, g + d)),
+                   key=lambda j: abs(j - g))
+    for j in order:
+        H = path.between(j, g)
+        if H is None:
+            continue
+        img = cv2.imread(path.frames[j])
+        if img is None:
+            continue
+        wj = cv2.warpPerspective(img, H, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+        free = (~path.busy(j)).view(np.uint8)
+        free = cv2.warpPerspective(free, H, (w, h), flags=cv2.INTER_NEAREST, borderValue=0) > 0
+        free = cv2.erode(free.view(np.uint8), np.ones((5, 5), np.uint8)) > 0
+        ring = ring_src & free
+        if ring.sum() < 300:
+            continue
+        d = np.abs(wj.astype(np.int16) - orig)[ring].max(1)
+        if np.median(d) > 14:  # does not line up (parallax, lighting change)
+            continue
+        gain = np.clip((orig[ring].mean(0) + 1) / (wj[ring].mean(0) + 1), 0.8, 1.25)
+        wj = np.clip(wj * gain + 0.5, 0, 255).astype(np.uint8)
+        take = need & free & ~taken
+        if gate:
+            agree = np.abs(cv2.GaussianBlur(wj, (0, 0), 4).astype(np.int16) - blur_p).max(2) < tol
+            take &= agree
+        if take.any():
+            out[take] = wj[take]
+            taken |= take
+        if (need & ~taken).sum() < 50:
+            break
+    if not taken.any():
+        return painted, 0.0
+    # soft seam between real and painted pixels
+    a = cv2.GaussianBlur(taken.astype(np.float32), (0, 0), 1.5)[..., None]
+    out = (out.astype(np.float32) * a + painted.astype(np.float32) * (1 - a))
+    return np.clip(out + 0.5, 0, 255).astype(np.uint8), float(taken.sum()) / total
+
+
+def match_grain(f, o, region, ring, rng):
+    """Adds the video's own fine noise/grain to the painted area (painted pixels are cleaner
+    than real footage, which gives them away)."""
+    if ring.sum() < 200 or region.sum() < 50:
+        return f
+    go = cv2.cvtColor(o, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    gf = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    so = float((go - cv2.GaussianBlur(go, (0, 0), 1.2))[ring].std())
+    sf = float((gf - cv2.GaussianBlur(gf, (0, 0), 1.2))[region].std())
+    add = (max(0.0, so * so - sf * sf)) ** 0.5
+    if add < 0.6:
+        return f
+    nz = cv2.GaussianBlur(rng.standard_normal(f.shape[:2]).astype(np.float32), (0, 0), 0.6)
+    nz *= add / max(1e-3, float(nz.std()))
+    out = f.astype(np.float32)
+    out[region] += nz[region][:, None]
+    return np.clip(out + 0.5, 0, 255).astype(np.uint8)
+
+
 def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo, hi, w, h,
-              overlap=16, feather_px=9, stages=None):
+              overlap=16, feather_px=9, stages=None, film=None):
     """Final frames of the part: the painted background blended in where people were removed.
-    Several frames are prepared at once in threads (OpenCV releases the GIL); written in order."""
+    Several frames are prepared at once in threads (OpenCV releases the GIL); written in order.
+    film: {"ranges": scene pieces, "gate": bool, "effects": bool} - real background from other
+    frames, the painter's shadow/reflection removal outside the masks, matched grain."""
+    path = None
+    share = []
+    if film:
+        try:
+            path = CameraPath(frames, final_dir, prot_dir, film["ranges"])
+        except Exception:
+            traceback.print_exc()
+
     def make(g):
         orig = cv2.imread(frames[g])
         if not flags.get(g):
@@ -1852,6 +1983,20 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
         mb = _read_mask(final_dir, g)
         if not mb.any():
             return orig
+        if path is not None:
+            try:
+                prot_full = _read_mask(prot_dir, g)
+                inp, got = real_fill(path, g, orig, mb, inp, prot_full, gate=film.get("gate", True))
+                share.append(got)
+            except Exception:
+                traceback.print_exc()
+        if film and film.get("effects"):  # shadows/reflections the painter removed next to people
+            r = max(9, int(0.06 * max(w, h)))
+            near = cv2.dilate(mb.view(np.uint8), np.ones((r, r), np.uint8)) > 0
+            dd = cv2.GaussianBlur(np.abs(inp.astype(np.int16) - orig).max(2).astype(np.float32), (0, 0), 3)
+            eff = np.clip((dd - 14.0) / 14.0, 0, 1) * near * ~_read_mask(prot_dir, g)
+            if eff.max() > 0:
+                mb = mb | (eff > 0.5)
         x1, y1, x2, y2 = (int(v) for v in _bbox(mb))
         pd = 4 * feather_px + 2
         x1, y1, x2, y2 = max(0, x1 - pd), max(0, y1 - pd), min(w, x2 + pd), min(h, y2 + pd)
@@ -1875,6 +2020,8 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
             gain = np.clip((np.array(mo) + 1) / (np.array(mf) + 1), 0.85, 1.18)
             if np.abs(gain - 1).max() > 0.004:
                 f = cv2.transform(f, np.diag(gain).astype(np.float32))
+        if film:
+            f = match_grain(f, o, a > 0.5, ring.view(bool), np.random.default_rng(g))
         orig = orig.copy()
         orig[y1:y2, x1:x2] = cv2.blendLinear(f, o, a, 1.0 - a)
         return orig
@@ -1897,6 +2044,8 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
             stages.step(g - lo + 1, hi - lo)
     pool.shutdown()
     wr.close()
+    if share:
+        log(f"  real background used for {100 * float(np.mean(share)):.0f}% of the removed area")
 
 
 # ---------------------------------------------------------------- jobs (saved, resumable)
@@ -2498,7 +2647,8 @@ def _fill_level(st, opts=None):
     for lv in FILL_LEVELS:
         if lv[0] == name:
             return lv
-    return {"Best": FILL_LEVELS[0], "Balanced": FILL_LEVELS[1]}.get(st["preset"], FILL_LEVELS[2])
+    want = {"Best": "sharpest", "Balanced": "sharp"}.get(st["preset"], "fast")
+    return next(lv for lv in FILL_LEVELS if lv[0] == want)
 
 
 def fill_frames_estimate(st):
@@ -2529,7 +2679,7 @@ def choose_fill_level(st, elapsed):
         return elapsed + max(mask_s, first / (8.0 if big else 2.0) + paint) + 60
 
     for lv in FILL_LEVELS:
-        if est(lv) <= TARGET_SECONDS:
+        if lv[0] != "film" and est(lv) <= TARGET_SECONDS:
             return lv[0], est(lv), frames
     return FILL_LEVELS[-1][0], est(FILL_LEVELS[-1]), frames
 
@@ -2601,7 +2751,9 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     lv = _fill_level(st, opts)
     stride = lv[4] if len(lv) > 4 else 1
     tae = bool(lv[5]) if len(lv) > 5 else False
-    steps = opts.get("steps") or st.get("steps") or lv[2]
+    engine = lv[6] if len(lv) > 6 else "mm"
+    steps = (max(lv[2], opts.get("steps") or 0) if engine == "svor"
+             else opts.get("steps") or st.get("steps") or lv[2])
     seed = opts.get("seed", 42)
     _FILL_AREA[0] = lv[1]
     cfg = PRESETS[st["preset"]]
@@ -2657,7 +2809,7 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     return dict(a=a, b=b, video=video, w=w, h=h, fps=fps, us=us, ranges=ranges, opts=opts,
                 preview=preview,
                 steps=steps, seed=seed, pp_side=pp_side, work=work, d=d, S=S, flags=flags,
-                stride=stride, tae=tae)
+                stride=stride, tae=tae, engine=engine)
 
 
 def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
@@ -2685,7 +2837,7 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
     try:
         if use_ai:
             try:
-                filler, close_it = _get_filler()
+                filler, close_it = _get_filler(ctx.get("engine", "mm"))
                 if hasattr(filler, "use_tae"):
                     try:
                         filler.use_tae(ctx.get("tae", False))
@@ -2702,7 +2854,8 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
         if moving and filler is not None:
             k = ctx.get("stride", 1)
             # 49 painted frames per piece: 81 at 832x480 ran out of memory with 3 parts at once
-            for win in (49 * k, 25 * k, 13 * k):
+            wins = (81, 49, 25) if ctx.get("engine") == "svor" else (49 * k, 25 * k, 13 * k)
+            for win in wins:
                 try:
                     if ctx.get("mm_prev") is None:
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
@@ -2730,8 +2883,10 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
     chs, results = _merge_fills(fills)
     S.start(5)
     out = os.path.join(work, "part.mp4")
+    film = ({"ranges": ranges, "gate": True, "effects": True}
+            if ctx.get("engine") == "svor" else None)
     composite(video, d["final"], d["protect"], flags, chs, results, out, fps, a, b, w, h,
-              overlap=ov, stages=S)
+              overlap=ov, stages=S, film=film)
     viol = []
     if check:
         S.start(6)
