@@ -64,16 +64,19 @@ def run(name, filler, **kw):
     results.append((f"{name} {len(frames) / dt:.2f} f/s", up))
 
 
-mm = rp.MiniMaxFiller()
-mm.use_tae(True)
-run("quick (MiniMax 832x480, 6 steps)", mm, steps=6)
-del mm
-torch.cuda.empty_cache()
+if os.environ.get("KOP_SKIP_MM") != "1":
+    mm = rp.MiniMaxFiller()
+    mm.use_tae(True)
+    run("quick (MiniMax 832x480, 6 steps)", mm, steps=6)
+    del mm
+    torch.cuda.empty_cache()
 torch.cuda.reset_peak_memory_stats()
 sv = rp.SVORFiller()
-run("film (SVOR 20 steps)", sv)
-sv.guidance = 1.0
-run("film (SVOR 10 steps, no guidance)", sv, steps=10)
+# configurations "steps:guidance" separated by commas, e.g. KOP_SVOR_CFGS=20:6,12:6,12:4
+for c in os.environ.get("KOP_SVOR_CFGS", "20:6,10:1").split(","):
+    steps, g = c.split(":")
+    sv.guidance = float(g)
+    run(f"film (SVOR {steps} steps, guidance {g})", sv, steps=int(steps))
 x1, y1, x2, y2 = (int(v) for v in rp._bbox(masks[k])) if masks[k].any() else (0, 0, w, h)
 cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 cw, ch = min(w, 640), min(h, 360)
