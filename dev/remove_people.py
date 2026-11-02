@@ -2015,20 +2015,39 @@ class CameraPath:
                 self.unit[i] = r
             jobs += [(i, i + 1) for i in range(a, b - 1)]
         self.step = {}
+        self._cache = {}
+        self._lock = __import__("threading").Lock()
 
         def measure(ij):
             i, j = ij
-            return ij, camera_motion(cv2.imread(frames[i]), cv2.imread(frames[j]),
-                                     self.busy(i), self.busy(j))
+            return ij, camera_motion(self.img(i), self.img(j), self.busy(i), self.busy(j))
         with ThreadPoolExecutor(threads) as ex:
             for (i, j), H in ex.map(measure, jobs):
                 self.step[i] = H
+        self._cache.clear()
+
+    def _get(self, key, make, keep=160):
+        with self._lock:
+            v = self._cache.get(key)
+        if v is None:
+            v = make()
+            with self._lock:
+                if len(self._cache) > keep:
+                    for k in list(self._cache)[:keep // 4]:
+                        del self._cache[k]
+                self._cache[key] = v
+        return v
+
+    def img(self, i):
+        return self._get(("i", i), lambda: cv2.imread(self.frames[i]))
 
     def busy(self, i):
-        m = _read_mask(self.final, i)
-        if os.path.exists(_mpath(self.prot, i)):
-            m = m | _read_mask(self.prot, i)
-        return m
+        def make():
+            m = _read_mask(self.final, i)
+            if os.path.exists(_mpath(self.prot, i)):
+                m = m | _read_mask(self.prot, i)
+            return m
+        return self._get(("b", i), make)
 
     def between(self, j, g):
         """3x3 that moves frame j onto frame g, or None (other scene, or not measurable)."""
@@ -2048,46 +2067,62 @@ class CameraPath:
         return H
 
 
-def real_fill(path, g, orig, hole, painted, prot, gate=True, reach=36, step=3, tol=20):
+def real_fill(path, g, orig, hole, painted, prot, gate=True, reach=36, step=4, tol=20, give_up=6):
     """Puts real background into the removed area where it can be seen in other frames of
     the shot (moved along with the camera). Only pixels that were free of people there, that
     line up with this frame around the area, and (gate) agree with the painting in their
-    overall colour are used - so no misplaced shadows or ghosts. Returns (frame, share)."""
+    overall colour are used - so no misplaced shadows or ghosts. Works on the removed area's
+    box only. Returns (frame, share of the area filled with real background)."""
     h, w = hole.shape
-    need = hole & ~prot
-    total = int(need.sum())
-    if total < 50:
+    need_full = hole & ~prot
+    if need_full.sum() < 50:
         return painted, 0.0
-    out = painted.copy()
-    taken = np.zeros_like(hole)
-    ring_src = cv2.dilate(hole.view(np.uint8), np.ones((31, 31), np.uint8)) > 0
-    ring_src &= ~hole & ~prot
-    blur_p = cv2.GaussianBlur(painted, (0, 0), 4).astype(np.int16) if gate else None
+    x1, y1, x2, y2 = (int(v) for v in _bbox(need_full))
+    pd = 24
+    x1, y1, x2, y2 = max(0, x1 - pd), max(0, y1 - pd), min(w, x2 + pd), min(h, y2 + pd)
+    cw, ch = x2 - x1, y2 - y1
+    T = np.array([[1, 0, -x1], [0, 1, -y1], [0, 0, 1]], np.float64)
+    need = need_full[y1:y2, x1:x2]
+    hl, pr = hole[y1:y2, x1:x2], prot[y1:y2, x1:x2]
+    o = orig[y1:y2, x1:x2]
+    pc = painted[y1:y2, x1:x2]
+    total = int(need.sum())
+    ring_src = (cv2.dilate(hl.view(np.uint8), np.ones((25, 25), np.uint8)) > 0) & ~hl & ~pr
+    sm = (max(8, cw // 4), max(8, ch // 4))  # colour agreement is judged at 1/4 size
+    p_small = cv2.GaussianBlur(cv2.resize(pc, sm, interpolation=cv2.INTER_AREA), (0, 0), 1.0).astype(np.int16)
+    out = pc.copy()
+    taken = np.zeros_like(need)
     order = sorted((j for d in range(step, reach + 1, step) for j in (g - d, g + d)),
                    key=lambda j: abs(j - g))
+    tried = 0
     for j in order:
         H = path.between(j, g)
         if H is None:
             continue
-        img = cv2.imread(path.frames[j])
-        if img is None:
+        tried += 1
+        if tried > give_up and not taken.any():
+            break  # nothing usable nearby: this frame is painted only
+        Hc = T @ H
+        wj = cv2.warpPerspective(path.img(j), Hc, (cw, ch), flags=cv2.INTER_LINEAR,
+                                 borderMode=cv2.BORDER_CONSTANT)
+        free = cv2.warpPerspective((~path.busy(j)).view(np.uint8), Hc, (cw, ch),
+                                   flags=cv2.INTER_NEAREST, borderValue=0)
+        free = cv2.erode(free, np.ones((5, 5), np.uint8)) > 0
+        take = need & free & ~taken
+        if take.sum() < 20:
             continue
-        wj = cv2.warpPerspective(img, H, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-        free = (~path.busy(j)).view(np.uint8)
-        free = cv2.warpPerspective(free, H, (w, h), flags=cv2.INTER_NEAREST, borderValue=0) > 0
-        free = cv2.erode(free.view(np.uint8), np.ones((5, 5), np.uint8)) > 0
         ring = ring_src & free
         if ring.sum() < 300:
             continue
-        d = np.abs(wj.astype(np.int16) - orig)[ring].max(1)
+        d = np.abs(wj.astype(np.int16) - o)[ring].max(1)
         if np.median(d) > 14:  # does not line up (parallax, lighting change)
             continue
-        gain = np.clip((orig[ring].mean(0) + 1) / (wj[ring].mean(0) + 1), 0.8, 1.25)
+        gain = np.clip((o[ring].mean(0) + 1) / (wj[ring].mean(0) + 1), 0.8, 1.25)
         wj = np.clip(wj * gain + 0.5, 0, 255).astype(np.uint8)
-        take = need & free & ~taken
         if gate:
-            agree = np.abs(cv2.GaussianBlur(wj, (0, 0), 4).astype(np.int16) - blur_p).max(2) < tol
-            take &= agree
+            w_small = cv2.GaussianBlur(cv2.resize(wj, sm, interpolation=cv2.INTER_AREA), (0, 0), 1.0)
+            agree = (np.abs(w_small.astype(np.int16) - p_small).max(2) < tol).view(np.uint8)
+            take &= cv2.resize(agree, (cw, ch), interpolation=cv2.INTER_NEAREST) > 0
         if take.any():
             out[take] = wj[take]
             taken |= take
@@ -2095,10 +2130,11 @@ def real_fill(path, g, orig, hole, painted, prot, gate=True, reach=36, step=3, t
             break
     if not taken.any():
         return painted, 0.0
-    # soft seam between real and painted pixels
-    a = cv2.GaussianBlur(taken.astype(np.float32), (0, 0), 1.5)[..., None]
-    out = (out.astype(np.float32) * a + painted.astype(np.float32) * (1 - a))
-    return np.clip(out + 0.5, 0, 255).astype(np.uint8), float(taken.sum()) / total
+    a = cv2.GaussianBlur(taken.astype(np.float32), (0, 0), 1.5)[..., None]  # soft seam
+    res = painted.copy()
+    res[y1:y2, x1:x2] = np.clip(out.astype(np.float32) * a + pc.astype(np.float32) * (1 - a) + 0.5,
+                                0, 255).astype(np.uint8)
+    return res, float(taken.sum()) / total
 
 
 def guided_alpha(img, mask, r=4, eps=1e-3):
@@ -2142,7 +2178,7 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
     film: {"ranges": scene pieces, "gate": bool, "effects": bool} - real background from other
     frames, the painter's shadow/reflection removal outside the masks, matched grain."""
     path = None
-    share = []
+    share, miss = [], {}  # miss: scene piece -> frames in a row without usable real background
     if film:
         try:
             path = CameraPath(frames, final_dir, prot_dir, film["ranges"])
@@ -2158,20 +2194,28 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
         mb = _read_mask(final_dir, g)
         if not mb.any():
             return orig
-        if path is not None:
+        u = path.unit.get(g) if path is not None else None
+        if path is not None and not (miss.get(u, 0) >= 3 and g % 8):
             try:
                 prot_full = _read_mask(prot_dir, g)
                 inp, got = real_fill(path, g, orig, mb, inp, prot_full, gate=film.get("gate", True))
                 share.append(got)
+                miss[u] = 0 if got > 0.01 else miss.get(u, 0) + 1
             except Exception:
                 traceback.print_exc()
         if film and film.get("effects"):  # shadows/reflections the painter removed next to people
-            r = max(9, int(0.06 * max(w, h)))
-            near = cv2.dilate(mb.view(np.uint8), np.ones((r, r), np.uint8)) > 0
-            dd = cv2.GaussianBlur(np.abs(inp.astype(np.int16) - orig).max(2).astype(np.float32), (0, 0), 3)
-            eff = np.clip((dd - 14.0) / 14.0, 0, 1) * near * ~_read_mask(prot_dir, g)
-            if eff.max() > 0:
-                mb = mb | (eff > 0.5)
+            q = 4  # judged at 1/4 size
+            sw_, sh_ = w // q, h // q
+            r = max(3, int(0.06 * max(w, h)) // q)
+            near = cv2.dilate(cv2.resize(mb.view(np.uint8), (sw_, sh_), interpolation=cv2.INTER_NEAREST),
+                              np.ones((r, r), np.uint8)) > 0
+            dd = np.abs(cv2.resize(inp, (sw_, sh_), interpolation=cv2.INTER_AREA).astype(np.int16) -
+                        cv2.resize(orig, (sw_, sh_), interpolation=cv2.INTER_AREA)).max(2).astype(np.float32)
+            dd = cv2.GaussianBlur(dd, (0, 0), 1.0)
+            eff = ((dd > 21.0) & near).view(np.uint8)
+            if eff.any():
+                eff = cv2.resize(eff, (w, h), interpolation=cv2.INTER_NEAREST) > 0
+                mb = mb | (eff & ~_read_mask(prot_dir, g))
         x1, y1, x2, y2 = (int(v) for v in _bbox(mb))
         pd = 4 * feather_px + 2
         x1, y1, x2, y2 = max(0, x1 - pd), max(0, y1 - pd), min(w, x2 + pd), min(h, y2 + pd)
