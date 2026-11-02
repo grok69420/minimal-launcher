@@ -1653,7 +1653,8 @@ def crop_box(masks, w, h, margin=0.6, min_short=200, full_at=0.8):
 
 
 def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=49, overlap=8,
-                   stages=None, seed=42, reuse=None, changed=None, steps=None, stride=1):
+                   stages=None, seed=42, reuse=None, changed=None, steps=None, stride=1,
+                   prot_dir=None, refine=None, band=0.06):
     """Same output format as inpaint(): (chunks, {chunk: (folder, extension)}); the folder
     holds full-size frames with the removed areas filled in."""
     chs = plan_chunks(ranges, window, overlap)
@@ -1672,7 +1673,43 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
     def load(c):
         a, b, _, _ = chs[c]
         ext = _pad_4k1(painted(a, b))
-        return [cv2.imread(frames[g]) for g in ext], [_read_mask(final_dir, g) for g in ext]
+        prots = ([_read_mask(prot_dir, g) if os.path.exists(_mpath(prot_dir, g)) else None
+                  for g in ext] if (refine is not None and prot_dir) else None)
+        return ([cv2.imread(frames[g]) for g in ext], [_read_mask(final_dir, g) for g in ext],
+                prots)
+
+    def refine_band(out, imgs, masks, prots, box, fw, fh):
+        """The film painter also fades out people it was not asked to remove when they stand
+        next to removed ones; around the kept person the background is therefore painted
+        again by a painter that keeps everything outside its mask (no halos)."""
+        x1, y1, x2, y2 = box
+        cw, ch = x2 - x1, y2 - y1
+        r = max(5, int(band * max(w, h)))
+        k = np.ones((r, r), np.uint8)
+        bands = []
+        for m, p in zip(masks, prots):
+            mc = m[y1:y2, x1:x2]
+            if p is None or not p.any():
+                bands.append(np.zeros_like(mc))
+                continue
+            bands.append(mc & (cv2.dilate(p[y1:y2, x1:x2].view(np.uint8), k) > 0))
+        if sum(int(bb.sum()) for bb in bands) < 200:
+            return out
+        mixed = []
+        for o, im, m in zip(out, imgs, masks):
+            up = cv2.resize(o, (cw, ch), interpolation=cv2.INTER_LINEAR)
+            src = im[y1:y2, x1:x2].copy()
+            mc = m[y1:y2, x1:x2]
+            src[mc] = up[mc]
+            mixed.append(src)
+        ref = refine.fill(mixed, bands, fw, fh, seed=seed, steps=8)
+        res = []
+        for o, rf, bb in zip(out, ref, bands):
+            a = cv2.resize(bb.astype(np.float32), (fw, fh), interpolation=cv2.INTER_AREA)
+            a = cv2.GaussianBlur(a, (0, 0), 2.0)
+            a = np.clip(a * 1.5, 0, 1)[..., None]
+            res.append(np.clip(o * (1 - a) + rf * a + 0.5, 0, 255).astype(np.uint8))
+        return res
 
     def save(path, img, patch, box):
         x1, y1, x2, y2 = box
@@ -1705,12 +1742,19 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
     nxt = _IO.submit(load, todo[0]) if todo else None
     for t, c in enumerate(todo):
         a, b, _, _ = chs[c]
-        imgs, masks = nxt.result()
+        imgs, masks, prots = nxt.result()
         nxt = _IO.submit(load, todo[t + 1]) if t + 1 < len(todo) else None
         x1, y1, x2, y2 = crop_box(masks, w, h)
         fw, fh = fill_size(x2 - x1, y2 - y1)
         out = filler.fill([im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks],
                           fw, fh, seed=seed, steps=steps)
+        if refine is not None and prots is not None:
+            try:
+                out = refine_band(out, imgs, masks, prots, (x1, y1, x2, y2), fw, fh)
+            except torch.cuda.OutOfMemoryError:
+                raise
+            except Exception:
+                traceback.print_exc()
         sh = sharpener() if (x2 - x1) > 1.25 * fw else None
         if sh is not None:  # full-size detail instead of a blurry enlargement
             out = sh(out, (x2 - x1, y2 - y1))
@@ -3102,10 +3146,18 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
                 try:
                     if ctx.get("mm_prev") is None:
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
+                    refine = None
+                    if ctx.get("engine") == "svor":  # (also keeps the people who stay in remove mode)
+                        try:
+                            refine, _ = _get_filler("mm")
+                            refine.use_tae(False)
+                        except Exception:
+                            traceback.print_exc()
                     res = fill_realistic(video, d["final"], flags, work, moving, w, h, filler,
                                          window=win, overlap=8, stages=S, seed=seed, steps=steps,
                                          reuse=ctx.get("mm_prev"), changed=ctx.get("changed"),
-                                         stride=ctx.get("stride", 1))
+                                         stride=ctx.get("stride", 1), prot_dir=d["protect"],
+                                         refine=refine)
                     ctx["mm_prev"] = res
                     fills.append(res)
                     ov, done_moving = 8, True
@@ -3549,6 +3601,8 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=None, photos=()):
             f"{round(est / 60)} min in total)")
         save_job(st)
     n_w = n_workers(len(todo))
+    if _fill_level(st)[0] == "film":
+        n_w = min(n_w, int(os.environ.get("KOP_FILM_WORKERS", "2")))  # two painters per part
     if n_w > 1:
         run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow)
     for p in todo:  # sequential (and whatever a parallel worker could not finish)
