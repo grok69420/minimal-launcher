@@ -538,6 +538,91 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
     return np.asarray(scores, np.float32), boxes, segs
 
 
+def crowd_frames(boxes, h, min_people=5, max_height=0.3):
+    """Wide shots of a crowd: many people, all small (close-ups never qualify - cutting a
+    close-up into tiles makes faces look like extra people)."""
+    out = []
+    for i, b in enumerate(boxes):
+        if len(b) >= min_people and np.median(b[:, 3] - b[:, 1]) < max_height * h:
+            out.append(i)
+    return out
+
+
+def tile_detect(weights, imgs, conf, iou=0.8, imgsz=960, overlap=0.2):
+    """Small people in wide crowd shots: the frame is looked at in 4 overlapping tiles
+    (each enlarged), so people far away are found too. Returns [(boxes, outlines)] in
+    full-frame pixels; people cut by a tile edge are left to the neighbouring tile."""
+    det = _detector(weights)
+    h, w = imgs[0].shape[:2]
+    tw, th = int(w * (0.5 + overlap / 2)), int(h * (0.5 + overlap / 2))
+    offs = [(0, 0), (w - tw, 0), (0, h - th), (w - tw, h - th)]
+    res = []
+    for img in imgs:
+        tiles = [img[y:y + th, x:x + tw] for x, y in offs]
+        rr = det.predict(tiles, classes=[0], conf=conf, iou=iou, imgsz=imgsz, verbose=False,
+                         device=0 if DEVICE == "cuda" else "cpu",
+                         quantize=16 if DEVICE == "cuda" else None)
+        bs, ps, ss = [], [], []
+        for (x, y), r in zip(offs, rr):
+            b = r.boxes.xyxy.cpu().numpy()
+            xy = r.masks.xy if r.masks is not None else [None] * len(b)
+            for k in range(len(b)):
+                x1, y1, x2, y2 = b[k]
+                cut = (x1 < 2 and x > 0) or (y1 < 2 and y > 0) or (x2 > tw - 2 and x + tw < w) or \
+                      (y2 > th - 2 and y + th < h)
+                if cut:
+                    continue
+                bs.append([x1 + x, y1 + y, x2 + x, y2 + y])
+                ss.append(float(r.boxes.conf[k]))
+                ps.append(None if xy[k] is None else _poly(np.asarray(xy[k]) + [x, y]))
+        res.append((np.asarray(bs, np.float32).reshape(-1, 4), ps, np.asarray(ss, np.float32)))
+    return res
+
+
+def _iou_any(b, boxes, thr=0.5, contain=0.75):
+    """True if box b is (almost) the same person as one of boxes."""
+    if not len(boxes):
+        return False
+    x1 = np.maximum(b[0], boxes[:, 0])
+    y1 = np.maximum(b[1], boxes[:, 1])
+    x2 = np.minimum(b[2], boxes[:, 2])
+    y2 = np.minimum(b[3], boxes[:, 3])
+    inter = np.clip(x2 - x1, 0, None) * np.clip(y2 - y1, 0, None)
+    ab = (b[2] - b[0]) * (b[3] - b[1])
+    ao = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    iou = inter / np.maximum(ab + ao - inter, 1e-6)
+    return bool((iou > thr).any() or (inter / max(ab, 1e-6) > contain).any())
+
+
+def add_crowd_people(st, video, a, b, batch=16):
+    """Film mode: people the scan missed in wide crowd shots of frames [a, b) are added to
+    the scan results (boxes + outlines)."""
+    boxes, segs = st["boxes"], st.get("_segs")
+    h = st["h"]
+    idx = [i for i in crowd_frames(boxes[a:b], h)]
+    idx = [a + i for i in idx]
+    added = 0
+    weights = PRESETS[st["preset"]].get("seg") or PRESETS[st["preset"]]["det"]
+    for k in range(0, len(idx), batch):
+        part = idx[k:k + batch]
+        imgs = [cv2.imread(video[i]) for i in part]
+        for i, (tb, tp, ts) in zip(part, tile_detect(weights, imgs, st.get("conf", 0.15))):
+            keep_b, keep_p = [], []
+            for j in np.argsort(-ts):
+                if _iou_any(tb[j], boxes[i]) or (keep_b and _iou_any(tb[j], np.asarray(keep_b))):
+                    continue
+                keep_b.append(tb[j])
+                keep_p.append(tp[j])
+            if keep_b:
+                boxes[i] = np.concatenate([boxes[i], np.asarray(keep_b, np.float32)])
+                if segs is not None:
+                    segs[i] = list(segs[i]) + keep_p
+                added += len(keep_b)
+    if idx:
+        log(f"  crowd shots: {added} more people found in {len(idx)} frames")
+    return added
+
+
 def outline_masks(polys, boxes, h, w):
     """Person masks from the outlines found while scanning (box if an outline is missing)."""
     out = []
@@ -1348,6 +1433,10 @@ class _DtypeOnly(torch.nn.Module):
     @property
     def dtype(self):
         return self.p.dtype
+
+    @property
+    def device(self):
+        return self.p.device
 
 
 def svor_prompt_embeds(dtype=torch.bfloat16):
@@ -2798,6 +2887,11 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
             _ensure_target(st, vid_pred, u, scene_seed(st, u))
         S.step(t + 1, len(us))
     S.start(1)
+    if engine == "svor" and not remove_mode:  # film: also the small people in crowd shots
+        try:
+            add_crowd_people(st, video, a, b)
+        except Exception:
+            traceback.print_exc()
     if remove_mode:
         mask_removal(img_pred, video, st["boxes"], tgt, d["raw"], d["protect"], a, b, stages=S,
                      segs=st.get("_segs"))
