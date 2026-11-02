@@ -1409,6 +1409,8 @@ def sharpener():
 
 
 # ---------------------------------------------------------------- film quality (SVOR)
+DEBUG_DIR = os.environ.get("KOP_DEBUG_DIR", "")  # developer: pictures of each blending step
+DEBUG_FRAMES = {int(v) for v in os.environ.get("KOP_DEBUG_FRAMES", "").split(",") if v.strip()}
 SVOR_CODE = os.environ.get("KOP_SVOR_CODE", "/content/repos/SVOR")
 SVOR_BASE = os.environ.get("KOP_SVOR_BASE", "/content/repos/Wan2.1-VACE-1.3B")
 SVOR_PROMPT_CACHE = os.environ.get("KOP_SVOR_PROMPT", "/content/repos/svor_prompt.pt")
@@ -2194,6 +2196,13 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
         mb = _read_mask(final_dir, g)
         if not mb.any():
             return orig
+        dbg = DEBUG_DIR and g in DEBUG_FRAMES
+        if dbg:
+            os.makedirs(DEBUG_DIR, exist_ok=True)
+            cv2.imwrite(os.path.join(DEBUG_DIR, f"{g:06d}_a_painted.jpg"), inp)
+            vis = orig.copy()
+            vis[mb] = (0.5 * vis[mb] + [0, 0, 127]).astype(np.uint8)
+            cv2.imwrite(os.path.join(DEBUG_DIR, f"{g:06d}_b_mask.jpg"), vis)
         u = path.unit.get(g) if path is not None else None
         if path is not None and not (miss.get(u, 0) >= 3 and g % 8):
             try:
@@ -2249,10 +2258,14 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
             f = match_grain(f, o, a > 0.5, ring.view(bool), np.random.default_rng(g))
         orig = orig.copy()
         orig[y1:y2, x1:x2] = cv2.blendLinear(f, o, a, 1.0 - a)
+        if dbg:
+            cv2.imwrite(os.path.join(DEBUG_DIR, f"{g:06d}_c_real.jpg"), inp)
+            cv2.imwrite(os.path.join(DEBUG_DIR, f"{g:06d}_d_final.jpg"), orig)
         return orig
 
     wr = FFWriter(out_mp4, w, h, fps, crf=13, preset="veryfast")
-    pool = ThreadPoolExecutor(max(1, min(3, (os.cpu_count() or 2) // 4)))
+    cpus = os.cpu_count() or 2
+    pool = ThreadPoolExecutor(max(1, min(6, cpus // 3)) if film else max(1, min(3, cpus // 4)))
     futs, nxt = {}, lo
     for g in range(lo, hi):
         while nxt < hi and nxt < g + 12:
