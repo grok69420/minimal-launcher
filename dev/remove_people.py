@@ -2052,6 +2052,21 @@ def real_fill(path, g, orig, hole, painted, prot, gate=True, reach=36, step=3, t
     return np.clip(out + 0.5, 0, 255).astype(np.uint8), float(taken.sum()) / total
 
 
+def guided_alpha(img, mask, r=4, eps=1e-3):
+    """Soft edge of a mask that follows the picture's own edges (guided filter, He et al.):
+    hair and motion-blurred outlines get partial values instead of a hard cut."""
+    I = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+    p = mask.astype(np.float32)
+    k = (2 * r + 1, 2 * r + 1)
+    mI, mp = cv2.boxFilter(I, -1, k), cv2.boxFilter(p, -1, k)
+    cIp = cv2.boxFilter(I * p, -1, k) - mI * mp
+    vI = cv2.boxFilter(I * I, -1, k) - mI * mI
+    a = cIp / (vI + eps)
+    b = mp - a * mI
+    q = cv2.boxFilter(a, -1, k) * I + cv2.boxFilter(b, -1, k)
+    return np.clip(q, 0.0, 1.0)
+
+
 def match_grain(f, o, region, ring, rng):
     """Adds the video's own fine noise/grain to the painted area (painted pixels are cleaner
     than real footage, which gives them away)."""
@@ -2122,7 +2137,13 @@ def composite(frames, final_dir, prot_dir, flags, chs, results, out_mp4, fps, lo
         else:
             a = m8.astype(np.float32)
         pr = _read_mask(prot_dir, g)[y1:y2, x1:x2]
-        a[pr] = 0.0
+        if film and pr.any():  # soft, picture-guided edge of the kept person (no fringe)
+            keep = guided_alpha(orig[y1:y2, x1:x2], pr)
+            keep = np.where(cv2.erode(pr.view(np.uint8), np.ones((5, 5), np.uint8)) > 0, 1.0, keep)
+            keep *= cv2.dilate(pr.view(np.uint8), np.ones((5, 5), np.uint8)) > 0  # at most 2 px out
+            a *= (1.0 - keep)
+        else:
+            a[pr] = 0.0
         o = orig[y1:y2, x1:x2]
         f = inp[y1:y2, x1:x2]
         ring = cv2.dilate(m8, np.ones((9, 9), np.uint8)) & ~m8 & ~pr.view(np.uint8)
