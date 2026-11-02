@@ -814,11 +814,27 @@ def track_target(pred, frames, seed_idx, box, out_dir, tmp, lo, hi, chunk=200, m
 
 
 def _segment(img_pred, frames, boxes, segs, ks, imgs):
-    """Masks of the detected people in frames ks: scan outlines, else SAM 2."""
-    if segs is not None:
-        return [outline_masks(segs[k], boxes[k], imgs[j].shape[0], imgs[j].shape[1])
-                for j, k in enumerate(ks)]
-    return segment_frames(img_pred, imgs, [boxes[k] for k in ks])
+    """Masks of the detected people in frames ks: scan outlines, else SAM 2. People without
+    an outline from the scan are outlined by SAM 2 (instead of erasing their whole box)."""
+    if segs is None:
+        return segment_frames(img_pred, imgs, [boxes[k] for k in ks])
+    out = [outline_masks(segs[k], boxes[k], imgs[j].shape[0], imgs[j].shape[1])
+           for j, k in enumerate(ks)]
+    miss = [[n for n in range(len(boxes[k])) if not (n < len(segs[k]) and segs[k][n] is not None
+                                                       and len(segs[k][n]) >= 3)]
+            for k in ks]
+    if img_pred is not None and any(miss):
+        js = [j for j in range(len(ks)) if miss[j]]
+        try:
+            got = segment_frames(img_pred, [imgs[j] for j in js],
+                                 [np.asarray(boxes[ks[j]])[miss[j]] for j in js])
+            for j, ms in zip(js, got):
+                for n, m in zip(miss[j], ms):
+                    if m.any():
+                        out[j][n] = m
+        except Exception:
+            traceback.print_exc()
+    return out
 
 
 def mask_others(img_pred, frames, boxes, tgt_dir, raw_dir, prot_dir, inst_dir, lo, hi,
@@ -3270,7 +3286,8 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=Tr
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]
             log(f"  Self-check: {len(viol)} sighting(s) remain - please check them")
             break
-        late = time.time() - st.get("t_start", time.time()) > 0.5 * TARGET_SECONDS
+        late = (_fill_level(st)[0] != "film" and  # film quality: always fix what the check finds
+                time.time() - st.get("t_start", time.time()) > 0.5 * TARGET_SECONDS)
         made, repaint = (0, set()) if late else _apply_self_fix(st, p, viol)
         n_p = sum(1 for v in viol if v[2])
         log(f"  Self-check: {len(viol) - n_p} left-over person sighting(s), {n_p} figure(s) "
@@ -3435,7 +3452,9 @@ def run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow):
                    os.path.dirname(c), _SAM2_DIR[0] or "", pp_dir, str(grow), str(k),
                    ",".join(str(p) for p in g)]
             procs.append((subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT,
-                                           env=dict(os.environ, PYTHONUNBUFFERED="1")), lf))
+                                           env=dict(os.environ, PYTHONUNBUFFERED="1",
+                                                    PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True")),
+                          lf))
         shown = 0.0
         while any(pr.poll() is None for pr, _ in procs):
             time.sleep(1.0)

@@ -25,6 +25,23 @@ visible, wrong person) and click on the spot. **Redo with these fixes** redoes o
 affected parts. Every correction is saved in `Keep One Person/Feedback/` and new videos start
 with settings adjusted to the problems you reported most.
 
+## Film quality
+Choose **Film quality** under *Speed* for the best result (it takes much longer than the
+15-minute automatic setting):
+- **SVOR** (Xiaomi, winner of the CVPR 2026 video object removal challenge) paints the
+  background. It also removes the shadows and reflections people leave, and copes with masks
+  that miss a hand or a foot. On a crowded stage it gives an empty stage instead of the
+  person-shaped smudges of the quick painter.
+- SVOR also fades out people it was not asked to remove when they stand next to removed ones,
+  so a band around the kept person is painted again by a painter that keeps everything
+  outside its mask - no halos or outlines around the kept person.
+- **Real background**: where the background behind a removed person can be seen in other
+  frames of the shot, those real pixels are moved along with the camera and used.
+- Small people in wide crowd shots are found with a second look at the frame in four
+  enlarged tiles; the most accurate tracking model (SAM 2.1 large) follows the kept person;
+  the kept person gets a soft, picture-guided edge (hair); the painted areas get the video's
+  own grain.
+
 ## How it works
 Scene cuts are detected; every chosen person is recognised again in each scene (face and
 clothing); SAM 2 tracks people pixel-accurately. Removed areas are filled in two ways:
@@ -58,7 +75,7 @@ keeps the original pixels, resolution and audio. The finished screen shows how l
 step took.
 
 Engines: YOLO11, SAM 2.1, InsightFace, MiniMax-Remover (with the TAEHV tiny decoder),
-ProPainter.
+SVOR on Wan2.1-VACE (film quality), ProPainter.
 
 ## Files
 - `Keep_One_Person.ipynb` - one-button Colab notebook
@@ -71,6 +88,8 @@ ProPainter.
 - InsightFace pretrained face models: non-commercial research use only.
 - Ultralytics YOLO11: AGPL-3.0.
 - SAM 2: Apache 2.0.
+- SVOR: code Apache 2.0 (removal weights: see huggingface.co/HigherHu/SVOR); it runs on
+  Wan2.1-VACE-1.3B (Apache 2.0).
 - TAEHV (tiny decoder): MIT.
 
 Commercial use of videos made with this tool would need commercial licences for these
