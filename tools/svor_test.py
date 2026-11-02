@@ -74,9 +74,11 @@ torch.cuda.reset_peak_memory_stats()
 sv = rp.SVORFiller()
 # configurations "steps:guidance" separated by commas, e.g. KOP_SVOR_CFGS=20:6,12:6,12:4
 for c in os.environ.get("KOP_SVOR_CFGS", "20:6,10:1").split(","):
-    steps, g = c.split(":")
+    steps, g, share = (c.split(":") + ["1.0"])[:3]
     sv.guidance = float(g)
-    run(f"film (SVOR {steps} steps, guidance {g})", sv, steps=int(steps))
+    rp.SVOR_CFG_SHARE = float(share)
+    run(f"SVOR {steps} st, g{g}" + (f", g on {float(share):.0%}" if float(share) < 1 else ""), sv,
+        steps=int(steps))
 x1, y1, x2, y2 = (int(v) for v in rp._bbox(masks[k])) if masks[k].any() else (0, 0, w, h)
 cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 cw, ch = min(w, 640), min(h, 360)

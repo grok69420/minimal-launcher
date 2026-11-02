@@ -16,6 +16,7 @@ import contextlib
 import fcntl
 import glob
 import json
+import math
 import os
 import pickle
 import re
@@ -1415,6 +1416,7 @@ SVOR_PROMPT = "Remove the target and fill the content appropriately"
 SVOR_NEGATIVE = '色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走'  # (as in predict_SVOR.py)
 SVOR_STEPS = int(os.environ.get("KOP_SVOR_STEPS", "20"))
 SVOR_GUIDANCE = float(os.environ.get("KOP_SVOR_GUIDANCE", "6.0"))
+SVOR_CFG_SHARE = float(os.environ.get("KOP_SVOR_CFG_SHARE", "1.0"))  # <1: guidance on early steps only
 
 
 class _Embeds(list):
@@ -1545,6 +1547,15 @@ class SVORFiller:
         video = torch.from_numpy(x).permute(3, 0, 1, 2)[None] / 127.5 - 1.0  # 1,3,n,h,w
         mask = torch.from_numpy(m)[None, None]  # 1,1,n,h,w
         cfg = self.guidance > 1.0
+        if SVOR_CFG_SHARE < 1.0 and cfg:
+            with _gpu_lock(_LOCK_ST[0]):
+                try:
+                    out = self._loop(video, mask, fh, fw, steps or self.steps, seed)
+                finally:
+                    if WORKER:
+                        torch.cuda.empty_cache()
+            out = out[0].permute(1, 2, 3, 0).float().clamp(0, 1).cpu().numpy()
+            return [cv2.cvtColor((o * 255 + 0.5).astype(np.uint8), cv2.COLOR_RGB2BGR) for o in out[:n]]
         with _gpu_lock(_LOCK_ST[0]):
             try:
                 out = self.pipe(
@@ -1559,6 +1570,44 @@ class SVORFiller:
                     torch.cuda.empty_cache()
         out = out[0].permute(1, 2, 3, 0).float().clamp(0, 1).numpy()  # n,h,w,3 RGB
         return [cv2.cvtColor((o * 255 + 0.5).astype(np.uint8), cv2.COLOR_RGB2BGR) for o in out[:n]]
+
+    @torch.no_grad()
+    def _loop(self, video, mask, fh, fw, steps, seed):
+        """The SVOR pipeline's denoising, but the guidance (two model passes per step) only in
+        the first SVOR_CFG_SHARE of the steps - they decide what fills the gap; the later steps
+        only refine detail and run once."""
+        p = self.pipe
+        dev, dt = "cuda", torch.bfloat16
+        sch = p.scheduler
+        sch.set_timesteps(steps, device=dev, mu=1)
+        ts = sch.timesteps
+        video = video.to(dev, dt)
+        mask = mask.to(dev, dt)
+        z0 = p.vace_encode_frames(video, None, masks=mask)
+        m0 = p.vace_encode_masks(mask, None)
+        z = p.vace_latent(z0, m0).to(dev, dt)
+        shape = list(z0.shape)
+        shape[1] = shape[1] // 2
+        g = torch.Generator(device=dev).manual_seed(seed)
+        lat = torch.randn(shape, generator=g, device=dev, dtype=dt)
+        tr = p.transformer
+        seq_len = math.ceil((shape[3] * shape[4]) / (tr.config.patch_size[1] * tr.config.patch_size[2])
+                            * shape[2])
+        z2 = torch.cat([z] * 2)
+        n_cfg = max(1, int(round(steps * SVOR_CFG_SHARE)))
+        for i, t in enumerate(ts):
+            with torch.autocast("cuda", dtype=dt):
+                if i < n_cfg:
+                    out = tr(x=torch.cat([lat] * 2), context=[self.neg, self.pos], t=t.expand(2),
+                             seq_len=seq_len, vace_context=z2, vace_context_scale=1.0)
+                    un, co = out.chunk(2)
+                    noise = un + self.guidance * (co - un)
+                else:
+                    noise = tr(x=lat, context=[self.pos], t=t.expand(1), seq_len=seq_len,
+                               vace_context=z, vace_context_scale=1.0)
+            lat = sch.step(noise, t, lat, return_dict=False)[0]
+        frames = p.vae.decode(lat.to(p.vae.dtype)).sample
+        return (frames / 2 + 0.5).clamp(0, 1)
 
     def close(self):
         del self.pipe
