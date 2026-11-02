@@ -71,7 +71,7 @@ FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
 # and make the frames between by following the camera movement (no smearing).
 # "film": SVOR (also removes shadows/reflections), real background from other frames, matched
 # grain - for the best result, no time limit; never chosen automatically.
-FILL_LEVELS = [("film", 832 * 480, 20, 0.5, 1, False, "svor"),
+FILL_LEVELS = [("film", 832 * 480, 12, 1.3, 1, False, "svor"),
                ("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
                ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True),
                ("fastest", 832 * 480, 6, 20.0, 4, True)]
@@ -1414,7 +1414,7 @@ SVOR_BASE = os.environ.get("KOP_SVOR_BASE", "/content/repos/Wan2.1-VACE-1.3B")
 SVOR_PROMPT_CACHE = os.environ.get("KOP_SVOR_PROMPT", "/content/repos/svor_prompt.pt")
 SVOR_PROMPT = "Remove the target and fill the content appropriately"
 SVOR_NEGATIVE = '色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走'  # (as in predict_SVOR.py)
-SVOR_STEPS = int(os.environ.get("KOP_SVOR_STEPS", "20"))
+SVOR_STEPS = int(os.environ.get("KOP_SVOR_STEPS", "12"))  # 12 looked as good as 20 (measured)
 SVOR_GUIDANCE = float(os.environ.get("KOP_SVOR_GUIDANCE", "6.0"))
 SVOR_CFG_SHARE = float(os.environ.get("KOP_SVOR_CFG_SHARE", "1.0"))  # <1: guidance on early steps only
 
