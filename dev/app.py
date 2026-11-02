@@ -427,6 +427,8 @@ def _prescan(path):
             ld = rp.learned_defaults(fb_dir())
             box["st"] = rp.create_job(path, jobs_root(), CACHE, 0, 0, preset, ld["conf"],
                                       PART_SECONDS)
+            if torch.cuda.is_available():  # the scan's cached GPU memory back for the painters
+                torch.cuda.empty_cache()
         except Exception as e:
             box["err"] = e
             traceback.print_exc()

@@ -3238,6 +3238,23 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
                     break
                 except torch.cuda.OutOfMemoryError:
                     torch.cuda.empty_cache()
+                    if ctx.get("engine") == "svor" and not ctx.get("_oom_wait"):
+                        ctx["_oom_wait"] = True  # another part is painting: wait, same pieces
+                        log("  GPU memory busy; waiting a moment, then painting again")
+                        time.sleep(45)
+                        try:
+                            res = fill_realistic(video, d["final"], flags, work, moving, w, h,
+                                                 filler, window=win, overlap=8, stages=S, seed=seed,
+                                                 steps=steps, reuse=ctx.get("mm_prev"),
+                                                 changed=ctx.get("changed"),
+                                                 stride=ctx.get("stride", 1), prot_dir=d["protect"],
+                                                 refine=refine, judge=judge)
+                            ctx["mm_prev"] = res
+                            fills.append(res)
+                            ov, done_moving = 8, True
+                            break
+                        except torch.cuda.OutOfMemoryError:
+                            torch.cuda.empty_cache()
                     log("  GPU memory full; retrying with shorter pieces")
     finally:
         if filler is not None and close_it:
