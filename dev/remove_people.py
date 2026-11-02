@@ -1669,9 +1669,31 @@ def crop_box(masks, w, h, margin=0.6, min_short=200, full_at=0.8):
     return X1, Y1, X1 + int(cw), Y1 + int(ch)
 
 
+def figure_judge(det_weights, conf=0.35, every=6, inside=0.5):
+    """Returns judge(painted_frames, masks) -> how many person-like figures the painter made
+    inside the removed areas (looked at every `every`-th frame)."""
+    det = _detector(det_weights)
+
+    def judge(out, masks):
+        idx = list(range(0, len(out), every))
+        res = det.predict([out[i] for i in idx], classes=[0], conf=conf, imgsz=640, verbose=False,
+                          device=0 if DEVICE == "cuda" else "cpu",
+                          quantize=16 if DEVICE == "cuda" else None)
+        n = 0
+        for i, r in zip(idx, res):
+            fh, fw = out[i].shape[:2]
+            m = cv2.resize(masks[i].view(np.uint8), (fw, fh), interpolation=cv2.INTER_NEAREST)
+            for b in r.boxes.xyxy.cpu().numpy().astype(int):
+                x1, y1, x2, y2 = max(0, b[0]), max(0, b[1]), min(fw, b[2]), min(fh, b[3])
+                if x2 > x1 and y2 > y1 and m[y1:y2, x1:x2].mean() >= inside:
+                    n += 1
+        return n
+    return judge
+
+
 def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=49, overlap=8,
                    stages=None, seed=42, reuse=None, changed=None, steps=None, stride=1,
-                   prot_dir=None, refine=None, band=0.06):
+                   prot_dir=None, refine=None, band=0.06, judge=None, retries=2):
     """Same output format as inpaint(): (chunks, {chunk: (folder, extension)}); the folder
     holds full-size frames with the removed areas filled in."""
     chs = plan_chunks(ranges, window, overlap)
@@ -1763,8 +1785,23 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         nxt = _IO.submit(load, todo[t + 1]) if t + 1 < len(todo) else None
         x1, y1, x2, y2 = crop_box(masks, w, h)
         fw, fh = fill_size(x2 - x1, y2 - y1)
-        out = filler.fill([im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks],
-                          fw, fh, seed=seed, steps=steps)
+        crops, cms = [im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks]
+        out = filler.fill(crops, cms, fw, fh, seed=seed, steps=steps)
+        if judge is not None:  # film: figures painted into the gap? paint again, keep the best
+            try:
+                bad = judge(out, cms)
+                for k in range(retries):
+                    if bad == 0:
+                        break
+                    alt = filler.fill(crops, cms, fw, fh, seed=seed + 101 * (k + 1), steps=steps)
+                    nb = judge(alt, cms)
+                    log(f"  piece {c}: {bad} painted figure(s) -> repainted: {nb}")
+                    if nb < bad:
+                        out, bad = alt, nb
+            except torch.cuda.OutOfMemoryError:
+                raise
+            except Exception:
+                traceback.print_exc()
         if refine is not None and prots is not None:
             try:
                 out = refine_band(out, imgs, masks, prots, (x1, y1, x2, y2), fw, fh)
@@ -2815,7 +2852,8 @@ _DET = {}
 def _detector(weights):
     if weights not in _DET:
         from ultralytics import YOLO
-        _DET.clear()
+        if len(_DET) >= 3:  # a few small models stay loaded (detector, outline model)
+            _DET.pop(next(iter(_DET)))
         _DET[weights] = YOLO(weights)
     return _DET[weights]
 
@@ -3177,7 +3215,12 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
                 try:
                     if ctx.get("mm_prev") is None:
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
-                    refine = None
+                    refine = judge = None
+                    if ctx.get("engine") == "svor":
+                        try:
+                            judge = figure_judge(PRESETS[st["preset"]]["det"])
+                        except Exception:
+                            traceback.print_exc()
                     if ctx.get("engine") == "svor":  # (also keeps the people who stay in remove mode)
                         try:
                             refine, _ = _get_filler("mm")
@@ -3188,7 +3231,7 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
                                          window=win, overlap=8, stages=S, seed=seed, steps=steps,
                                          reuse=ctx.get("mm_prev"), changed=ctx.get("changed"),
                                          stride=ctx.get("stride", 1), prot_dir=d["protect"],
-                                         refine=refine)
+                                         refine=refine, judge=judge)
                     ctx["mm_prev"] = res
                     fills.append(res)
                     ov, done_moving = 8, True
