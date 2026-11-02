@@ -26,8 +26,9 @@ affected parts. Every correction is saved in `Keep One Person/Feedback/` and new
 with settings adjusted to the problems you reported most.
 
 ## Film quality
-Choose **Film quality** under *Speed* for the best result (it takes much longer than the
-15-minute automatic setting):
+Choose **Film quality** under *Speed* for the best result. It takes much longer than the
+15-minute automatic setting: measured on a Colab A100, one minute of a crowded music video
+took 28 minutes (so a 4.6-minute video takes about 2 hours).
 - **SVOR** (Xiaomi, winner of the CVPR 2026 video object removal challenge) paints the
   background. It also removes the shadows and reflections people leave, and copes with masks
   that miss a hand or a foot. On a crowded stage it gives an empty stage instead of the
@@ -37,6 +38,8 @@ Choose **Film quality** under *Speed* for the best result (it takes much longer 
   outside its mask - no halos or outlines around the kept person.
 - **Real background**: where the background behind a removed person can be seen in other
   frames of the shot, those real pixels are moved along with the camera and used.
+- Every painted piece is checked for person-like figures the painter made up; such pieces
+  are painted again (best of three), and the self-check always repairs left-over people.
 - Small people in wide crowd shots are found with a second look at the frame in four
   enlarged tiles; the most accurate tracking model (SAM 2.1 large) follows the kept person;
   the kept person gets a soft, picture-guided edge (hair); the painted areas get the video's
