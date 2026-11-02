@@ -2,6 +2,7 @@
 # Film quality engine: SVOR code + removal LoRAs + Wan2.1-VACE-1.3B base (the 11 GB text encoder
 # is only fetched until the fixed prompt has been encoded once).
 set -e
+mkdir -p /content/repos
 R=/content/repos
 test -d $R/SVOR/videox_fun || git clone -q --depth 1 https://github.com/xiaomi-research/SVOR.git $R/SVOR
 python3 - <<'PY'

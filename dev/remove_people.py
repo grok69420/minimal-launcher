@@ -1380,11 +1380,33 @@ def svor_prompt_embeds(dtype=torch.bfloat16):
     return out[0], out[1]
 
 
+def ensure_svor():
+    """The film engine is downloaded in the background after the app opens; wait for it (or
+    download it now if nobody started it). One download at a time (file lock)."""
+    root = os.path.dirname(SVOR_CODE)
+    os.makedirs(root, exist_ok=True)
+    ready = os.path.join(root, ".svor_ready")
+    if os.path.exists(ready):
+        return
+    log("  waiting for the film quality engine to finish downloading ...")
+    with open(os.path.join(root, ".svor_setup.lock"), "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try:
+            if not os.path.exists(ready):
+                script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools", "setup_svor.sh")
+                subprocess.run(["bash", script], check=True, stdout=subprocess.DEVNULL)
+                open(ready, "w").close()
+        finally:
+            fcntl.flock(lk, fcntl.LOCK_UN)
+
+
 class SVORFiller:
     """Film quality: SVOR (Wan2.1-VACE 1.3B + Xiaomi's removal LoRAs, CVPR 2026 winner).
     Also removes the shadows and reflections people leave, and copes with imperfect masks."""
 
     def __init__(self, steps=SVOR_STEPS, guidance=SVOR_GUIDANCE):
+        if os.path.isdir("/content"):
+            ensure_svor()
         if SVOR_CODE not in sys.path:
             sys.path.insert(0, SVOR_CODE)
         from diffusers import FlowMatchEulerDiscreteScheduler
