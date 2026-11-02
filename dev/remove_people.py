@@ -75,6 +75,7 @@ FILL_LEVELS = [("film", 832 * 480, 12, 1.4, 1, False, "svor"),
                ("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
                ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True),
                ("fastest", 832 * 480, 6, 20.0, 4, True)]
+FILM_FPS = 1.0  # film level, whole job on an A100 incl. the band repaint (measured, see README)
 FILL_EFFICIENCY = 0.72  # share of that speed reached with tracking etc. sharing the GPU (measured)
 # the engine's share of the 15 minutes; the rest is starting Colab, setup, upload and clicks
 TARGET_SECONDS = 12 * 60
@@ -3008,11 +3009,25 @@ def _get_filler(kind="mm"):
     """(fill model or None, close after use). On big GPUs it stays loaded between parts.
     kind: "mm" (MiniMax-Remover, quick levels) or "svor" (film quality)."""
     make = SVORFiller if kind == "svor" else MiniMaxFiller
+
+    def load():
+        for attempt in range(4):  # another part may be using the GPU memory right now
+            try:
+                return make()
+            except torch.cuda.OutOfMemoryError:
+                if attempt == 3:
+                    raise
+                torch.cuda.empty_cache()
+                log("  GPU memory busy - waiting to load the painter ...")
+                time.sleep(30)
     if not big_gpu():
-        return make(), True
-    if kind not in _FILL:
+        return load(), True
+    if _FILL.get(kind) is None:
         try:
-            _FILL[kind] = make()
+            _FILL[kind] = load()
+        except torch.cuda.OutOfMemoryError:
+            _FILL.pop(kind, None)  # try again for the next part
+            raise
         except Exception:
             _FILL[kind] = None
             raise
@@ -3402,6 +3417,9 @@ def run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow):
     """Process parts in n_w worker processes; show their combined progress and pictures;
     merge what they changed (self-check fixes) back into the job."""
     flush_masks()
+    if DEVICE == "cuda":  # the scan and search leave GPU memory cached: give it to the workers
+        __import__("gc").collect()
+        torch.cuda.empty_cache()
     c = st["cache"]
     for f in glob.glob(os.path.join(c, "status_w*")) + glob.glob(os.path.join(c, "preview_w*")) + \
             glob.glob(os.path.join(c, "result_*")) + glob.glob(os.path.join(c, "timings_w*")):
@@ -3601,8 +3619,12 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=None, photos=()):
             f"{round(est / 60)} min in total)")
         save_job(st)
     n_w = n_workers(len(todo))
-    if _fill_level(st)[0] == "film":
+    if todo and _fill_level(st)[0] == "film":
         n_w = min(n_w, int(os.environ.get("KOP_FILM_WORKERS", "2")))  # two painters per part
+        frames = fill_frames_estimate(st)
+        est = frames / (FILM_FPS if big_gpu() else FILM_FPS * 0.3)
+        log(f"Film quality: {frames} frames to paint; about {max(1, round(est / 60))} min "
+            f"(an estimate) - it is worth it.")
     if n_w > 1:
         run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow)
     for p in todo:  # sequential (and whatever a parallel worker could not finish)
