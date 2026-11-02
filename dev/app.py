@@ -476,10 +476,11 @@ def on_next1(video, path, start, end, photos=None, fill=None, mode=None, progres
             st["fill_level"] = "sharpest"
         elif (fill or "").startswith("Film"):
             st["fill_level"] = "film"
+            st["preset"] = preset = "Best"  # film: the most accurate tracking model too
         st["mode"] = "remove" if (mode or "").startswith("Remove") else "keep"
         st["out_dir"] = out_root()
         rp.save_job(st)
-        vid, img_pred, reid = models(preset)
+        vid, img_pred, reid = models(st["preset"])
         found = None
         if is_remove(st):
             photos = None  # photos describe the person to keep
