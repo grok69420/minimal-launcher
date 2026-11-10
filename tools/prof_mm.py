@@ -54,14 +54,3 @@ d = np.abs(np.stack(outs[True]).astype(np.int16) - np.stack(outs[False]))
 mk = np.stack(masks)
 print(f"difference between the two paths: inside removed area mean {d[mk].mean():.2f}, "
       f"99th percentile {np.percentile(d[mk], 99):.0f} (0-255)")
-
-sh = rp.sharpener()
-if sh is not None:
-    for size in ((1280, 720), (854, 480)):
-        sh(out[:8], size)
-        torch.cuda.synchronize()
-        t = time.time()
-        sh(out, size)
-        torch.cuda.synchronize()
-        dt = time.time() - t
-        print(f"sharpen {F} frames {W}x{H} -> {size[0]}x{size[1]}: {dt:.2f} s = {F / dt:.0f} frames/s")
