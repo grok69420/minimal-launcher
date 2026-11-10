@@ -1964,7 +1964,7 @@ def plate_fill(frames, final_dir, prot_dir, flags, ranges, w, h, filler=None, wi
     return chs, results
 
 
-PLATE_HOLE = 0.004  # share of the picture never seen behind a removed person that matters
+PLATE_HOLE = float(os.environ.get("KOP_PLATE_HOLE", "0.004"))  # share of the picture never seen behind a removed person that matters
 
 
 def plate_holes(final_dir, prot_dir, lo, hi, samples=24):
@@ -3053,6 +3053,8 @@ def _work_dir(st, p):
     return os.path.join(st["cache"], f"part_work_{p:04d}")
 
 
+# quick painter: pieces where it painted person-like figures are painted again this many times
+MM_JUDGE_RETRIES = int(os.environ.get("KOP_MM_JUDGE", "0") or 0)
 FILL_SLOTS = [1]
 _LOCK_ST = [None]
 
@@ -3246,11 +3248,13 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
         if paint and filler is not None:
             k = ctx.get("stride", 1)
             refine = judge = None
-            if film:  # the film painter needs a second opinion and a careful neighbour
+            retries = 2 if film else MM_JUDGE_RETRIES
+            if film or retries:  # a second opinion: figures painted into the gap are redone
                 try:
                     judge = figure_judge(PRESETS[st["preset"]]["det"])
-                    refine, _ = _get_filler("mm")
-                    refine.use_tae(False)
+                    if film:  # ... and the film painter needs a careful neighbour
+                        refine, _ = _get_filler("mm")
+                        refine.use_tae(False)
                 except Exception:
                     traceback.print_exc()
             # painted frames per piece; shorter pieces when the GPU memory is full
@@ -3265,7 +3269,7 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
                                          window=win, overlap=8, stages=S, seed=seed, steps=steps,
                                          reuse=ctx.get("mm_prev"), changed=ctx.get("changed"),
                                          stride=k, prot_dir=d["protect"], refine=refine,
-                                         judge=judge, plates=plates)
+                                         judge=judge, retries=retries, plates=plates)
                     ctx["mm_prev"] = res
                     fills.append(res)
                     ov, done_moving = 8, True
