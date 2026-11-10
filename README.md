@@ -25,6 +25,21 @@ visible, wrong person) and click on the spot. **Redo with these fixes** redoes o
 affected parts. Every correction is saved in `Keep One Person/Feedback/` and new videos start
 with settings adjusted to the problems you reported most.
 
+## Better (between Fast and Film quality)
+Choose **Better** under *Speed* when the video has crowds. The film painter (SVOR, see below)
+paints every 3rd frame and the frames between follow the camera.
+
+Measured on a 42-second crowded section of a music video (about 10 people per picture, Colab
+L4 GPU), counting the people a detector still sees in the finished video beyond the kept one:
+
+| Level | Extra people seen | Pictures with an extra person | Time (L4) |
+|---|---|---|---|
+| Fast | 65 | 26.8% | 4.7 min |
+| Better | 23 | 11.9% | 28.9 min |
+
+So about two thirds fewer left-over or painted-in people, for about 6 times the time. The
+times are from an L4; on an A100 this level has not been timed yet.
+
 ## Film quality
 Choose **Film quality** under *Speed* for the best result. It takes much longer than the
 15-minute automatic setting: measured on a Colab A100, one minute of a crowded music video
@@ -67,6 +82,10 @@ while the AI models are still downloading, and the scan starts as soon as the up
 finished. The background painting level is chosen automatically so the processing takes
 about 12 minutes; choose *Sharpest background* under More options for every frame painted
 with extra care (takes longer).
+
+**Smaller GPUs:** when Colab has no A100 free it connects an L4 instead. The app works there
+(the scan now uses smaller batches when GPU memory is short, and the film painter works on one
+part at a time unless about 34 GB are free), but everything takes several times longer.
 
 **Limits:** where a crowd covers the background in every frame of a shot, there is no real
 background to recover - the painted area is invented and looks soft there. Steady shots and

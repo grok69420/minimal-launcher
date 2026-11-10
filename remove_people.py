@@ -26,6 +26,7 @@ import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from typing import NamedTuple
 
 import cv2
 import numpy as np
@@ -63,19 +64,31 @@ PAD = 4                # frames of temporal carry-over of the removal masks
 GROW = 0.016           # removal masks are widened by this share of the picture size (hair, blur)
 WORKER = False         # True inside a parallel worker process
 OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
-FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
 FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
-# background painting quality levels: (name, working area, steps, frames/s on an A100, stride,
-# tiny decoder). Below the model's own size (832x480) the painting shows a checkerboard
-# pattern, so every level paints at 832x480; the faster levels paint every 2nd / 3rd frame
-# and make the frames between by following the camera movement (no smearing).
-# "film": SVOR (also removes shadows/reflections), real background from other frames, matched
-# grain - for the best result, no time limit; never chosen automatically.
-FILL_LEVELS = [("film", 832 * 480, 12, 1.4, 1, False, "svor"),
-               ("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
-               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True),
-               ("fastest", 832 * 480, 6, 20.0, 4, True)]
-FILM_FPS = 0.85  # film level, whole job on an A100 (measured: 1439 frames in 28 min incl. repaints)
+FILL_AREA = 832 * 480  # the painters' own size; smaller sizes gave a checkerboard pattern
+
+
+class Level(NamedTuple):
+    """A background painting level. fps: painted video frames per second on an A100;
+    stride: every n-th frame is painted, the frames between follow the camera movement;
+    tae: tiny (faster, slightly softer) decoder; engine: "mm" MiniMax-Remover or "svor"."""
+    name: str
+    steps: int
+    fps: float
+    stride: int = 1
+    tae: bool = False
+    engine: str = "mm"
+
+
+# best first. The SVOR levels ("film", "better") also remove shadows/reflections, bring real
+# background in from other frames and match the grain; they are never chosen automatically.
+FILL_LEVELS = [Level("film", 12, 1.4, engine="svor"),
+               Level("better", 12, 4.0, stride=3, engine="svor"),
+               Level("sharpest", 8, 4.0), Level("sharp", 6, 5.9, tae=True),
+               Level("balanced", 6, 11.0, 2, True), Level("fast", 6, 15.5, 3, True),
+               Level("fastest", 6, 20.0, 4, True)]
+SVOR_LEVELS = {lv.name for lv in FILL_LEVELS if lv.engine == "svor"}
+FILM_EFFICIENCY = 0.6  # share of an SVOR level's speed reached in a whole job (measured)
 FILL_EFFICIENCY = 0.72  # share of that speed reached with tracking etc. sharing the GPU (measured)
 # the engine's share of the 15 minutes; the rest is starting Colab, setup, upload and clicks
 TARGET_SECONDS = 12 * 60
@@ -481,7 +494,9 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
     segs = [] if model is not None else None
     weights = seg_weights if model is not None else det_weights
     model = model or YOLO(det_weights)
-    batch = batch or (32 if DEVICE == "cuda" else 4)
+    if not batch:  # smaller batches when little GPU memory is free (L4 / T4, or a busy GPU)
+        free = torch.cuda.mem_get_info()[0] if DEVICE == "cuda" else 0
+        batch = 32 if free > 16e9 else 16 if free > 8e9 else 8 if DEVICE == "cuda" else 4
     scores, boxes, buf, prev = [], [], [], None
     # two copies of the model work on alternate batches in threads, so reading the video, the
     # GPU work and turning masks into outlines (CPU) overlap instead of waiting for each other
@@ -496,9 +511,15 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
 
     def predict(m, frames):
         # iou 0.8: in crowds people overlap a lot; the usual 0.7 throws away real people
-        res = m.predict(frames, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz, verbose=False,
-                        device=0 if DEVICE == "cuda" else "cpu",
-                        quantize=16 if DEVICE == "cuda" else None)
+        try:
+            res = m.predict(frames, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz,
+                            verbose=False, device=0 if DEVICE == "cuda" else "cpu",
+                            quantize=16 if DEVICE == "cuda" else None)
+        except torch.cuda.OutOfMemoryError:  # GPU memory full: the same frames in two halves
+            if len(frames) < 2:
+                raise
+            torch.cuda.empty_cache()
+            return predict(m, frames[:len(frames) // 2]) + predict(m, frames[len(frames) // 2:])
         out = []
         for r in res:
             bx = r.boxes.xyxy.cpu().numpy().astype(np.float32)
@@ -1037,8 +1058,8 @@ class ReID:
 
     def reset(self):
         self.ref_faces, self.ref_bodies = [], []
+        self.ref_looks = []  # other outfits of the person, learned from scenes a face confirmed
         self._seen = {}  # frame -> (descriptions, H, W): a second search reuses them
-
 
     def _faces(self, img):
         if self.face is None:
@@ -1117,6 +1138,31 @@ class ReID:
         return [{"face": owner[k][1] if k in owner else None, "body": bodies[k]}
                 for k in range(len(boxes))]
 
+    def deepen(self, img, boxes, descs, max_people=3, lo=0.15, hi=0.6):
+        """A closer look for faces too small for the whole-picture pass (wide shots): the head
+        area of the biggest people without a face is enlarged and searched again. Such a small
+        face can confirm the person, but is too blurry to rule anyone out ('small')."""
+        if self.face is None:
+            return
+        H, W = img.shape[:2]
+        todo = [k for k, d in enumerate(descs) if d["face"] is None
+                and lo * H <= boxes[k][3] - boxes[k][1] < hi * H]
+        todo.sort(key=lambda k: -(boxes[k][3] - boxes[k][1]))
+        for k in todo[:max_people]:
+            x1, y1, x2, y2 = boxes[k]
+            bw, bh = x2 - x1, y2 - y1
+            cx1, cy1 = int(max(0, x1 - 0.1 * bw)), int(max(0, y1 - 0.05 * bh))
+            cx2, cy2 = int(min(W, x2 + 0.1 * bw)), int(min(H, y1 + 0.45 * bh))
+            if cx2 - cx1 < 12 or cy2 - cy1 < 12:
+                continue
+            best = None
+            for f in self.face.get(np.ascontiguousarray(img[cy1:cy2, cx1:cx2])):
+                side = min(f.bbox[2] - f.bbox[0], f.bbox[3] - f.bbox[1])
+                if f.det_score >= 0.5 and side >= 12 and (best is None or side > best[0]):
+                    best = (side, f.normed_embedding)
+            if best is not None:
+                descs[k]["face"], descs[k]["small"] = best[1], True
+
     def add_person(self, img, box, mask):
         d = self.describe(img, [box], [mask])[0]
         if d["face"] is not None:
@@ -1142,11 +1188,14 @@ class ReID:
         return float(max(np.dot(r, d["face"]) for r in self.ref_faces))
 
     def body_sim(self, d):
+        """How well the clothes match the clicked person - or one of the learned outfits."""
         if d["body"] is None or not self.ref_bodies:
             return 0.0
-        sims = sorted((0.5 * float(np.dot(c, d["body"][0])) + 0.5 * float(np.dot(e, d["body"][1]))
-                       for c, e in self.ref_bodies), reverse=True)
-        return float(np.mean(sims[:3]))
+        def sim(refs):
+            sims = sorted((0.5 * float(np.dot(c, d["body"][0])) + 0.5 * float(np.dot(e, d["body"][1]))
+                           for c, e in refs), reverse=True)
+            return float(np.mean(sims[:3]))
+        return max([sim(self.ref_bodies)] + [sim(look) for look in self.ref_looks])
 
     @staticmethod
     def sample_frames(lo, hi, n_samples=6):
@@ -1158,8 +1207,9 @@ class ReID:
         return sorted(idxs, key=lambda i: abs(i - mid))
 
     def find_in_shot(self, img_pred, frames, boxes, lo, hi, n_samples=6, segs=None,
-                     closeups=True):
-        """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None."""
+                     closeups=True, deep=False):
+        """Best {frame, box, how, score} for the kept person in frames [lo, hi), or None.
+        deep: also look closely for small faces (slower; for scenes no face settled)."""
         cands = []
         seen = getattr(self, "_seen", None)
         if seen is None:
@@ -1172,12 +1222,19 @@ class ReID:
                 img = cv2.imread(frames[i])
                 masks = (outline_masks(segs[i], boxes[i], img.shape[0], img.shape[1])
                          if segs is not None else segment_boxes(img_pred, img, boxes[i]))
-                seen[key] = (self.describe(img, boxes[i], masks), img.shape[0], img.shape[1])
-            descs, H, W = seen[key]
+                seen[key] = [self.describe(img, boxes[i], masks), img.shape[0], img.shape[1], False]
+            if deep and not seen[key][3]:
+                self.deepen(cv2.imread(frames[i]), boxes[i], seen[key][0])
+                seen[key][3] = True
+            descs, H, W = seen[key][:3]
             for k, d in enumerate(descs):
                 b = boxes[i][k]
-                cands.append(dict(frame=i, k=k, box=b, face=self.face_sim(d), body=self.body_sim(d),
-                                  emb=d["face"], n=len(boxes[i]),
+                face = self.face_sim(d)
+                if d.get("small") and face is not None and face < self.FACE_MATCH:
+                    face = None  # a tiny face that does not match proves nothing
+                cands.append(dict(frame=i, k=k, box=b, face=face, body=self.body_sim(d),
+                                  emb=d["face"], desc=d["body"], small=bool(d.get("small")),
+                                  n=len(boxes[i]),
                                   big=(b[3] - b[1]) >= 0.6 * H or
                                   (b[2] - b[0]) * (b[3] - b[1]) >= 0.2 * W * H))
             if any(c["face"] is not None and c["face"] >= self.FACE_MATCH for c in cands):
@@ -1191,7 +1248,8 @@ class ReID:
         faced = [c for c in cands if c["face"] is not None and c["face"] >= self.FACE_MATCH]
         if faced:
             c = max(faced, key=lambda c: c["face"])
-            return dict(frame=c["frame"], box=c["box"], how="face", score=c["face"], emb=c["emb"])
+            return dict(frame=c["frame"], box=c["box"], how="face", score=c["face"],
+                        emb=None if c["small"] else c["emb"], body=c["desc"])
         ok = [c for c in cands if c["face"] is None or c["face"] >= self.FACE_REJECT]
         if not ok:
             return None
@@ -1213,7 +1271,6 @@ MM_CODE = os.environ.get("KOP_MM_CODE", "/content/repos/MiniMax-Remover")
 MM_WEIGHTS = os.environ.get("KOP_MM_WEIGHTS", "/content/repos/minimax_weights")
 
 
-_FILL_AREA = [832 * 480]
 MM_FAST = os.environ.get("KOP_MM_FAST", "1") == "1"
 TAE = os.environ.get("KOP_TAE", "0") == "1"
 TAE_URL = "https://github.com/madebyollin/taehv/raw/main/"
@@ -1223,7 +1280,7 @@ TAE_WEIGHTS = os.environ.get("KOP_TAE_WEIGHTS", "/content/repos/taehv/taew2_1.pt
 def fill_size(w, h, area=None):
     """Working size for the generative fill (the model was trained at 832x480; smaller sizes
     are faster)."""
-    area = area or _FILL_AREA[0]
+    area = area or FILL_AREA
     a, ref = w / h, 832 / 480
     k = (area / (832 * 480)) ** 0.5
     if abs(a - ref) / ref < 0.06:
@@ -1351,78 +1408,6 @@ class MiniMaxFiller:
         del self.pipe
         if DEVICE == "cuda":
             torch.cuda.empty_cache()
-
-
-SR_URL = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
-SR_WEIGHTS = os.environ.get("KOP_SR", "/content/repos/realesr-general-x4v3.pth")
-SHARPEN = os.environ.get("KOP_SHARPEN", "0") == "1"  # off: it sharpened the painting's flaws too
-
-
-class _SRNet(torch.nn.Module):
-    """Real-ESRGAN 'general x4 v3' (compact): restores detail in an upscaled picture."""
-
-    def __init__(self, feat=64, conv=32, up=4):
-        super().__init__()
-        layers = [torch.nn.Conv2d(3, feat, 3, 1, 1), torch.nn.PReLU(feat)]
-        for _ in range(conv):
-            layers += [torch.nn.Conv2d(feat, feat, 3, 1, 1), torch.nn.PReLU(feat)]
-        layers.append(torch.nn.Conv2d(feat, 3 * up * up, 3, 1, 1))
-        self.body = torch.nn.ModuleList(layers)
-        self.ps = torch.nn.PixelShuffle(up)
-        self.up = up
-
-    def forward(self, x):
-        o = x
-        for layer in self.body:
-            o = layer(o)
-        return self.ps(o) + torch.nn.functional.interpolate(x, scale_factor=self.up, mode="nearest")
-
-
-class Sharpener:
-    """Brings the painted background (made at a smaller size for speed) up to the video's full
-    size with real detail instead of a blurry enlargement."""
-
-    def __init__(self, path=SR_WEIGHTS):
-        if not os.path.exists(path):
-            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            subprocess.run(["wget", "-q", "-O", path + ".part", SR_URL], check=True)
-            os.replace(path + ".part", path)
-        sd = torch.load(path, map_location="cpu")
-        sd = sd.get("params", sd.get("params_ema", sd))
-        self.net = _SRNet()
-        self.net.load_state_dict(sd)
-        self.net = self.net.to(DEVICE).half().eval()
-
-    @torch.no_grad()
-    def __call__(self, patches, size, batch=8):
-        """patches: BGR uint8 frames (all the same size); size: (w, h) wanted. Returns BGR."""
-        W, H = size
-        out = []
-        for i in range(0, len(patches), batch):
-            x = torch.from_numpy(np.ascontiguousarray(np.stack(patches[i:i + batch])[..., ::-1]))
-            x = x.to(DEVICE).permute(0, 3, 1, 2).half() / 255.0
-            y = self.net(x).clamp_(0, 1).float()
-            y = torch.nn.functional.interpolate(y, size=(H, W), mode="bilinear", antialias=True,
-                                                align_corners=False)
-            y = (y * 255 + 0.5).clamp_(0, 255).byte().permute(0, 2, 3, 1).cpu().numpy()
-            out += [np.ascontiguousarray(f[..., ::-1]) for f in y]
-        return out
-
-
-_SHARP = {}
-
-
-def sharpener():
-    """Loaded once; None when switched off or not available (then plain enlargement)."""
-    if not SHARPEN or DEVICE != "cuda":
-        return None
-    if "s" not in _SHARP:
-        try:
-            _SHARP["s"] = Sharpener()
-        except Exception:
-            traceback.print_exc()
-            _SHARP["s"] = None
-    return _SHARP["s"]
 
 
 # ---------------------------------------------------------------- film quality (SVOR)
@@ -1693,9 +1678,12 @@ def figure_judge(det_weights, conf=0.35, every=6, inside=0.5):
 
 def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=49, overlap=8,
                    stages=None, seed=42, reuse=None, changed=None, steps=None, stride=1,
-                   prot_dir=None, refine=None, band=0.06, judge=None, retries=2):
+                   prot_dir=None, refine=None, band=0.06, judge=None, retries=2, plates=None):
     """Same output format as inpaint(): (chunks, {chunk: (folder, extension)}); the folder
-    holds full-size frames with the removed areas filled in."""
+    holds full-size frames with the removed areas filled in.
+    refine: second painter for a band around the kept people; judge: counts painted-in
+    figures (such pieces are painted again); plates: {scene piece: (plate, known)} - steady
+    shots where the known background is used and only the never-seen spot is painted."""
     chs = plan_chunks(ranges, window, overlap)
     todo = [c for c, (a, b, _, _) in enumerate(chs) if any(flags[i] for i in range(a, b))]
     results = {}
@@ -1750,15 +1738,18 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
             res.append(np.clip(o * (1 - a) + rf * a + 0.5, 0, 255).astype(np.uint8))
         return res
 
-    def save(path, img, patch, box):
+    def save(path, img, patch, box, plate=None):
         x1, y1, x2, y2 = box
         img = img.copy()
         if patch.shape[:2] != (y2 - y1, x2 - x1):
             patch = cv2.resize(patch, (x2 - x1, y2 - y1), interpolation=cv2.INTER_LANCZOS4)
         img[y1:y2, x1:x2] = patch
+        if plate is not None:  # steady shot: the real background wherever it was ever seen
+            pl, known = plate
+            img = cv2.blendLinear(pl, img, known, 1.0 - known)
         cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
-    def between(path, g, k, t, sub, imgs, masks, out, box, fw, fh):
+    def between(path, g, k, t, sub, imgs, masks, out, box, fw, fh, plate=None):
         """Frame g between painted frames sub[k] and sub[k+1]: both paintings are moved with
         the camera to frame g, then cross-faded (blending without moving them smears)."""
         base = cv2.imread(frames[g])
@@ -1775,14 +1766,15 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
                 o = cv2.warpPerspective(o, P @ H @ Pi, (fw, fh), flags=cv2.INTER_LINEAR,
                                         borderMode=cv2.BORDER_REPLICATE)
             warped.append(o)
-        save(path, base, cv2.addWeighted(warped[0], 1 - t, warped[1], t, 0), box)
+        save(path, base, cv2.addWeighted(warped[0], 1 - t, warped[1], t, 0), box, plate)
 
     writes = []
     nxt = _IO.submit(load, todo[0]) if todo else None
-    for t, c in enumerate(todo):
-        a, b, _, _ = chs[c]
+    for n_done, c in enumerate(todo):
+        a, b, sa, sb = chs[c]
+        plate = (plates or {}).get((sa, sb))
         imgs, masks, prots = nxt.result()
-        nxt = _IO.submit(load, todo[t + 1]) if t + 1 < len(todo) else None
+        nxt = _IO.submit(load, todo[n_done + 1]) if n_done + 1 < len(todo) else None
         x1, y1, x2, y2 = crop_box(masks, w, h)
         fw, fh = fill_size(x2 - x1, y2 - y1)
         crops, cms = [im[y1:y2, x1:x2] for im in imgs], [m[y1:y2, x1:x2] for m in masks]
@@ -1790,10 +1782,10 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         if judge is not None:  # film: figures painted into the gap? paint again, keep the best
             try:
                 bad = judge(out, cms)
-                for k in range(retries):
+                for r in range(retries):
                     if bad == 0:
                         break
-                    alt = filler.fill(crops, cms, fw, fh, seed=seed + 101 * (k + 1), steps=steps)
+                    alt = filler.fill(crops, cms, fw, fh, seed=seed + 101 * (r + 1), steps=steps)
                     nb = judge(alt, cms)
                     log(f"  piece {c}: {bad} painted figure(s) -> repainted: {nb}")
                     if nb < bad:
@@ -1809,9 +1801,6 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
                 raise
             except Exception:
                 traceback.print_exc()
-        sh = sharpener() if (x2 - x1) > 1.25 * fw else None
-        if sh is not None:  # full-size detail instead of a blurry enlargement
-            out = sh(out, (x2 - x1, y2 - y1))
         d = os.path.join(work, "mm_out", f"c{c:04d}_s{seed}")
         os.makedirs(d, exist_ok=True)
         sub = painted(a, b)
@@ -1819,15 +1808,16 @@ def fill_realistic(frames, final_dir, flags, work, ranges, w, h, filler, window=
         for j, g in enumerate(range(a, b)):
             path = os.path.join(d, f"{j:04d}.jpg")
             if g in pos:
-                writes.append(_IO.submit(save, path, imgs[pos[g]], out[pos[g]], (x1, y1, x2, y2)))
+                writes.append(_IO.submit(save, path, imgs[pos[g]], out[pos[g]], (x1, y1, x2, y2),
+                                         plate))
             else:  # between two painted frames
-                k = max(k for k, x in enumerate(sub) if x < g)
+                k = max(q for q, x in enumerate(sub) if x < g)
                 t = (g - sub[k]) / (sub[k + 1] - sub[k])
                 writes.append(_IO.submit(between, path, g, k, t, sub, imgs, masks, out,
-                                         (x1, y1, x2, y2), fw, fh))
+                                         (x1, y1, x2, y2), fw, fh, plate))
         results[c] = (d, ".jpg")
         if stages:
-            stages.step(t + 1, len(todo))
+            stages.step(n_done + 1, len(todo))
     for f in writes:
         f.result()
     return chs, results
@@ -1972,6 +1962,41 @@ def plate_fill(frames, final_dir, prot_dir, flags, ranges, w, h, filler=None, wi
             if stages:
                 stages.step(done, len(chs))
     return chs, results
+
+
+PLATE_HOLE = float(os.environ.get("KOP_PLATE_HOLE", "0.004"))  # share of the picture never seen behind a removed person that matters
+
+PLATE_QUICK = os.environ.get("KOP_PLATE_QUICK") == "1"  # test switch: also in the quick levels
+
+
+def plate_holes(final_dir, prot_dir, lo, hi, samples=24):
+    """Steady camera: share of the picture where a person to remove is in the way in every
+    frame (the background there is never seen, so other frames cannot supply it)."""
+    idx = sorted(set(np.linspace(lo, hi - 1, min(samples, hi - lo)).round().astype(int).tolist()))
+    never = need = None
+    for i in idx:
+        m = _read_mask(final_dir, i)
+        busy = m | _read_mask(prot_dir, i)
+        never = busy if never is None else never & busy
+        need = m if need is None else need | m
+    return float((never & need).mean()) if never is not None else 0.0
+
+
+def plate_of(frames, final_dir, prot_dir, lo, hi, w, h, samples=60):
+    """Steady camera: (picture of the empty background, where it is known) for frames [lo, hi)."""
+    idx = sorted(set(np.linspace(lo, hi - 1, min(samples, hi - lo)).round().astype(int).tolist()))
+    acc = np.zeros((h, w, 3), np.float32)
+    cnt = np.zeros((h, w), np.float32)
+    k = np.ones((7, 7), np.uint8)
+    for i in idx:
+        busy = cv2.dilate((_read_mask(final_dir, i) | _read_mask(prot_dir, i)).view(np.uint8), k) > 0
+        free = ~busy
+        acc[free] += cv2.imread(frames[i])[free]
+        cnt[free] += 1
+    plate = (acc / np.maximum(cnt, 1)[..., None] + 0.5).astype(np.uint8)
+    # soft edge towards the never-seen spot, so the painted fill joins without a line
+    known = cv2.GaussianBlur((cv2.erode((cnt > 0).view(np.uint8), k)).astype(np.float32), (0, 0), 3)
+    return plate, np.where(cnt > 0, known, 0.0).astype(np.float32)
 
 
 def _merge_fills(parts):
@@ -2585,7 +2610,8 @@ def anchors_from_photos(st, reid, img_pred, max_anchors=3, min_face=0.45):
     S = Stages(["Looking for your person using the photos"])
     S.start(0)
     for u, (lo, hi, _) in enumerate(st["units"]):
-        r = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi, n_samples=4)
+        r = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi, n_samples=4,
+                              segs=st.get("_segs"))
         if r and r["how"] == "face" and r["score"] >= min_face:
             found.append(u)
             st["seeds"][u] = (int(r["frame"]), np.asarray(r["box"], np.float32))
@@ -2783,22 +2809,26 @@ def find_person(st, reid, vid_pred, img_pred, photos=()):
         S.step(t + 1, len(todo))
     # second look: faces of the person found clearly in other scenes (other lighting, make-up,
     # angles) become references too; scenes not settled by a face are searched again
-    learned = [r["emb"] for r in auto.values()
-               if r and r["how"] == "face" and r["score"] >= 0.5 and r.get("emb") is not None]
-    if learned:
-        reid.ref_faces.extend(learned[:40])
-        again = [u for u in todo if auto[u] is None or auto[u]["how"] != "face"]
-        for u in again:
-            lo, hi, _ = st["units"][u]
-            r = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi,
-                                  segs=st.get("_segs"))
-            if r is not None and (auto[u] is None or r["how"] == "face"):
-                auto[u] = r
-        log(f"  learned {len(learned)} more look(s) of your person; searched "
-            f"{len(again)} scene piece(s) again")
+    sure = [r for r in auto.values() if r and r["how"] == "face" and r["score"] >= 0.5]
+    reid.ref_faces.extend([r["emb"] for r in sure if r.get("emb") is not None][:40])
+    reid.ref_looks.extend([[r["body"]] for r in sure if r.get("body") is not None][:40])
+    # ... and they are searched with a closer look for small faces (wide shots)
+    again = [u for u in todo if auto[u] is None or auto[u]["how"] != "face"]
+    more = 0
+    for u in again:
+        lo, hi, _ = st["units"][u]
+        r = reid.find_in_shot(img_pred, st["_video"], st["boxes"], lo, hi,
+                              segs=st.get("_segs"), deep=True)
+        if r is not None and (auto[u] is None or r["how"] == "face"):
+            more += auto[u] is None
+            auto[u] = r
+    if again:
+        log(f"  learned {len(sure)} more look(s) of your person; looked closer at {len(again)} "
+            f"scene piece(s): found in {more} more")
     for r in auto.values():
         if r:
             r.pop("emb", None)
+            r.pop("body", None)
     st["auto"] = auto
     save_job(st)
     found = sum(1 for u in range(len(st["units"])) if scene_seed(st, u) is not None)
@@ -2982,10 +3012,10 @@ def _track_extra(st, vid_pred, video, key, us, work, dst, minus=None):
 def _fill_level(st, opts=None):
     name = (opts or {}).get("fill_level") or st.get("fill_level")
     for lv in FILL_LEVELS:
-        if lv[0] == name:
+        if lv.name == name:
             return lv
     want = {"Best": "sharpest", "Balanced": "sharp"}.get(st["preset"], "fast")
-    return next(lv for lv in FILL_LEVELS if lv[0] == want)
+    return next(lv for lv in FILL_LEVELS if lv.name == want)
 
 
 def fill_frames_estimate(st):
@@ -3012,19 +3042,21 @@ def choose_fill_level(st, elapsed):
     mask_s = st["n"] / (25.0 if big else 6.0)
 
     def est(lv):
-        paint = frames / (lv[3] * scale * FILL_EFFICIENCY)
+        paint = frames / (lv.fps * scale * FILL_EFFICIENCY)
         return elapsed + max(mask_s, first / (8.0 if big else 2.0) + paint) + 60
 
     for lv in FILL_LEVELS:
-        if lv[0] != "film" and est(lv) <= TARGET_SECONDS:
-            return lv[0], est(lv), frames
-    return FILL_LEVELS[-1][0], est(FILL_LEVELS[-1]), frames
+        if lv.engine == "mm" and est(lv) <= TARGET_SECONDS:
+            return lv.name, est(lv), frames
+    return FILL_LEVELS[-1].name, est(FILL_LEVELS[-1]), frames
 
 
 def _work_dir(st, p):
     return os.path.join(st["cache"], f"part_work_{p:04d}")
 
 
+# quick painter: pieces where it painted person-like figures are painted again this many times
+MM_JUDGE_RETRIES = int(os.environ.get("KOP_MM_JUDGE", "0") or 0)
 FILL_SLOTS = [1]
 _LOCK_ST = [None]
 
@@ -3100,13 +3132,10 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     opts = st.get("part_opts", {}).get(p, {})
     grow_eff = grow * opts.get("grow_mult", 1.0)
     lv = _fill_level(st, opts)
-    stride = lv[4] if len(lv) > 4 else 1
-    tae = bool(lv[5]) if len(lv) > 5 else False
-    engine = lv[6] if len(lv) > 6 else "mm"
-    steps = (max(lv[2], opts.get("steps") or 0) if engine == "svor"
-             else opts.get("steps") or st.get("steps") or lv[2])
+    stride, tae, engine = lv.stride, lv.tae, lv.engine
+    steps = (max(lv.steps, opts.get("steps") or 0) if engine == "svor"
+             else opts.get("steps") or st.get("steps") or lv.steps)
     seed = opts.get("seed", 42)
-    _FILL_AREA[0] = lv[1]
     cfg = PRESETS[st["preset"]]
     pp_side = 1280 if (st["preset"] == "Best" and big_gpu()) else cfg["pp_max_side"]
     work = _work_dir(st, p)
@@ -3180,12 +3209,11 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
     need = [r for r in ranges if any(flags[i] for i in range(*r))]
     static = [] if opts.get("no_plate") else [
         r for r in need if is_static(video, d["final"], d["protect"], *r)]
-    st.setdefault("plate_ranges", {})[p] = static
     moving = [r for r in need if r not in static]
-    if static or moving:
-        log(f"  {len(static)} steady-camera and {len(moving)} moving-camera scene piece(s) to fill")
     fills, ov = [], 16
     filler, close_it = None, False
+    engine = ctx.get("engine", "mm")
+    film = engine == "svor"
     use_ai = st.get("fill", "realistic") == "realistic" or opts.get("ai")
     offload = use_ai and not big_gpu()
     if offload:
@@ -3193,86 +3221,87 @@ def _part_fill(st, p, ctx, vid_pred, img_pred, pp_dir, check):
     try:
         if use_ai:
             try:
-                filler, close_it = _get_filler(ctx.get("engine", "mm"))
-                if hasattr(filler, "use_tae"):
-                    try:
-                        filler.use_tae(ctx.get("tae", False))
-                    except Exception:  # tiny decoder not available: the normal one is used
-                        traceback.print_exc()
-                        filler.use_tae(False)
+                filler, close_it = _get_filler(engine)
+                try:
+                    filler.use_tae(ctx.get("tae", False))
+                except Exception:  # tiny decoder not available: the normal one is used
+                    traceback.print_exc()
+                    filler.use_tae(False)
             except Exception as e:  # missing model, download problem ... -> fast fill instead
                 traceback.print_exc()
                 log(f"  realistic fill unavailable ({e.__class__.__name__}); using the fast fill")
+        # steady camera, but someone to remove never moves away: the background behind them is
+        # never seen. The video painter fills that spot; the rest still comes from the plate.
+        plates = {}
+        if filler is not None:
+            # (film painter levels only: with the quick painter it cost 60% more painting time
+            # on a crowded test section and left as many people - measured)
+            for r in [r for r in static if (film or PLATE_QUICK)
+                      and plate_holes(d["final"], d["protect"], *r) > PLATE_HOLE]:
+                plates[r] = plate_of(video, d["final"], d["protect"], *r, w, h)
+                static.remove(r)
+        st.setdefault("plate_ranges", {})[p] = static
+        if need:
+            log(f"  {len(static)} steady-camera and {len(moving) + len(plates)} moving-camera scene "
+                f"piece(s) to fill" + (f" ({len(plates)} steady with a person who never moves)"
+                                       if plates else ""))
         if static:
             fills.append(plate_fill(video, d["final"], d["protect"], flags, static, w, h, filler,
                                     steps=steps, seed=seed, stages=S))
-        done_moving = False
-        if moving and filler is not None:
+        paint = sorted(moving + list(plates))
+        done_moving = not paint
+        if paint and filler is not None:
             k = ctx.get("stride", 1)
-            # 49 painted frames per piece: 81 at 832x480 ran out of memory with 3 parts at once
-            wins = (81, 49, 25) if ctx.get("engine") == "svor" else (49 * k, 25 * k, 13 * k)
-            for win in wins:
+            refine = judge = None
+            retries = 2 if film else MM_JUDGE_RETRIES
+            if film or retries:  # a second opinion: figures painted into the gap are redone
+                try:
+                    judge = figure_judge(PRESETS[st["preset"]]["det"])
+                    if film:  # ... and the film painter needs a careful neighbour
+                        refine, _ = _get_filler("mm")
+                        refine.use_tae(False)
+                except Exception:
+                    traceback.print_exc()
+            # painted frames per piece; shorter pieces when the GPU memory is full
+            wins = [81 * k, 49 * k, 25 * k] if film else [49 * k, 25 * k, 13 * k]
+            if film:
+                wins.insert(0, wins[0])  # first wait for the other part's painter, then shorten
+            for n_try, win in enumerate(wins):
                 try:
                     if ctx.get("mm_prev") is None:
                         shutil.rmtree(os.path.join(work, "mm_out"), ignore_errors=True)
-                    refine = judge = None
-                    if ctx.get("engine") == "svor":
-                        try:
-                            judge = figure_judge(PRESETS[st["preset"]]["det"])
-                        except Exception:
-                            traceback.print_exc()
-                    if ctx.get("engine") == "svor":  # (also keeps the people who stay in remove mode)
-                        try:
-                            refine, _ = _get_filler("mm")
-                            refine.use_tae(False)
-                        except Exception:
-                            traceback.print_exc()
-                    res = fill_realistic(video, d["final"], flags, work, moving, w, h, filler,
+                    res = fill_realistic(video, d["final"], flags, work, paint, w, h, filler,
                                          window=win, overlap=8, stages=S, seed=seed, steps=steps,
                                          reuse=ctx.get("mm_prev"), changed=ctx.get("changed"),
-                                         stride=ctx.get("stride", 1), prot_dir=d["protect"],
-                                         refine=refine, judge=judge)
+                                         stride=k, prot_dir=d["protect"], refine=refine,
+                                         judge=judge, retries=retries, plates=plates)
                     ctx["mm_prev"] = res
                     fills.append(res)
                     ov, done_moving = 8, True
                     break
                 except torch.cuda.OutOfMemoryError:
                     torch.cuda.empty_cache()
-                    if ctx.get("engine") == "svor" and not ctx.get("_oom_wait"):
-                        ctx["_oom_wait"] = True  # another part is painting: wait, same pieces
+                    if film and n_try == 0:
                         log("  GPU memory busy; waiting a moment, then painting again")
                         time.sleep(45)
-                        try:
-                            res = fill_realistic(video, d["final"], flags, work, moving, w, h,
-                                                 filler, window=win, overlap=8, stages=S, seed=seed,
-                                                 steps=steps, reuse=ctx.get("mm_prev"),
-                                                 changed=ctx.get("changed"),
-                                                 stride=ctx.get("stride", 1), prot_dir=d["protect"],
-                                                 refine=refine, judge=judge)
-                            ctx["mm_prev"] = res
-                            fills.append(res)
-                            ov, done_moving = 8, True
-                            break
-                        except torch.cuda.OutOfMemoryError:
-                            torch.cuda.empty_cache()
-                    log("  GPU memory full; retrying with shorter pieces")
+                    else:
+                        log("  GPU memory full; retrying with shorter pieces")
     finally:
         if filler is not None and close_it:
             filler.close()
         if offload:
             _sam2_to(vid_pred, img_pred, DEVICE)
-    if moving and not done_moving:
+    if not done_moving:
         with _gpu_lock(st):
-            fills.append(inpaint(video, d["final"], flags, work, pp_dir, moving, w, h, pp_side,
+            fills.append(inpaint(video, d["final"], flags, work, pp_dir, paint, w, h, pp_side,
                                  stages=S))
         ov = 16
     chs, results = _merge_fills(fills)
     S.start(5)
     out = os.path.join(work, "part.mp4")
-    film = ({"ranges": ranges, "gate": True, "effects": True}
-            if ctx.get("engine") == "svor" else None)
     composite(video, d["final"], d["protect"], flags, chs, results, out, fps, a, b, w, h,
-              overlap=ov, stages=S, film=film)
+              overlap=ov, stages=S,
+              film={"ranges": ranges, "gate": True, "effects": True} if film else None)
     viol = []
     if check:
         S.start(6)
@@ -3346,7 +3375,7 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=Tr
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]
             log(f"  Self-check: {len(viol)} sighting(s) remain - please check them")
             break
-        late = (_fill_level(st)[0] != "film" and  # film quality: always fix what the check finds
+        late = (_fill_level(st).engine == "mm" and  # film painter: always fix what the check finds
                 time.time() - st.get("t_start", time.time()) > 0.5 * TARGET_SECONDS)
         made, repaint = (0, set()) if late else _apply_self_fix(st, p, viol)
         n_p = sum(1 for v in viol if v[2])
@@ -3435,9 +3464,9 @@ def add_feedback(st, img_pred, kind, frame, x=None, y=None, text="", fb_dir=None
         opts["seed"] = opts.get("seed", 42) + 1
         opts["ai"] = True
         opts["smudge"] = opts.get("smudge", 0) + 1
-        names = [lv[0] for lv in FILL_LEVELS]
-        cur = names.index(_fill_level(st, opts)[0])
-        opts["fill_level"] = names[max(0, cur - 1)]
+        # smudges are what the film painter is good at: this part is painted with it
+        # (every 3rd frame first, every frame if it is reported again)
+        opts["fill_level"] = "film" if _fill_level(st, opts).engine == "svor" else "better"
         if opts["smudge"] >= 2:  # still smudged: switch method (video model instead of plate)
             opts["no_plate"] = True
         msg = "repaint that area more carefully"
@@ -3488,6 +3517,24 @@ def n_workers(n_todo):
     mem = torch.cuda.get_device_properties(0).total_memory
     n = 3 if mem > 35e9 else 2 if mem > 20e9 else 1
     return max(1, min(n, n_todo, (os.cpu_count() or 2) // 2))
+
+
+FILM_WORKER_BYTES = 17e9  # free GPU memory one film-painter part needs (two painters + tracker)
+
+
+def film_workers(n_w):
+    """Parts the film painter works on at the same time: as many as the GPU memory that is
+    free right now allows (other programs on the GPU count), at most 2. KOP_FILM_WORKERS
+    overrides."""
+    env = int(os.environ.get("KOP_FILM_WORKERS", "0") or 0)
+    if env:
+        return max(1, min(n_w, env))
+    if DEVICE != "cuda":
+        return 1
+    __import__("gc").collect()
+    torch.cuda.empty_cache()
+    free = torch.cuda.mem_get_info()[0]
+    return max(1, min(n_w, 2, int(free // FILM_WORKER_BYTES)))
 
 
 def run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow):
@@ -3698,12 +3745,13 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=None, photos=()):
             f"{round(est / 60)} min in total)")
         save_job(st)
     n_w = n_workers(len(todo))
-    if todo and _fill_level(st)[0] == "film":
-        n_w = min(n_w, int(os.environ.get("KOP_FILM_WORKERS", "2")))  # two painters per part
+    if todo and _fill_level(st).engine == "svor":
+        n_w = film_workers(n_w)
+        lv = _fill_level(st)
         frames = fill_frames_estimate(st)
-        est = frames / (FILM_FPS if big_gpu() else FILM_FPS * 0.3)
-        log(f"Film quality: {frames} frames to paint; about {max(1, round(est / 60))} min "
-            f"(an estimate) - it is worth it.")
+        est = frames / (lv.fps * FILM_EFFICIENCY * (1.0 if big_gpu() else 0.3))
+        log(f"Film painter ({lv.name}): {frames} frames to paint; about "
+            f"{max(1, round(est / 60))} min (an estimate).")
     if n_w > 1:
         run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow)
     for p in todo:  # sequential (and whatever a parallel worker could not finish)

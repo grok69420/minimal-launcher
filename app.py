@@ -30,8 +30,9 @@ PART_SECONDS = float(os.environ.get("KOP_PART_SECONDS", rp.PART_SECONDS))
 CKPT_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/092824/"
 LEGACY_INPUT = os.path.join(os.path.dirname(DRIVE_ROOT), "KeepOnePerson_input")
 LEGACY_JOBS = os.path.join(os.path.dirname(DRIVE_ROOT), "KeepOnePerson")
-FILLS = ["Automatic - done in about 15 minutes", "Sharpest background - takes longer",
-         "Film quality - best result (also removes shadows/reflections), takes much longer"]
+FILLS = ["Fast - done in about 15 minutes",
+         "Better - the film painter on every 3rd frame (far fewer left-over people in crowds); takes about 6x longer",
+         "Film quality - the film painter on every frame; takes much longer"]
 MODES = ["Keep one person - remove everyone else", "Remove some people - keep everyone else"]
 GREEN, RED = np.array([0, 220, 0]), np.array([0, 0, 235])
 FB_KINDS = {"A person is still here": "person", "Smudged or blurry here": "smudge",
@@ -280,8 +281,10 @@ def _done_text(st):
         lines.append(f"⏱ Took **{_took(prep + t['total'])}** for {_took(st['n'] / fps)} of video "
                      f"(preparing {_took(prep)}, removing {_took(t['total'])}{par}).")
     if st.get("fill_level"):
-        what = {"film": "film quality: every frame painted by SVOR (shadows and reflections removed "
-                        "too), real background brought in from other frames, matched grain",
+        what = {"film": "film quality: every frame painted by the film painter (shadows and "
+                        "reflections removed too), real background brought in from other frames",
+                "better": "the film painter on every 3rd frame, the frames between follow the "
+                          "camera; real background brought in from other frames",
                 "sharpest": "every frame painted, extra care", "sharp": "every frame painted",
                 "balanced": "every 2nd frame painted, the frames between follow the camera",
                 "fast": "every 3rd frame painted, the frames between follow the camera",
@@ -474,11 +477,10 @@ def on_next1(video, path, start, end, photos=None, fill=None, mode=None, progres
         st["grow"] = ld["grow"]
         st["steps"] = (rp.FILL_STEPS[preset] + ld["extra_steps"]) if ld["extra_steps"] else None
         st["fill"] = "realistic"
-        if (fill or "").startswith("Sharpest"):
-            st["fill_level"] = "sharpest"
-        elif (fill or "").startswith("Film"):
-            st["fill_level"] = "film"
-            st["preset"] = preset = "Best"  # film: the most accurate tracking model too
+        level = {"Better": "better", "Film": "film"}.get((fill or "").split(" ")[0])
+        if level:
+            st["fill_level"] = level
+            st["preset"] = preset = "Best"  # ... with the most accurate tracking model too
         st["mode"] = "remove" if (mode or "").startswith("Remove") else "keep"
         st["out_dir"] = out_root()
         rp.save_job(st)
