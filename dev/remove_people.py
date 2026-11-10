@@ -494,7 +494,9 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
     segs = [] if model is not None else None
     weights = seg_weights if model is not None else det_weights
     model = model or YOLO(det_weights)
-    batch = batch or (32 if DEVICE == "cuda" else 4)
+    if not batch:  # smaller batches when little GPU memory is free (L4 / T4, or a busy GPU)
+        free = torch.cuda.mem_get_info()[0] if DEVICE == "cuda" else 0
+        batch = 32 if free > 16e9 else 16 if free > 8e9 else 8 if DEVICE == "cuda" else 4
     scores, boxes, buf, prev = [], [], [], None
     # two copies of the model work on alternate batches in threads, so reading the video, the
     # GPU work and turning masks into outlines (CPU) overlap instead of waiting for each other
@@ -509,9 +511,15 @@ def scan(video, det_weights, imgsz, conf, n_est, stages=None, batch=None, seg_we
 
     def predict(m, frames):
         # iou 0.8: in crowds people overlap a lot; the usual 0.7 throws away real people
-        res = m.predict(frames, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz, verbose=False,
-                        device=0 if DEVICE == "cuda" else "cpu",
-                        quantize=16 if DEVICE == "cuda" else None)
+        try:
+            res = m.predict(frames, classes=[0], conf=conf, iou=SCAN_IOU, imgsz=imgsz,
+                            verbose=False, device=0 if DEVICE == "cuda" else "cpu",
+                            quantize=16 if DEVICE == "cuda" else None)
+        except torch.cuda.OutOfMemoryError:  # GPU memory full: the same frames in two halves
+            if len(frames) < 2:
+                raise
+            torch.cuda.empty_cache()
+            return predict(m, frames[:len(frames) // 2]) + predict(m, frames[len(frames) // 2:])
         out = []
         for r in res:
             bx = r.boxes.xyxy.cpu().numpy().astype(np.float32)

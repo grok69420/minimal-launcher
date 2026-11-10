@@ -19,7 +19,7 @@ src, s0, s1, click, level = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]),
 name = sys.argv[6] if len(sys.argv) > 6 else level
 OUT = f"/content/kop_film_{name}"
 shutil.rmtree(OUT, ignore_errors=True)
-preset = "Best" if level in rp.SVOR_LEVELS else "Balanced"  # as the app does
+preset = "Best" if level in getattr(rp, "SVOR_LEVELS", ("film",)) else "Balanced"  # as the app does
 vid, img = rp.load_sam2("/content/repos/sam2", rp.PRESETS[preset]["sam2"])
 reid = rp.ReID(emb_weights="yolo11s-cls.pt")
 LD = rp.learned_defaults("/nonexistent")
