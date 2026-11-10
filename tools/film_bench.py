@@ -3,7 +3,7 @@ the person to keep), at a chosen background level. Prints the time per step and 
 side-by-side pictures of the result.
 python tools/film_bench.py video.mp4 start_s end_s click_frame level [out_name]
   click_frame: a frame (counted in the section) where the person to keep is the biggest person
-  level: film | sharpest | sharp | balanced | fast | fastest | auto"""
+  level: film | better | sharpest | sharp | balanced | fast | fastest | auto"""
 import json
 import os
 import shutil
@@ -19,7 +19,7 @@ src, s0, s1, click, level = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]),
 name = sys.argv[6] if len(sys.argv) > 6 else level
 OUT = f"/content/kop_film_{name}"
 shutil.rmtree(OUT, ignore_errors=True)
-preset = "Best" if level == "film" else "Balanced"  # as the app does
+preset = "Best" if level in rp.SVOR_LEVELS else "Balanced"  # as the app does
 vid, img = rp.load_sam2("/content/repos/sam2", rp.PRESETS[preset]["sam2"])
 reid = rp.ReID(emb_weights="yolo11s-cls.pt")
 LD = rp.learned_defaults("/nonexistent")

@@ -26,6 +26,7 @@ import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from typing import NamedTuple
 
 import cv2
 import numpy as np
@@ -63,19 +64,31 @@ PAD = 4                # frames of temporal carry-over of the removal masks
 GROW = 0.016           # removal masks are widened by this share of the picture size (hair, blur)
 WORKER = False         # True inside a parallel worker process
 OFFLOAD_VIDEO = False  # keep tracking frames in CPU memory (parallel workers share the GPU)
-FILL_AREA = {"Best": 832 * 480, "Balanced": 640 * 368, "Fast": 512 * 288}
 FILL_STEPS = {"Best": 8, "Balanced": 6, "Fast": 4}
-# background painting quality levels: (name, working area, steps, frames/s on an A100, stride,
-# tiny decoder). Below the model's own size (832x480) the painting shows a checkerboard
-# pattern, so every level paints at 832x480; the faster levels paint every 2nd / 3rd frame
-# and make the frames between by following the camera movement (no smearing).
-# "film": SVOR (also removes shadows/reflections), real background from other frames, matched
-# grain - for the best result, no time limit; never chosen automatically.
-FILL_LEVELS = [("film", 832 * 480, 12, 1.4, 1, False, "svor"),
-               ("sharpest", 832 * 480, 8, 4.0, 1, False), ("sharp", 832 * 480, 6, 5.9, 1, True),
-               ("balanced", 832 * 480, 6, 11.0, 2, True), ("fast", 832 * 480, 6, 15.5, 3, True),
-               ("fastest", 832 * 480, 6, 20.0, 4, True)]
-FILM_FPS = 0.85  # film level, whole job on an A100 (measured: 1439 frames in 28 min incl. repaints)
+FILL_AREA = 832 * 480  # the painters' own size; smaller sizes gave a checkerboard pattern
+
+
+class Level(NamedTuple):
+    """A background painting level. fps: painted video frames per second on an A100;
+    stride: every n-th frame is painted, the frames between follow the camera movement;
+    tae: tiny (faster, slightly softer) decoder; engine: "mm" MiniMax-Remover or "svor"."""
+    name: str
+    steps: int
+    fps: float
+    stride: int = 1
+    tae: bool = False
+    engine: str = "mm"
+
+
+# best first. The SVOR levels ("film", "better") also remove shadows/reflections, bring real
+# background in from other frames and match the grain; they are never chosen automatically.
+FILL_LEVELS = [Level("film", 12, 1.4, engine="svor"),
+               Level("better", 12, 4.0, stride=3, engine="svor"),
+               Level("sharpest", 8, 4.0), Level("sharp", 6, 5.9, tae=True),
+               Level("balanced", 6, 11.0, 2, True), Level("fast", 6, 15.5, 3, True),
+               Level("fastest", 6, 20.0, 4, True)]
+SVOR_LEVELS = {lv.name for lv in FILL_LEVELS if lv.engine == "svor"}
+FILM_EFFICIENCY = 0.6  # share of an SVOR level's speed reached in a whole job (measured)
 FILL_EFFICIENCY = 0.72  # share of that speed reached with tracking etc. sharing the GPU (measured)
 # the engine's share of the 15 minutes; the rest is starting Colab, setup, upload and clicks
 TARGET_SECONDS = 12 * 60
@@ -1250,7 +1263,6 @@ MM_CODE = os.environ.get("KOP_MM_CODE", "/content/repos/MiniMax-Remover")
 MM_WEIGHTS = os.environ.get("KOP_MM_WEIGHTS", "/content/repos/minimax_weights")
 
 
-_FILL_AREA = [832 * 480]
 MM_FAST = os.environ.get("KOP_MM_FAST", "1") == "1"
 TAE = os.environ.get("KOP_TAE", "0") == "1"
 TAE_URL = "https://github.com/madebyollin/taehv/raw/main/"
@@ -1260,7 +1272,7 @@ TAE_WEIGHTS = os.environ.get("KOP_TAE_WEIGHTS", "/content/repos/taehv/taew2_1.pt
 def fill_size(w, h, area=None):
     """Working size for the generative fill (the model was trained at 832x480; smaller sizes
     are faster)."""
-    area = area or _FILL_AREA[0]
+    area = area or FILL_AREA
     a, ref = w / h, 832 / 480
     k = (area / (832 * 480)) ** 0.5
     if abs(a - ref) / ref < 0.06:
@@ -2990,10 +3002,10 @@ def _track_extra(st, vid_pred, video, key, us, work, dst, minus=None):
 def _fill_level(st, opts=None):
     name = (opts or {}).get("fill_level") or st.get("fill_level")
     for lv in FILL_LEVELS:
-        if lv[0] == name:
+        if lv.name == name:
             return lv
     want = {"Best": "sharpest", "Balanced": "sharp"}.get(st["preset"], "fast")
-    return next(lv for lv in FILL_LEVELS if lv[0] == want)
+    return next(lv for lv in FILL_LEVELS if lv.name == want)
 
 
 def fill_frames_estimate(st):
@@ -3020,13 +3032,13 @@ def choose_fill_level(st, elapsed):
     mask_s = st["n"] / (25.0 if big else 6.0)
 
     def est(lv):
-        paint = frames / (lv[3] * scale * FILL_EFFICIENCY)
+        paint = frames / (lv.fps * scale * FILL_EFFICIENCY)
         return elapsed + max(mask_s, first / (8.0 if big else 2.0) + paint) + 60
 
     for lv in FILL_LEVELS:
-        if lv[0] != "film" and est(lv) <= TARGET_SECONDS:
-            return lv[0], est(lv), frames
-    return FILL_LEVELS[-1][0], est(FILL_LEVELS[-1]), frames
+        if lv.engine == "mm" and est(lv) <= TARGET_SECONDS:
+            return lv.name, est(lv), frames
+    return FILL_LEVELS[-1].name, est(FILL_LEVELS[-1]), frames
 
 
 def _work_dir(st, p):
@@ -3108,15 +3120,10 @@ def _part_masks(st, p, vid_pred, img_pred, grow, pad):
     opts = st.get("part_opts", {}).get(p, {})
     grow_eff = grow * opts.get("grow_mult", 1.0)
     lv = _fill_level(st, opts)
-    stride = lv[4] if len(lv) > 4 else 1
-    tae = bool(lv[5]) if len(lv) > 5 else False
-    engine = lv[6] if len(lv) > 6 else "mm"
-    if engine == "svor":
-        stride = int(os.environ.get("KOP_FILM_STRIDE", stride))
-    steps = (max(lv[2], opts.get("steps") or 0) if engine == "svor"
-             else opts.get("steps") or st.get("steps") or lv[2])
+    stride, tae, engine = lv.stride, lv.tae, lv.engine
+    steps = (max(lv.steps, opts.get("steps") or 0) if engine == "svor"
+             else opts.get("steps") or st.get("steps") or lv.steps)
     seed = opts.get("seed", 42)
-    _FILL_AREA[0] = lv[1]
     cfg = PRESETS[st["preset"]]
     pp_side = 1280 if (st["preset"] == "Best" and big_gpu()) else cfg["pp_max_side"]
     work = _work_dir(st, p)
@@ -3351,7 +3358,7 @@ def process_part(st, p, vid_pred, img_pred, pp_dir, grow, pad=PAD, self_check=Tr
             rep["left"] = frames[::max(1, len(frames) // 5)][:5]
             log(f"  Self-check: {len(viol)} sighting(s) remain - please check them")
             break
-        late = (_fill_level(st)[0] != "film" and  # film quality: always fix what the check finds
+        late = (_fill_level(st).engine == "mm" and  # film painter: always fix what the check finds
                 time.time() - st.get("t_start", time.time()) > 0.5 * TARGET_SECONDS)
         made, repaint = (0, set()) if late else _apply_self_fix(st, p, viol)
         n_p = sum(1 for v in viol if v[2])
@@ -3440,9 +3447,9 @@ def add_feedback(st, img_pred, kind, frame, x=None, y=None, text="", fb_dir=None
         opts["seed"] = opts.get("seed", 42) + 1
         opts["ai"] = True
         opts["smudge"] = opts.get("smudge", 0) + 1
-        names = [lv[0] for lv in FILL_LEVELS]
-        cur = names.index(_fill_level(st, opts)[0])
-        opts["fill_level"] = names[max(0, cur - 1)]
+        # smudges are what the film painter is good at: this part is painted with it
+        # (every 3rd frame first, every frame if it is reported again)
+        opts["fill_level"] = "film" if _fill_level(st, opts).engine == "svor" else "better"
         if opts["smudge"] >= 2:  # still smudged: switch method (video model instead of plate)
             opts["no_plate"] = True
         msg = "repaint that area more carefully"
@@ -3493,6 +3500,24 @@ def n_workers(n_todo):
     mem = torch.cuda.get_device_properties(0).total_memory
     n = 3 if mem > 35e9 else 2 if mem > 20e9 else 1
     return max(1, min(n, n_todo, (os.cpu_count() or 2) // 2))
+
+
+FILM_WORKER_BYTES = 17e9  # free GPU memory one film-painter part needs (two painters + tracker)
+
+
+def film_workers(n_w):
+    """Parts the film painter works on at the same time: as many as the GPU memory that is
+    free right now allows (other programs on the GPU count), at most 2. KOP_FILM_WORKERS
+    overrides."""
+    env = int(os.environ.get("KOP_FILM_WORKERS", "0") or 0)
+    if env:
+        return max(1, min(n_w, env))
+    if DEVICE != "cuda":
+        return 1
+    __import__("gc").collect()
+    torch.cuda.empty_cache()
+    free = torch.cuda.mem_get_info()[0]
+    return max(1, min(n_w, 2, int(free // FILM_WORKER_BYTES)))
 
 
 def run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow):
@@ -3703,12 +3728,13 @@ def remove_others(st, reid, vid_pred, img_pred, pp_dir, grow=None, photos=()):
             f"{round(est / 60)} min in total)")
         save_job(st)
     n_w = n_workers(len(todo))
-    if todo and _fill_level(st)[0] == "film":
-        n_w = min(n_w, int(os.environ.get("KOP_FILM_WORKERS", "2")))  # two painters per part
+    if todo and _fill_level(st).engine == "svor":
+        n_w = film_workers(n_w)
+        lv = _fill_level(st)
         frames = fill_frames_estimate(st)
-        est = frames / (FILM_FPS if big_gpu() else FILM_FPS * 0.3)
-        log(f"Film quality: {frames} frames to paint; about {max(1, round(est / 60))} min "
-            f"(an estimate) - it is worth it.")
+        est = frames / (lv.fps * FILM_EFFICIENCY * (1.0 if big_gpu() else 0.3))
+        log(f"Film painter ({lv.name}): {frames} frames to paint; about "
+            f"{max(1, round(est / 60))} min (an estimate).")
     if n_w > 1:
         run_parallel(st, todo, n_w, vid_pred, img_pred, pp_dir, grow)
     for p in todo:  # sequential (and whatever a parallel worker could not finish)

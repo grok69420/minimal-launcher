@@ -48,7 +48,7 @@ for i, f in enumerate(imgs):
 flags = {i: bool(masks[i].any()) for i in range(n)}
 filler = rp.MiniMaxFiller()
 filler.use_tae(True)
-rp._FILL_AREA[0] = 832 * 480
+
 outs = {}
 for stride in (1, 2, 3):
     work = os.path.join(tmp, f"w{stride}")
