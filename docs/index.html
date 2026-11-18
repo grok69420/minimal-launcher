@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>India Cyclone Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: map as the instrument on the left, readouts and tables on the right; single deep-sea theme by choice. */
+path,line{vector-effect:non-scaling-stroke}
+:root{
+  --sea:#0d2236; --sea-2:#123049; --land:#2c3a3f; --coast:#5d7480; --ink:#e8eef2; --muted:#93a8b6;
+  --imd:#ff9a3c; --jtwc:#55c1ff; --cons:#f4f1e6; --warn:#ff5d5d; --ok:#5fd49a; --panel:#10283d; --line:#23435c;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--sea);color:var(--ink);font:15px/1.5 var(--body)}
+a{color:var(--jtwc)}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 16px 40px;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:14px}
+h1{font:700 40px/1 var(--display);letter-spacing:.5px;margin:0;text-wrap:balance}
+h1 small{display:block;font:500 15px/1.4 var(--body);color:var(--muted);letter-spacing:0;margin-top:6px}
+h2{font:600 22px/1.1 var(--display);letter-spacing:.4px;margin:0 0 10px;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;background:var(--panel);display:flex;gap:6px;align-items:center}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,1fr);gap:18px;align-items:start}
+@media (max-width:880px){.main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.mapcard{padding:0;overflow:hidden;position:relative}
+svg#map{display:block;width:100%;height:auto;background:var(--sea-2)}
+.maptools{position:absolute;top:10px;left:10px;display:flex;flex-wrap:wrap;gap:6px}
+button,select{font:600 13px var(--body);color:var(--ink);background:#173a55;border:1px solid #2d5878;border-radius:6px;padding:7px 12px;cursor:pointer}
+button:hover{background:#1e4a6b}
+button[aria-pressed="true"]{background:var(--cons);color:#10283d;border-color:var(--cons)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--imd);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);padding:10px 14px;border-top:1px solid var(--line)}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:22px;height:0;border-top:3px solid}
+.controls{display:grid;gap:10px}
+.timebar{display:flex;gap:10px;align-items:center}
+input[type=range]{flex:1;accent-color:var(--cons)}
+.clock{font:600 26px/1.1 var(--display);letter-spacing:.4px}
+.clock small,.mono{display:block;font:400 13px var(--mono);color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+td.n,th.n{font-family:var(--mono);text-align:right;white-space:nowrap}
+.tblwrap{overflow-x:auto}
+.read{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.read div{border:1px solid var(--line);border-radius:8px;padding:8px}
+.read b{display:block;font:500 12px var(--body);color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.read span{font:500 14px var(--mono)}
+.landfall{border-left:4px solid var(--warn);padding:10px 12px;background:#1a2a3a;border-radius:0 8px 8px 0}
+.landfall strong{font:600 20px/1.2 var(--display);letter-spacing:.3px;display:block}
+.pill{display:inline-block;font:500 11.5px var(--body);padding:1px 8px;border-radius:999px;border:1px solid}
+.p-core{color:var(--warn);border-color:var(--warn)} .p-near{color:var(--imd);border-color:var(--imd)} .p-far{color:var(--muted);border-color:var(--line)}
+.p-ok{color:var(--ok);border-color:var(--ok)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:880px){.grid2{grid-template-columns:1fr}}
+.note{color:var(--muted);font-size:13.5px;max-width:70ch}
+.note li{margin:4px 0}
+.empty{padding:40px 20px;text-align:center}
+.svglabel{font:500 13px var(--body);fill:var(--ink);paint-order:stroke;stroke:#0d2236;stroke-width:3px}
+.svgsmall{font:400 11px var(--mono);fill:var(--muted)}
+@keyframes spin{to{transform:rotate(-360deg)}}
+.spin{animation:spin 2.4s linear infinite;transform-box:fill-box;transform-origin:center}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1 id="title">India cyclone tracker<small id="sub">North Indian Ocean · IMD and JTWC forecast tracks with an equal-weight consensus</small></h1>
+  <div class="chips" id="chips"></div>
+</header>
+<div id="app"></div>
+</div>
+
+<template id="tpl">
+<section class="main">
+  <div class="card mapcard">
+    <div class="maptools">
+      <select id="storm" aria-label="Choose storm"></select>
+      <button id="vAll" aria-pressed="true">Whole track</button>
+      <button id="vNorth" aria-pressed="false">Landfall close-up</button>
+    </div>
+    <svg id="map" role="img" aria-label="Map with IMD, JTWC and consensus cyclone tracks"></svg>
+    <div class="legend">
+      <span><i class="sw" style="border-color:var(--imd)"></i>IMD forecast</span>
+      <span><i class="sw" style="border-color:var(--jtwc);border-top-style:dashed"></i>JTWC forecast</span>
+      <span><i class="sw" style="border-color:var(--muted);border-top-style:dotted"></i>Observed fixes</span>
+      <span><i class="sw" style="border-color:var(--cons);border-top-width:4px"></i>Consensus</span>
+      <span><i class="dot" style="background:rgba(244,241,230,.35)"></i>Agency spread band</span>
+    </div>
+  </div>
+  <div style="display:grid;gap:18px">
+    <div class="card controls">
+      <div class="clock" id="clock"></div>
+      <div class="timebar">
+        <button id="play" aria-pressed="false">Play</button>
+        <input type="range" id="t" step="1" aria-label="Time">
+      </div>
+      <div class="read">
+        <div><b style="color:var(--imd)">IMD centre</b><span id="rImd">–</span></div>
+        <div><b style="color:var(--jtwc)">JTWC centre</b><span id="rJt">–</span></div>
+        <div><b style="color:var(--cons)">Consensus</b><span id="rCons">–</span></div>
+      </div>
+      <span class="mono" id="rSep"></span>
+    </div>
+    <div class="card"><div class="landfall"><strong id="lfHead"></strong><span class="note" id="lfBody"></span></div></div>
+    <div class="card">
+      <h2>Distance to centre</h2>
+      <div class="tblwrap"><table>
+        <thead><tr><th>Place</th><th class="n">Right now</th><th class="n">Closest</th><th>When (IST)</th><th>Band</th></tr></thead>
+        <tbody id="near"></tbody>
+      </table></div>
+      <p class="note" style="margin:8px 0 0">Your watch places first, then the nearest coastal places. “Right now” follows the time slider. Bands: under 30 km near the core, 30–100 km strong winds and very heavy rain likely, over 100 km mainly rain bands. These bands are a rule of thumb, not official wind radii.</p>
+    </div>
+  </div>
+</section>
+<section class="grid2">
+  <div class="card">
+    <h2>Consensus track</h2>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Valid (IST)</th><th class="n">IMD</th><th class="n">JTWC</th><th class="n">Consensus</th><th class="n">Spread</th></tr></thead>
+      <tbody id="cons"></tbody>
+    </table></div>
+    <h2 style="margin-top:18px">Intensity, each agency's own scale</h2>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Valid (IST)</th><th class="n">IMD km/h (3-min)</th><th>IMD class</th><th class="n">JTWC kt (1-min)</th></tr></thead>
+      <tbody id="inten"></tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <h2>Data status</h2>
+    <div class="tblwrap"><table><tbody id="status"></tbody></table></div>
+    <h2 style="margin-top:18px">How this is built</h2>
+    <ul class="note">
+      <li>Every hour a GitHub Actions job downloads the latest IMD (RSMC New Delhi) advisory and JTWC North Indian Ocean warnings and parses the positions and forecasts.</li>
+      <li>Both forecasts are put on a 6-hour clock by straight-line interpolation and averaged with equal weight. No accuracy-based weights are applied.</li>
+      <li>Only the track is averaged. IMD uses 3-minute and JTWC 1-minute wind averages, so winds are shown separately.</li>
+      <li>The spread band is half the IMD–JTWC separation. It shows disagreement between agencies; it is not a probability cone.</li>
+      <li>Landfall is the first crossing of the Natural Earth 1:10m coastline. Place coordinates are approximate.</li>
+      <li>If a source is down, the last good data is kept and marked in Data status.</li>
+      <li>For warnings and decisions use IMD and state disaster management bulletins.</li>
+    </ul>
+  </div>
+</section>
+</template>
+
+<script>
+const NS="http://www.w3.org/2000/svg";
+const $=id=>document.getElementById(id);
+const pt=s=>Date.parse(s.replace('Z',':00Z'));
+const fmt=ms=>{const d=new Date(ms+330*60000);return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'})+', '+d.toISOString().slice(11,16)+' IST'};
+const fmtU=ms=>{const d=new Date(ms).toISOString();return d.slice(8,10)+'/'+d.slice(5,7)+' '+d.slice(11,16)+' UTC'};
+const round30=ms=>Math.round(ms/1800000)*1800000;
+const hav=(a,b)=>{const R=6371,r=Math.PI/180,dp=(b[0]-a[0])*r,dl=(b[1]-a[1])*r,x=Math.sin(dp/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(x))};
+function interp(tr,t){if(!tr||!tr.length)return null;const ts=tr.map(p=>pt(p.time));if(t<ts[0]||t>ts[ts.length-1])return null;
+  for(let i=0;i<tr.length-1;i++)if(t>=ts[i]&&t<=ts[i+1]){const f=ts[i+1]>ts[i]?(t-ts[i])/(ts[i+1]-ts[i]):0;return{lat:tr[i].lat+f*(tr[i+1].lat-tr[i].lat),lon:tr[i].lon+f*(tr[i+1].lon-tr[i].lon),i,f}}
+  return{lat:tr[tr.length-1].lat,lon:tr[tr.length-1].lon}}
+const pos=p=>p?`${p.lat.toFixed(1)}°N ${p.lon.toFixed(1)}°E`:'no data';
+const band3=km=>km<30?'<span class="pill p-core">near core</span>':km<=100?'<span class="pill p-near">strong winds, heavy rain</span>':'<span class="pill p-far">rain bands</span>';
+const SHORT={Bheemunipatnam:'Bheemili'};
+// label side per place: [anchor, dx, dy] in screen px (default: left of the dot)
+const LBL={Kalingapatnam:['start',8,14],Bheemunipatnam:['start',8,6],Puri:['start',8,-6],Paradip:['start',8,-4],Digha:['start',8,-4],'Port Blair':['start',8,-4]};
+let L,D,S,timer=null,Z=1,stormIdx=0,lastKey='';
+
+async function load(){
+  const bust='?v='+Date.now();
+  const [land,latest,status]=await Promise.all(['land','latest','status'].map(n=>fetch('data/'+n+'.json'+bust).then(r=>r.ok?r.json():null).catch(()=>null)));
+  L=land;S=status;const key=JSON.stringify(latest);if(key===lastKey&&D){chips(D.storms&&D.storms[stormIdx]);return}lastKey=key;D=latest;draw();
+}
+function chips(st){
+  const c=[];
+  if(st&&st.imd&&st.imd.track.length){const p=st.imd.track[0];c.push(`<span class="chip"><i class="dot" style="background:var(--imd)"></i>IMD: ${p.cls}, ${p.kmh[0]}–${p.kmh[1]} km/h (3-min)</span>`)}
+  if(st&&st.jtwc){const k=st.jtwc.fix.kt;c.push(`<span class="chip"><i class="dot" style="background:var(--jtwc)"></i>JTWC: ${k} kt ≈ ${Math.round(k*1.852)} km/h (1-min)</span>`)}
+  if(S)c.push(`<span class="chip">Checked ${fmt(pt(S.checked))}</span>`);
+  $('chips').innerHTML=c.join('');
+}
+function draw(){
+  stop();
+  const storms=(D&&D.storms)||[];
+  if(!L||!D){$('app').innerHTML='<div class="card empty">Could not load the data files. Reload the page in a minute.</div>';return}
+  if(!storms.length){chips(null);$('app').innerHTML=`<div class="card empty"><h2>No active cyclone in the North Indian Ocean</h2><p class="note" style="margin:0 auto">Neither IMD nor JTWC has an active forecast right now. The page refreshes itself every 15 minutes.${S?' Last check: '+fmt(pt(S.checked))+'.':''}</p></div>`;return}
+  stormIdx=Math.min(stormIdx,storms.length-1);
+  const st=storms[stormIdx];
+  $('app').innerHTML='';$('app').appendChild($('tpl').content.cloneNode(true));
+  $('title').firstChild.nodeValue=`${st.name} cyclone tracker`;
+  chips(st);
+  $('storm').innerHTML=storms.map((s,i)=>`<option value="${i}" ${i===stormIdx?'selected':''}>${s.name} (${s.id})</option>`).join('');
+  $('storm').onchange=e=>{stormIdx=+e.target.value;draw()};
+  const svg=$('map');const BB=L.bbox,k=Math.cos(L.lat0*Math.PI/180),sx=L.W/((BB[2]-BB[0])*k);
+  const P=(lon,lat)=>[(lon-BB[0])*k*sx,(BB[3]-lat)*sx];const kmPx=sx/111.32;
+  const el=(tag,a,par)=>{const e=document.createElementNS(NS,tag);for(const x in a)e.setAttribute(x,a[x]);(par||svg).appendChild(e);return e};
+  const imd=st.imd?st.imd.track:[],jt=st.jtwc?st.jtwc.track:[],cons=st.consensus||[],past=st.past||[];
+  // view boxes
+  const all=[...imd,...jt,...cons,...past];
+  const lats=all.map(p=>p.lat),lons=all.map(p=>p.lon);
+  const vb=(lo0,la0,lo1,la1)=>{const a=P(lo0,la1),b=P(lo1,la0);return[a[0],a[1],b[0]-a[0],b[1]-a[1]]};
+  let pad=2.2,lo0=Math.min(...lons)-pad,lo1=Math.max(...lons)+pad,la0=Math.min(...lats)-pad,la1=Math.max(...lats)+pad;
+  const minSpan=8;if(lo1-lo0<minSpan){const c=(lo0+lo1)/2;lo0=c-minSpan/2;lo1=c+minSpan/2}if(la1-la0<minSpan){const c=(la0+la1)/2;la0=c-minSpan/2;la1=c+minSpan/2}
+  const VA=vb(lo0,la0,lo1,la1);
+  const lf=st.landfall&&(st.landfall.consensus||st.landfall.imd||st.landfall.jtwc);
+  const focus=lf||cons[cons.length-1]||imd[imd.length-1]||jt[jt.length-1];
+  const VN=vb(focus.lon-1.9,focus.lat-1.9,focus.lon+1.9,focus.lat+1.9);
+  const zA=VA[2]/800, zN=VN[2]/800;
+  // graticule + land
+  const g=el('g',{stroke:'#1d4462','stroke-width':0.8});
+  for(let lo=Math.ceil(BB[0]/2)*2;lo<=BB[2];lo+=2){const a=P(lo,BB[3]),b=P(lo,BB[1]);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1]},g)}
+  for(let la=Math.ceil(BB[1]/2)*2;la<=BB[3];la+=2){const a=P(BB[0],la),b=P(BB[2],la);el('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1]},g)}
+  el('path',{d:L.land,fill:'var(--land)',stroke:'var(--coast)','stroke-width':1});
+  el('path',{d:L.borders,fill:'none',stroke:'#6f8790','stroke-width':0.8,'stroke-dasharray':'4 3'});
+  const gl=el('g',{});
+  const lineD=pts=>pts.map((p,i)=>(i?'L':'M')+P(p.lon,p.lat).join(',')).join('');
+  // spread band
+  const band=el('g',{opacity:0.22});
+  if(cons.length>1&&cons[0].sep_km!=null){const t0=pt(cons[0].time),t1=pt(cons[cons.length-1].time);
+    for(let t=t0;t<=t1;t+=3600000){const c=interp(cons,t);const a=cons[c.i??cons.length-2],b=cons[(c.i??cons.length-2)+1]||a;const r=(a.sep_km+(c.f||0)*(b.sep_km-a.sep_km))/2;const p=P(c.lon,c.lat);el('circle',{cx:p[0],cy:p[1],r:Math.max(r,6)*kmPx,fill:'var(--cons)'},band)}}
+  if(past.length>1)el('path',{d:lineD(past.filter(p=>p.src==='jtwc')),fill:'none',stroke:'var(--jtwc)','stroke-width':2,'stroke-dasharray':'2 4'});
+  if(past.length>1)el('path',{d:lineD(past.filter(p=>p.src==='imd')),fill:'none',stroke:'var(--imd)','stroke-width':2,'stroke-dasharray':'2 4'});
+  if(imd.length)el('path',{d:lineD(imd),fill:'none',stroke:'var(--imd)','stroke-width':2.5});
+  if(jt.length)el('path',{d:lineD(jt),fill:'none',stroke:'var(--jtwc)','stroke-width':2.5,'stroke-dasharray':'8 5'});
+  if(cons.length&&cons[0].sep_km!=null)el('path',{d:lineD(cons),fill:'none',stroke:'var(--cons)','stroke-width':3.5,'stroke-linecap':'round'});
+  const dots=[];
+  [[imd,'var(--imd)',4],[jt,'var(--jtwc)',4],[cons[0]&&cons[0].sep_km!=null?cons:[],'var(--cons)',4.5]].forEach(([tr,c,r])=>tr.forEach(p=>{const q=P(p.lon,p.lat);dots.push(el('circle',{cx:q[0],cy:q[1],r,'data-r':r,fill:c,stroke:'#0d2236','stroke-width':1}))}));
+  let lfX=null,lq=null;if(lf){lq=P(lf.lon,lf.lat);lfX=el('path',{d:'M-7,-7L7,7M7,-7L-7,7',stroke:'var(--warn)','stroke-width':3})}
+  // places
+  const pl=D.places.places,watch=D.places.watch;
+  const near=st.near||{};
+  const nearest=Object.keys(near).filter(n=>!watch.includes(n)).sort((a,b)=>near[a].km-near[b].km).slice(0,5);
+  const labels=[];
+  for(const n in pl){const [la,lo]=pl[n];if(la<la0-1||la>la1+1||lo<lo0-1||lo>lo1+1)continue;const q=P(lo,la);
+    dots.push(el('circle',{cx:q[0],cy:q[1],r:3.2,'data-r':3.2,fill:'#fff'},gl));
+    const o=LBL[n]||['end',-8,-6];const t=el('text',{class:'svglabel','data-qx':q[0],'data-qy':q[1],'data-dx':o[1],'data-dy':o[2],'text-anchor':o[0]},gl);t.textContent=SHORT[n]||n;t.dataset.small=watch.includes(n)&&n!==watch[0]?1:0;labels.push(t)}
+  // storm markers
+  const storm=c=>{const g=el('g',{});el('circle',{r:16,fill:c,opacity:0.18},g);const s=el('g',{class:'spin'},g);el('path',{d:'M0,-9 C6,-9 9,-4 9,0 M0,9 C-6,9 -9,4 -9,0',fill:'none',stroke:c,'stroke-width':3,'stroke-linecap':'round'},s);el('circle',{r:3.5,fill:c},g);return g};
+  const mI=storm('var(--imd)'),mJ=storm('var(--jtwc)'),mC=storm('var(--cons)');
+  const place=(m,p)=>{if(!p){m.setAttribute('visibility','hidden');return}m.setAttribute('visibility','visible');const q=P(p.lon,p.lat);m.setAttribute('transform',`translate(${q[0]},${q[1]}) scale(${Z})`)};
+  // time range
+  const times=all.map(p=>pt(p.time));const T0=Math.min(...times),T1=Math.max(...times);
+  const nowFix=Math.max(...[imd[0],st.jtwc&&st.jtwc.fix].filter(Boolean).map(p=>pt(p.time)));
+  const slider=$('t');slider.min=0;slider.max=Math.round((T1-T0)/3600000);slider.value=Math.round((nowFix-T0)/3600000);
+  const pastI=past.filter(p=>p.src==='imd'),pastJ=past.filter(p=>p.src==='jtwc');
+  const trI=[...pastI.filter(p=>!imd.length||pt(p.time)<pt(imd[0].time)),...imd];
+  const trJ=[...pastJ.filter(p=>!jt.length||pt(p.time)<pt(jt[0].time)),...jt];
+  const consOK=cons.length>1&&cons[0].sep_km!=null;
+  const nearRows=[...watch,...nearest];
+  function render(){
+    const t=T0+(+slider.value)*3600000;
+    const pi=interp(trI,t),pj=interp(trJ,t),pc=consOK?interp(cons,t):(pi||pj);
+    place(mI,pi);place(mJ,pj);place(mC,consOK?pc:null);
+    $('clock').innerHTML=fmt(t)+'<small>'+fmtU(t)+(t<nowFix-1?' · observed':t<=nowFix+1?' · latest fix':' · forecast')+'</small>';
+    $('rImd').textContent=pos(pi);$('rJt').textContent=pos(pj);$('rCons').textContent=consOK?pos(pc):'needs both agencies';
+    $('rSep').textContent=(pi&&pj)?`IMD and JTWC centres are ${Math.round(hav([pi.lat,pi.lon],[pj.lat,pj.lon]))} km apart at this time.`:'Only one agency has a position at this time.';
+    $('near').innerHTML=nearRows.filter(n=>near[n]).map(n=>{const c=near[n],now=pc?Math.round(hav(pl[n],[pc.lat,pc.lon]))+' km':'–';
+      return `<tr><td>${SHORT[n]||n}${watch.includes(n)?'':' <span class="pill p-far">nearest</span>'}</td><td class="n">${now}</td><td class="n">${c.km} km</td><td>${fmt(round30(pt(c.time)))}</td><td>${band3(c.km)}</td></tr>`}).join('');
+  }
+  function setView(north){const v=north?VN:VA;Z=north?zN:zA;svg.setAttribute('viewBox',v.join(' '));$('vAll').setAttribute('aria-pressed',!north);$('vNorth').setAttribute('aria-pressed',north);
+    labels.forEach(t=>{t.setAttribute('x',+t.dataset.qx+t.dataset.dx*Z);t.setAttribute('y',+t.dataset.qy+t.dataset.dy*Z);t.style.fontSize=13*Z+'px';t.style.strokeWidth=3*Z+'px';t.style.display=(!north&&t.dataset.small==='1')?'none':''});
+    dots.forEach(c=>c.setAttribute('r',c.dataset.r*Z));if(lfX)lfX.setAttribute('transform',`translate(${lq[0]},${lq[1]}) scale(${Z})`);
+    g.setAttribute('stroke-width',0.8);render()}
+  $('vAll').onclick=()=>setView(false);$('vNorth').onclick=()=>setView(true);
+  slider.oninput=render;
+  $('play').onclick=()=>{if(timer){stop();return}$('play').textContent='Pause';$('play').setAttribute('aria-pressed','true');if(+slider.value>=+slider.max)slider.value=0;
+    timer=setInterval(()=>{const v=+slider.value+1;if(v>+slider.max){stop();return}slider.value=v;render()},140)};
+  setView(false);
+  // landfall
+  const LF=st.landfall||{};
+  const lfTxt=(o,n)=>o?`${n} ${o.lat.toFixed(2)}°N ${o.lon.toFixed(2)}°E (~${fmt(round30(pt(o.time)))})`:`${n}: no landfall in its forecast`;
+  if(lf){const nearestPlace=Object.keys(pl).sort((a,b)=>hav(pl[a],[lf.lat,lf.lon])-hav(pl[b],[lf.lat,lf.lon]))[0];
+    $('lfHead').textContent=`${LF.consensus?'Consensus':'Forecast'} landfall near ${nearestPlace}, ~${fmt(round30(pt(lf.time)))}`;
+    $('lfBody').textContent=[lfTxt(LF.consensus,'Consensus'),lfTxt(LF.imd,'IMD'),lfTxt(LF.jtwc,'JTWC')].join('. ')+'.'}
+  else{$('lfHead').textContent='No landfall in the current forecasts';$('lfBody').textContent='The forecast tracks stay over the sea for their full length.'}
+  // tables
+  $('cons').innerHTML=consOK?cons.map(c=>`<tr><td>${fmt(pt(c.time))}</td><td class="n">${c.imd[0].toFixed(1)}, ${c.imd[1].toFixed(1)}</td><td class="n">${c.jtwc[0].toFixed(1)}, ${c.jtwc[1].toFixed(1)}</td><td class="n"><b>${c.lat.toFixed(2)}, ${c.lon.toFixed(2)}</b></td><td class="n">${c.sep_km} km</td></tr>`).join(''):'<tr><td colspan="5">Only one agency has a forecast, so there is no consensus yet.</td></tr>';
+  const jtAt=tm=>{const f=jt.find(p=>p.time===tm);return f&&f.kt!=null?f.kt:'–'};
+  $('inten').innerHTML=(imd.length?imd:jt).map(p=>`<tr><td>${fmt(pt(p.time))}</td><td class="n">${p.kmh?p.kmh.join('–'):'–'}</td><td>${p.cls||'–'}</td><td class="n">${jtAt(p.time)}</td></tr>`).join('');
+  const sRow=(n,o,src)=>{const ok=o&&o.ok;const prev=o&&o.using_previous;return `<tr><td>${n}</td><td>${ok?'<span class="pill p-ok">updated</span>':prev?'<span class="pill p-near">kept previous</span>':'<span class="pill p-core">failed</span>'}</td><td class="note">${src||''}${o&&o.error?'<br>'+o.error:''}</td></tr>`};
+  $('status').innerHTML=`<tr><td>Last check</td><td colspan="2">${S?fmt(pt(S.checked)):'–'}</td></tr>`+
+    sRow('IMD',S&&S.imd,st.imd&&st.imd.url&&!st.imd.url.startsWith('fixture')?`<a href="${st.imd.url}">latest advisory</a>`:'')+
+    sRow('JTWC',S&&S.jtwc,st.jtwc?`Warning ${st.jtwc.warning}, issued ${fmtU(pt(st.jtwc.issued))}${st.jtwc.url&&!st.jtwc.url.startsWith('fixture')?` · <a href="${st.jtwc.url}">text</a>`:''}`:'');
+}
+function stop(){clearInterval(timer);timer=null;const b=$('play');if(b){b.textContent='Play';b.setAttribute('aria-pressed','false')}}
+load();setInterval(load,15*60*1000);
+</script>
+</body>
+</html>

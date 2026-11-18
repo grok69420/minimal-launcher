@@ -1,0 +1,60 @@
+name: Update cyclone data
+
+on:
+  schedule:
+    - cron: "17 * * * *"   # every hour at :17 UTC (GitHub may start it a few minutes late)
+  workflow_dispatch:        # "Run workflow" button for a manual update
+  push:                     # run once whenever code (not data) is pushed
+    branches: [main, cyclone-tracker]
+    paths-ignore: ["docs/data/**"]
+
+concurrency:
+  group: cyclone-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Fetch IMD + JTWC and rebuild data
+        run: python scripts/update.py
+
+      - name: Commit data if it changed
+        run: |
+          git config user.name "cyclone-bot"
+          git config user.email "cyclone-bot@users.noreply.github.com"
+          # monthly heartbeat so GitHub does not pause the schedule in quiet months (it pauses after 60 days without commits)
+          if [ "$(date -u +%d%H)" = "0100" ]; then date -u > docs/data/heartbeat.txt; git add docs/data/heartbeat.txt; fi
+          git add docs/data/latest.json docs/data/history.json
+          git diff --cached --quiet || (git commit -m "data: $(date -u +'%Y-%m-%d %H:%M') UTC" && git push)
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  # GitHub Pages only deploys from the repository's default branch
+  deploy:
+    needs: update
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deploy
+        uses: actions/deploy-pages@v4

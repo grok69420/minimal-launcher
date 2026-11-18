@@ -1,0 +1,13 @@
+TROPICAL CYCLONE ADVISORY NO. 15
+The Severe Cyclonic Storm "Akvan" over westcentral and adjoining central parts of south Bay of Bengal
+lay centred at 0600 UTC of 18th November near Latitude 13.1°N and Longitude 85.4°E, about 540 km southeast of Narsapur
+Date/Time (UTC) Position (Lat. 0N/ long. 0E) Maximum sustained surface wind speed (Kmph) Category of cyclonic disturbance
+18.11.26/0600 13.1/85.4 90-100 gusting to 110 Severe Cyclonic Storm
+18.11.26/1200 13.5/85.2 90-100 gusting to 110 Severe Cyclonic Storm
+18.11.26/1800 14.1/85.0 100-110 gusting to 120 Severe Cyclonic Storm
+19.11.26/0000 15.0/84.7 100-110 gusting to 120 Severe Cyclonic Storm
+19.11.26/0600 16.0/84.5 100-110 gusting to 120 Severe Cyclonic Storm
+19.11.26/1800 17.2/84.3 90-100 gusting to 110 Severe Cyclonic Storm
+20.11.26/0600 18.7/84.2 60-70 gusting to 80 Cyclonic Storm
+20.11.26/1800 20.3/84.4 40-50 gusting to 60 Depression
+21.11.26/0600 22.1/84.6 25-35 gusting to 45 Well Marked Low Pressure Area

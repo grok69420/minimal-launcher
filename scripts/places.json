@@ -1,0 +1,15 @@
+{
+  "_note": "Approximate coordinates (lat, lon) of Indian coastal reference places.",
+  "watch": ["Visakhapatnam", "Bheemunipatnam", "Gambheeram", "Bhogapuram"],
+  "places": {
+    "Kolkata": [22.57, 88.36], "Digha": [21.63, 87.51], "Balasore": [21.49, 86.93], "Paradip": [20.27, 86.67],
+    "Puri": [19.81, 85.83], "Gopalpur": [19.26, 84.91], "Kalingapatnam": [18.34, 84.12], "Srikakulam": [18.30, 83.90],
+    "Bhogapuram": [18.03, 83.50], "Bheemunipatnam": [17.89, 83.45], "Gambheeram": [17.86, 83.38], "Visakhapatnam": [17.69, 83.22],
+    "Kakinada": [16.99, 82.25], "Narsapur": [16.43, 81.70], "Machilipatnam": [16.19, 81.14], "Vijayawada": [16.51, 80.65],
+    "Ongole": [15.50, 80.05], "Nellore": [14.44, 79.99], "Chennai": [13.08, 80.27], "Puducherry": [11.93, 79.83],
+    "Nagapattinam": [10.77, 79.84], "Thoothukudi": [8.76, 78.13], "Kanyakumari": [8.08, 77.54], "Thiruvananthapuram": [8.52, 76.94],
+    "Kochi": [9.93, 76.27], "Kozhikode": [11.26, 75.78], "Mangaluru": [12.91, 74.86], "Panaji": [15.49, 73.83],
+    "Mumbai": [19.08, 72.88], "Veraval": [20.91, 70.37], "Porbandar": [21.64, 69.61], "Dwarka": [22.24, 68.97],
+    "Kandla": [23.03, 70.22], "Port Blair": [11.62, 92.73]
+  }
+}
