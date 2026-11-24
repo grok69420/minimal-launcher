@@ -31,6 +31,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import android.widget.Toast
+import android.util.Log
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import org.json.JSONObject
@@ -46,6 +47,7 @@ import java.util.concurrent.Executors
 class MainActivity : ComponentActivity() {
 
     companion object {
+        const val TAG = "StartupLaw"
         const val DEFAULT_HOME_URL = "https://claude.ai/artifact/DKsSn81Jr9f7GRAm4Rt1rq"
         // Remote settings: change these on GitHub and the installed app follows, no rebuild.
         const val CONFIG_URL =
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         applyConfig(prefs.getString("config", null)) // last known remote settings
+        applyModeExtra(intent)
 
         // Chrome mode: the library opens in a Chrome tab that shares your Chrome sign-in,
         // which is the only way Google sign-in works (Google blocks it inside app web views).
@@ -143,10 +146,14 @@ class MainActivity : ComponentActivity() {
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) errorView.visibility = View.VISIBLE
+                if (request.isForMainFrame) {
+                    Log.i(TAG, "offline screen: ${error.description}")
+                    errorView.visibility = View.VISIBLE
+                }
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                Log.i(TAG, "page $url")
                 CookieManager.getInstance().flush()
             }
         }
@@ -181,6 +188,7 @@ class MainActivity : ComponentActivity() {
                     val oldHome = homeUrl
                     if (applyConfig(json)) {
                         prefs.edit().putString("config", json).apply()
+                        Log.i(TAG, "config ok")
                         if (::web.isInitialized && homeUrl != oldHome && web.url?.startsWith(oldHome) == true) web.loadUrl(homeUrl)
                     }
                 }
@@ -189,6 +197,7 @@ class MainActivity : ComponentActivity() {
                 val latest = runCatching {
                     Regex("versionCode:\\s*(\\d+)").find(JSONObject(json).optString("body"))?.groupValues?.get(1)?.toInt()
                 }.getOrNull() ?: return@let
+                Log.i(TAG, "latest build $latest (this ${BuildConfig.VERSION_CODE})")
                 if (latest > BuildConfig.VERSION_CODE) main.post { updateBar.visibility = View.VISIBLE }
             }
         }
@@ -222,6 +231,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        val before = isChromeMode()
+        applyModeExtra(intent)
+        if (isChromeMode() != before) {
+            setIntent(intent)
+            if (isChromeMode()) openInChrome(homeUrl)
+            recreate()
+            return
+        }
         openFromIntent(intent)
     }
 
@@ -252,6 +269,15 @@ class MainActivity : ComponentActivity() {
         if (isChromeMode()) { openInChrome(target); return }
         errorView.visibility = View.GONE
         web.loadUrl(target)
+    }
+
+    /** Optional "mode" extra ("app" or "chrome"), used by shortcuts and the automated phone tests. */
+    private fun applyModeExtra(intent: Intent?) {
+        val m = intent?.getStringExtra("mode") ?: return
+        if (m == "app" || m == "chrome") {
+            prefs.edit().putString("mode", m).apply()
+            Log.i(TAG, "mode $m")
+        }
     }
 
     private fun isChromeMode() = prefs.getString("mode", "app") == "chrome"

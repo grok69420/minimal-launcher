@@ -37,7 +37,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           else
-            echo "::warning::No signing key secret set; signing with the cached build key. Add the STARTUP_LAW_KEYSTORE_BASE64 secret for a permanent key."
+            echo "::warning::No signing key secret set; signing with the cached build key."
           fi
 
       - name: Build APK
@@ -50,7 +50,62 @@ jobs:
           name: StartupLawLibrary-apk
           path: StartupLawLibrary.apk
 
-      - name: Publish download link
+  phone-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: StartupLawLibrary-apk
+
+      - name: Enable hardware acceleration for the virtual phone
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test on a virtual Pixel 6 (Android 14)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash tests/emulator-test.sh
+
+      - name: Bundle test results
+        if: always()
+        run: |
+          mkdir -p test-shots
+          zip -qr phone-test-results.zip test-shots
+
+      - name: Publish test results
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: startup-law-tests
+          name: Startup Law app – latest phone test
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          files: phone-test-results.zip
+          body: |
+            Virtual-phone test for build ${{ github.run_number }} (${{ github.sha }}): ${{ job.status }}.
+
+  publish:
+    needs: phone-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: StartupLawLibrary-apk
+
+      - name: Send to phones (publish download)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: startup-law-latest
@@ -60,6 +115,6 @@ jobs:
           files: StartupLawLibrary.apk
           body: |
             Android app for the Startup Law Library. Install StartupLawLibrary.apk below.
-            The app loads the live library, so design and content changes appear without reinstalling.
+            Passed the virtual-phone test before publishing.
             Build ${{ github.run_number }} from ${{ github.sha }}.
             versionCode: ${{ github.run_number }}
