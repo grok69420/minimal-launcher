@@ -21,7 +21,9 @@ front()   { adb shell dumpsys activity activities | grep -m1 -E "topResumedActiv
 img()     { python3 - "$OUT/$2.png" "$1" <<'PY'
 import sys
 from PIL import Image
-im = Image.open(sys.argv[1]).convert('RGB').resize((180, 400))
+im = Image.open(sys.argv[1]).convert('RGB')
+w, h = im.size
+im = im.crop((0, int(h * 0.06), w, int(h * 0.93))).resize((180, 400))  # ignore status and nav bars
 px = list(im.getdata())
 if sys.argv[2] == 'content':
     sys.exit(0 if len(set(px)) > 40 else 1)
@@ -44,6 +46,12 @@ for i in $(seq 1 18); do
   [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && break; sleep 5
 done
 sleep 90; quiet; adb shell input keyevent KEYCODE_HOME
+# Chrome: skip its welcome screens and notification prompt so they don't cover the pages under test.
+adb root >/dev/null 2>&1; sleep 3; adb wait-for-device
+adb shell 'echo "_ --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line'
+adb shell am set-debug-app --persistent com.android.chrome >/dev/null 2>&1
+adb shell pm grant com.android.chrome android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
+adb shell am force-stop com.android.chrome
 adb logcat -c
 log "Device: $(adb shell getprop ro.product.model) / Android $(adb shell getprop ro.build.version.release)"
 
@@ -80,7 +88,8 @@ shot_content 04-signin-link "sign-in page"
 
 log "6. Chrome mode (Google sign-in path)"
 adb shell am start -W -n "$PKG/.MainActivity" --es mode chrome >/dev/null
-sleep 12; nocrash "chrome mode"; shot 05-chrome-tab
+sleep 12; nocrash "chrome mode"; shot_content 05-chrome-tab "Chrome tab"
+front | grep -q "com.android.chrome" || fail "library did not open in a Chrome tab"
 adb shell input keyevent KEYCODE_BACK; sleep 4; alive "chrome home"; nocrash "chrome home"
 front | grep -q "$PKG" || fail "Chrome-mode home screen not shown after Back"
 shot 06-chrome-home; img lime 06-chrome-home || fail "Chrome-mode home screen missing its lime button"
@@ -107,10 +116,6 @@ PY
 python3 -m http.server 8000 --directory tests/web >/dev/null 2>&1 &
 SERVER_PID=$!
 sleep 2
-adb root >/dev/null 2>&1; sleep 3; adb wait-for-device
-adb shell 'echo "_ --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line'
-adb shell am set-debug-app --persistent com.android.chrome >/dev/null 2>&1
-adb shell am force-stop com.android.chrome
 for v in home map founders cases gaps quiz cards updates tutor; do
   adb shell am start -a android.intent.action.VIEW -d "http://10.0.2.2:8000/index.html?v=$v#$v" com.android.chrome >/dev/null
   sleep 7
@@ -119,11 +124,11 @@ for v in home map founders cases gaps quiz cards updates tutor; do
   img lime "web-$v" || fail "library screen '$v' did not render (no lime accent visible)"
 done
 cleanup; SERVER_PID=""
-adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
 
 log "10. Stress test: 400 random taps and swipes in the app"
 adb shell monkey -p "$PKG" --throttle 250 --pct-syskeys 0 -v 400 > "$OUT/monkey.txt" 2>&1 || fail "random-input test found a crash"
 nocrash "random input"; quiet
+adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
 
 adb logcat -d > "$OUT/logcat.txt"
 log "ALL TESTS PASSED"

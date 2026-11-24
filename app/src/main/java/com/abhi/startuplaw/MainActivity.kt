@@ -175,8 +175,9 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        if (savedInstanceState != null) web.restoreState(savedInstanceState)
-        else openFromIntent(intent)
+        // Restore the previous page if there is one (e.g. after rotation); otherwise load the library.
+        // Coming back from Chrome mode there is no saved page, so load fresh instead of showing a blank view.
+        if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) openFromIntent(intent)
         refreshRemote()
     }
 
