@@ -38,7 +38,12 @@ trap cleanup EXIT
 
 # Settle the freshly booted phone: hide "app isn't responding" pop-ups from the cold start.
 adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
-sleep 20; quiet; adb shell input keyevent KEYCODE_HOME
+# Google Play services restarts itself shortly after a cold boot and takes apps that use
+# its font provider with it, so let the phone settle before testing.
+for i in $(seq 1 18); do
+  [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && break; sleep 5
+done
+sleep 90; quiet; adb shell input keyevent KEYCODE_HOME
 adb logcat -c
 log "Device: $(adb shell getprop ro.product.model) / Android $(adb shell getprop ro.build.version.release)"
 
