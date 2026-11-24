@@ -16,13 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 200
 
       - name: Did the app itself change?
         id: changes
         run: |
+          # Compare with the build phones currently have (the startup-law-latest release).
+          git fetch -q --depth=200 origin "+refs/tags/startup-law-latest:refs/tags/startup-law-latest" || true
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
-             git diff --name-only HEAD~1 HEAD | grep -qE '^(app/|build.gradle.kts|settings.gradle.kts|gradle.properties)'; then
+             ! git rev-parse -q --verify startup-law-latest >/dev/null || \
+             ! git merge-base --is-ancestor startup-law-latest HEAD || \
+             git diff --name-only startup-law-latest HEAD | grep -qE '^(app/|build.gradle.kts|settings.gradle.kts|gradle.properties)'; then
             echo "app_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "app_changed=false" >> "$GITHUB_OUTPUT"
