@@ -14,7 +14,7 @@
    LAYOUT: dark sticky bar, dark hero with giant caps and lime pill CTA, bone sections washed with lime glow. */
 :root{color-scheme:light dark;
  --bg:light-dark(#F5F5F0,#111112);--paper:light-dark(#ffffff,#1b1b1d);--ink:light-dark(#111112,#F5F5F0);
- --mute:light-dark(#5f5a50,#a7a39a);--line:light-dark(rgba(10,10,10,.1),rgba(245,245,240,.13));
+ --mute:light-dark(#5f5a50,#a7a39a);--line:light-dark(rgba(10,10,10,.18),rgba(245,245,240,.18));
  --ox:#111112;--ox2:light-dark(#067A50,#AEF02E);--gold:#AEF02E;--stamp:#ff4d2e;--ok:light-dark(#067A50,#AEF02E)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
@@ -66,7 +66,7 @@ nav a[aria-current=page]{background:var(--gold);color:#0a0a0a;font-weight:700}
 .btn:disabled{opacity:.5}
 .btn:focus-visible,.q:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,.chip:focus-visible,.leaf:focus-visible,.cta:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 20px}
-.chip{font:600 14px Archivo,sans-serif;padding:9px 16px;min-height:42px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.chip{font:600 14px Archivo,sans-serif;padding:9px 16px;min-height:42px;border-radius:999px;border:1.5px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.04);background:var(--paper);color:var(--ink);cursor:pointer}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 details.les{border-bottom:1px solid var(--line);padding:6px 0}
 details.les summary{cursor:pointer;list-style:none;padding:14px 0;display:flex;gap:12px;align-items:baseline}
