@@ -6,6 +6,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -28,6 +30,10 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
 
 /**
  * Thin native shell around the Startup Law Library artifact.
@@ -37,12 +43,26 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : ComponentActivity() {
 
     companion object {
-        const val HOME_URL = "https://claude.ai/artifact/DKsSn81Jr9f7GRAm4Rt1rq"
+        const val DEFAULT_HOME_URL = "https://claude.ai/artifact/DKsSn81Jr9f7GRAm4Rt1rq"
+        // Remote settings: change these on GitHub and the installed app follows, no rebuild.
+        const val CONFIG_URL =
+            "https://raw.githubusercontent.com/grok69420/minimal-launcher/startup-law-android/config.json"
+        const val RELEASE_API =
+            "https://api.github.com/repos/grok69420/minimal-launcher/releases/tags/startup-law-latest"
+        const val APK_URL =
+            "https://github.com/grok69420/minimal-launcher/releases/download/startup-law-latest/StartupLawLibrary.apk"
         private const val INK = 0xFF111112.toInt()
         private const val BONE = 0xFFF5F5F0.toInt()
         private const val LIME = 0xFFAEF02E.toInt()
-        private const val REFRESH_AFTER_MS = 30 * 60 * 1000L // reload if away 30+ min
     }
+
+    private val io = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
+    private val prefs by lazy { getSharedPreferences("shell", MODE_PRIVATE) }
+    private var homeUrl = DEFAULT_HOME_URL
+    private var internalHosts = listOf("claude.ai", "anthropic.com", "claudeusercontent.com")
+    private var refreshAfterMs = 30 * 60 * 1000L
+    private lateinit var updateBar: View
 
     private lateinit var web: WebView
     private lateinit var errorView: View
@@ -66,10 +86,13 @@ class MainActivity : ComponentActivity() {
             progressBackgroundTintList = android.content.res.ColorStateList.valueOf(INK)
         }
         errorView = buildErrorView()
+        updateBar = buildUpdateBar()
+        applyConfig(prefs.getString("config", null)) // last known remote settings
 
         root.addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         root.addView(progress, FrameLayout.LayoutParams(MATCH_PARENT, dp(3), Gravity.TOP))
         root.addView(errorView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        root.addView(updateBar, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM))
         setContentView(root)
 
         // Keep content clear of the status bar, navigation bar and keyboard.
@@ -131,7 +154,55 @@ class MainActivity : ComponentActivity() {
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState)
         else openFromIntent(intent)
+        refreshRemote()
     }
+
+    /** Pull remote settings and check for a newer app build, off the main thread. */
+    private fun refreshRemote() {
+        io.execute {
+            fetch(CONFIG_URL)?.let { json ->
+                main.post {
+                    val oldHome = homeUrl
+                    if (applyConfig(json)) {
+                        prefs.edit().putString("config", json).apply()
+                        if (homeUrl != oldHome && web.url?.startsWith(oldHome) == true) web.loadUrl(homeUrl)
+                    }
+                }
+            }
+            fetch(RELEASE_API)?.let { json ->
+                val latest = runCatching {
+                    Regex("versionCode:\\s*(\\d+)").find(JSONObject(json).optString("body"))?.groupValues?.get(1)?.toInt()
+                }.getOrNull() ?: return@let
+                if (latest > BuildConfig.VERSION_CODE) main.post { updateBar.visibility = View.VISIBLE }
+            }
+        }
+    }
+
+    private fun applyConfig(json: String?): Boolean {
+        if (json == null) return false
+        return runCatching {
+            val o = JSONObject(json)
+            val url = o.optString("homeUrl")
+            if (url.startsWith("https://")) homeUrl = url
+            o.optJSONArray("internalHosts")?.let { arr ->
+                val list = (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }
+                if (list.isNotEmpty()) internalHosts = list
+            }
+            val mins = o.optInt("refreshMinutes", 0)
+            if (mins > 0) refreshAfterMs = mins * 60_000L
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun fetch(url: String): String? = runCatching {
+        (URL(url).openConnection() as HttpURLConnection).run {
+            connectTimeout = 8000; readTimeout = 8000
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Cache-Control", "no-cache")
+            try { if (responseCode == 200) inputStream.bufferedReader().readText() else null }
+            finally { disconnect() }
+        }
+    }.getOrNull()
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -147,7 +218,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // Pick up any newly published design or content after a long break.
-        if (pausedAt > 0 && SystemClock.elapsedRealtime() - pausedAt > REFRESH_AFTER_MS) web.reload()
+        if (pausedAt > 0 && SystemClock.elapsedRealtime() - pausedAt > refreshAfterMs) {
+            web.reload()
+            refreshRemote()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -159,14 +233,13 @@ class MainActivity : ComponentActivity() {
     private fun openFromIntent(intent: Intent?) {
         val data = intent?.data
         errorView.visibility = View.GONE
-        if (data != null && isInternal(data)) web.loadUrl(data.toString()) else web.loadUrl(HOME_URL)
+        if (data != null && isInternal(data)) web.loadUrl(data.toString()) else web.loadUrl(homeUrl)
     }
 
     private fun isInternal(uri: Uri): Boolean {
         val host = uri.host ?: return false
         if (uri.scheme != "https") return false
-        return host == "claude.ai" || host.endsWith(".claude.ai") ||
-            host.endsWith("anthropic.com") || host.endsWith("claudeusercontent.com")
+        return internalHosts.any { host == it || host.endsWith(".$it") }
     }
 
     private fun openExternally(uri: Uri) {
@@ -208,6 +281,37 @@ class MainActivity : ComponentActivity() {
                 web.reload()
             }
         }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+    }
+
+    /** Lime bar shown when GitHub has a newer build; installs over this one, keeping your sign-in. */
+    private fun buildUpdateBar(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setBackgroundColor(LIME)
+        setPadding(dp(20), dp(12), dp(12), dp(12))
+        visibility = View.GONE
+        addView(TextView(context).apply {
+            text = "APP UPDATE READY"
+            setTextColor(INK)
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = 14f
+        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        addView(Button(context).apply {
+            text = "INSTALL  →"
+            setTextColor(LIME)
+            typeface = Typeface.DEFAULT_BOLD
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(INK); cornerRadius = dp(999).toFloat()
+            }
+            setPadding(dp(18), dp(8), dp(18), dp(8))
+            setOnClickListener { openExternally(Uri.parse(APK_URL)) }
+        })
+        addView(Button(context).apply {
+            text = "LATER"
+            setTextColor(INK)
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener { updateBar.visibility = View.GONE }
+        })
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()

@@ -22,9 +22,11 @@ android {
         create("release") {
             if (keystorePath != null) {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+                // The keystore file itself is the secret (kept in a GitHub secret);
+                // its password and alias are fixed.
+                storePassword = "startuplaw"
+                keyAlias = "startuplaw"
+                keyPassword = "startuplaw"
             }
         }
     }
@@ -36,6 +38,8 @@ android {
                             else signingConfigs.getByName("debug")
         }
     }
+
+    buildFeatures { buildConfig = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -37,14 +37,10 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
             echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           else
-            echo "::warning::No signing key secret set; signing with the cached build key."
+            echo "::warning::No signing key secret set; signing with the cached build key. Add the STARTUP_LAW_KEYSTORE_BASE64 secret for a permanent key."
           fi
 
       - name: Build APK
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.STARTUP_LAW_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.STARTUP_LAW_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.STARTUP_LAW_KEY_PASSWORD }}
         run: |
           gradle assembleRelease --no-daemon --stacktrace
           cp app/build/outputs/apk/release/app-release.apk StartupLawLibrary.apk
@@ -66,3 +62,4 @@ jobs:
             Android app for the Startup Law Library. Install StartupLawLibrary.apk below.
             The app loads the live library, so design and content changes appear without reinstalling.
             Build ${{ github.run_number }} from ${{ github.sha }}.
+            versionCode: ${{ github.run_number }}
