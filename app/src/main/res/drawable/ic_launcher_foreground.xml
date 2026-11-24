@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- three book spines on a lime ledge -->
+    <path android:fillColor="#FFF5F5F0" android:pathData="M33,34h10v38h-10z"/>
+    <path android:fillColor="#FFAEF02E" android:pathData="M46,28h12v44h-12z"/>
+    <path android:fillColor="#FFF5F5F0" android:pathData="M61,38h10v34h-10z"/>
+    <path android:fillColor="#FFAEF02E" android:pathData="M30,74h48v5h-48z"/>
+    <path android:fillColor="#FF111112" android:pathData="M49,34h6v2h-6zM49,64h6v2h-6z"/>
+</vector>
