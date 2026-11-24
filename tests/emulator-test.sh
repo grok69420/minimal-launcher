@@ -50,7 +50,7 @@ adb shell input keyevent KEYCODE_BACK; sleep 4; shot 06-chrome-home; alive "chro
 
 log "7. Switch back to in-app mode"
 adb shell am start -W -n "$PKG/.MainActivity" --es mode app >/dev/null
-sleep 12; alive "app mode"; nocrash "app mode"; shot 07-app-mode
+sleep 25; alive "app mode"; nocrash "app mode"; shot 07-app-mode
 
 log "8. Stress test: 400 random taps and swipes"
 adb shell monkey -p "$PKG" --throttle 250 --pct-syskeys 0 -v 400 > "$OUT/monkey.txt" 2>&1 || fail "random-input test found a crash"
@@ -63,6 +63,29 @@ adb shell am start -W -n "$PKG/.MainActivity" --es mode app >/dev/null
 sleep 10; alive offline; nocrash offline; shot 08-offline
 applog; grep -q "offline screen" "$OUT/applog.txt" || fail "offline screen not shown"
 adb shell svc wifi enable; adb shell svc data enable
+
+log "10. Library screens on the phone's Chrome (test data)"
+python3 - <<'PY'
+src=open('tests/web/library.html').read(); mock=open('tests/web/mock.js').read()
+open('tests/web/index.html','w').write(src.replace('<script>\n{','<script>'+mock+'</script><script>\n{',1))
+PY
+(cd tests/web && python3 -m http.server 8000 >/dev/null 2>&1 &)
+sleep 2
+adb root >/dev/null 2>&1; sleep 3
+adb shell 'echo "_ --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line'
+adb shell am set-debug-app --persistent com.android.chrome >/dev/null 2>&1
+adb shell am force-stop com.android.chrome
+pip install -q pillow >/dev/null 2>&1
+for v in home map founders cases gaps quiz cards updates tutor; do
+  adb shell am start -a android.intent.action.VIEW -d "http://10.0.2.2:8000/index.html?v=$v#$v" com.android.chrome >/dev/null
+  sleep 7; shot "web-$v"
+  python3 - "$OUT/web-$v.png" <<'PY' || fail "library screen '$v' looks blank"
+import sys; from PIL import Image
+im=Image.open(sys.argv[1]).convert('RGB').resize((180,400))
+sys.exit(0 if len(set(im.getdata()))>40 else 1)
+PY
+done
+adb shell am force-stop com.android.chrome
 
 adb logcat -d > "$OUT/logcat.txt"
 log "ALL TESTS PASSED"

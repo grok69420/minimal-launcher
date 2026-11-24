@@ -11,8 +11,22 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      app_changed: ${{ steps.changes.outputs.app_changed }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Did the app itself change?
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             git diff --name-only HEAD~1 HEAD | grep -qE '^(app/|build.gradle.kts|settings.gradle.kts|gradle.properties)'; then
+            echo "app_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app_changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -98,7 +112,8 @@ jobs:
             Virtual-phone test for build ${{ github.run_number }} (${{ github.sha }}): ${{ job.status }}.
 
   publish:
-    needs: phone-test
+    needs: [build, phone-test]
+    if: needs.build.outputs.app_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
