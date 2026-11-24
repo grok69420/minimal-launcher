@@ -331,6 +331,7 @@ function view(){return(location.hash||'#home').slice(1)}
 function render(force){const v=view();
  document.querySelectorAll('nav a').forEach(a=>a.toggleAttribute('aria-current',a.getAttribute('href')==='#'+v||(v.startsWith('m-')&&a.getAttribute('href')==='#home')));
  document.querySelectorAll('nav a[aria-current]').forEach(a=>a.setAttribute('aria-current','page'));
+ const cur=document.querySelector('nav a[aria-current]');if(cur){const n=$('#nav');const l=cur.offsetLeft-n.clientWidth/2+cur.clientWidth/2;n.scrollTo({left:Math.max(0,l),behavior:'auto'})}
  if(!force&&v==='tutor'&&$('#tform'))return;
  let h;if(S.state!=='ready')h=vState();else if(S.q.trim())h=vSearch();else if(v.startsWith('m-'))h=vModule(v.slice(2));
  else h=({home:vHome,map:vMap,founders:vFounders,cases:vCases,gaps:vGaps,quiz:vQuiz,cards:vCards,updates:vUpdates,tutor:vTutor}[v]||vMissing)();
