@@ -28,6 +28,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import org.json.JSONObject
@@ -76,6 +79,16 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(INK)
         )
         super.onCreate(savedInstanceState)
+        applyConfig(prefs.getString("config", null)) // last known remote settings
+
+        // Chrome mode: the library opens in a Chrome tab that shares your Chrome sign-in,
+        // which is the only way Google sign-in works (Google blocks it inside app web views).
+        if (isChromeMode()) {
+            setupChromeHub()
+            if (savedInstanceState == null) openFromIntent(intent)
+            refreshRemote()
+            return
+        }
 
         val root = FrameLayout(this).apply { setBackgroundColor(INK) }
         web = WebView(this).apply { setBackgroundColor(INK) }
@@ -87,7 +100,6 @@ class MainActivity : ComponentActivity() {
         }
         errorView = buildErrorView()
         updateBar = buildUpdateBar()
-        applyConfig(prefs.getString("config", null)) // last known remote settings
 
         root.addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         root.addView(progress, FrameLayout.LayoutParams(MATCH_PARENT, dp(3), Gravity.TOP))
@@ -121,6 +133,10 @@ class MainActivity : ComponentActivity() {
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
+                if (isGoogleSignIn(uri)) {
+                    switchToChromeMode()
+                    return true
+                }
                 if (isInternal(uri)) return false
                 openExternally(uri)
                 return true
@@ -165,7 +181,7 @@ class MainActivity : ComponentActivity() {
                     val oldHome = homeUrl
                     if (applyConfig(json)) {
                         prefs.edit().putString("config", json).apply()
-                        if (homeUrl != oldHome && web.url?.startsWith(oldHome) == true) web.loadUrl(homeUrl)
+                        if (::web.isInitialized && homeUrl != oldHome && web.url?.startsWith(oldHome) == true) web.loadUrl(homeUrl)
                     }
                 }
             }
@@ -219,21 +235,103 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Pick up any newly published design or content after a long break.
         if (pausedAt > 0 && SystemClock.elapsedRealtime() - pausedAt > refreshAfterMs) {
-            web.reload()
+            if (::web.isInitialized) web.reload()
             refreshRemote()
         }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        web.saveState(outState)
+        if (::web.isInitialized) web.saveState(outState)
     }
 
     /** Sign-in links from email (claude.ai) open here; everything else starts at the library. */
     private fun openFromIntent(intent: Intent?) {
         val data = intent?.data
+        val target = if (data != null && isInternal(data)) data.toString() else homeUrl
+        if (isChromeMode()) { openInChrome(target); return }
         errorView.visibility = View.GONE
-        if (data != null && isInternal(data)) web.loadUrl(data.toString()) else web.loadUrl(homeUrl)
+        web.loadUrl(target)
+    }
+
+    private fun isChromeMode() = prefs.getString("mode", "app") == "chrome"
+
+    private fun isGoogleSignIn(uri: Uri): Boolean {
+        val host = uri.host ?: return false
+        return host == "accounts.google.com" || host.endsWith(".accounts.google.com")
+    }
+
+    /** Called when Google sign-in starts inside the app: move to Chrome mode for good. */
+    private fun switchToChromeMode() {
+        prefs.edit().putString("mode", "chrome").apply()
+        Toast.makeText(this, "Google sign-in opens in Chrome. The library will open there from now on.", Toast.LENGTH_LONG).show()
+        openInChrome(homeUrl)
+        recreate()
+    }
+
+    private fun switchToAppMode() {
+        prefs.edit().putString("mode", "app").apply()
+        recreate()
+    }
+
+    private fun openInChrome(url: String) {
+        val colors = CustomTabColorSchemeParams.Builder()
+            .setToolbarColor(INK).setNavigationBarColor(INK).build()
+        val tab = CustomTabsIntent.Builder()
+            .setDefaultColorSchemeParams(colors)
+            .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
+            .setShowTitle(false)
+            .setUrlBarHidingEnabled(true)
+            .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
+            .build()
+        try { tab.launchUrl(this, Uri.parse(url)) } catch (_: Exception) { openExternally(Uri.parse(url)) }
+    }
+
+    /** Small home screen shown behind the Chrome tab: open the library, update, or switch mode. */
+    private fun setupChromeHub() {
+        val root = FrameLayout(this).apply { setBackgroundColor(INK) }
+        updateBar = buildUpdateBar()
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(32), dp(32), dp(32), dp(32))
+            addView(TextView(context).apply {
+                text = "STARTUP\nLAW LIBRARY"
+                setTextColor(BONE); textSize = 34f; gravity = Gravity.CENTER
+                typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
+            })
+            addView(TextView(context).apply {
+                text = "Opens in Chrome so your Google sign-in works."
+                setTextColor(Color.parseColor("#A7A39A")); textSize = 15f; gravity = Gravity.CENTER
+                setPadding(0, dp(12), 0, dp(28))
+            })
+            addView(pillButton("OPEN LIBRARY  →", LIME, INK) { openInChrome(homeUrl) },
+                LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(Button(context).apply {
+                text = "Use in-app mode instead (email sign-in)"
+                isAllCaps = false
+                setTextColor(Color.parseColor("#A7A39A"))
+                setBackgroundColor(Color.TRANSPARENT)
+                setOnClickListener { switchToAppMode() }
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(18) })
+        }
+        root.addView(col, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        root.addView(updateBar, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM))
+        setContentView(root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
+    }
+
+    private fun pillButton(label: String, bg: Int, fg: Int, onClick: () -> Unit) = Button(this).apply {
+        text = label
+        setTextColor(fg)
+        typeface = Typeface.DEFAULT_BOLD
+        background = android.graphics.drawable.GradientDrawable().apply { setColor(bg); cornerRadius = dp(999).toFloat() }
+        setPadding(dp(28), dp(14), dp(28), dp(14))
+        setOnClickListener { onClick() }
     }
 
     private fun isInternal(uri: Uri): Boolean {
