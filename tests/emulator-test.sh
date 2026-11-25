@@ -24,12 +24,14 @@ import sys
 from PIL import Image
 im = Image.open(sys.argv[1]).convert('RGB')
 w, h = im.size
-im = im.crop((0, int(h * 0.06), w, int(h * 0.93))).resize((180, 400))
-px = list(im.getdata())
+im = im.crop((0, int(h * 0.06), w, int(h * 0.93)))
+px = [im.getpixel((x, y)) for y in range(0, im.size[1], 3) for x in range(0, im.size[0], 3)]
 if sys.argv[2] == 'content':
-    sys.exit(0 if len(set(px)) > 40 else 1)
-ice = sum(1 for r, g, b in px if abs(r-143) < 40 and abs(g-232) < 35 and abs(b-255) < 30)
-sys.exit(0 if ice > 8 else 1)
+    sys.exit(0 if len({(r//8, g//8, b//8) for r, g, b in px}) > 40 else 1)
+# The app = mostly night-ice background with cold cyan accents.
+dark = sum(1 for r, g, b in px if r < 40 and g < 50 and b < 60 and b >= r) / len(px)
+ice = sum(1 for r, g, b in px if b > 170 and g > 150 and b - r > 50)
+sys.exit(0 if dark > 0.35 and ice > 15 else 1)
 PY
 }
 check_shot() { shot "$1"; img content "$1" || fail "$1 is blank"; img ice "$1" || fail "$1 does not show the app"; }

@@ -195,7 +195,7 @@ private fun AppNav(nav: NavHostController, vm: AppViewModel, lib: Library) {
 private fun BottomBar(current: Tab?, onSelect: (Tab) -> Unit) {
     Box(
         Modifier.fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Ice.Night.copy(alpha = 0.92f), Ice.Night)))
+            .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to Ice.Night, 1f to Ice.Night))
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
