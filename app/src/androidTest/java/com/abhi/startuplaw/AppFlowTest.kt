@@ -73,7 +73,7 @@ class AppFlowTest {
 
         // Library -> volume -> lesson -> mark learned -> next lesson
         tapTag("vol_foundations"); waitTag("lesson_f1"); shot("02-volume")
-        tapTag("lesson_f1"); waitTag("mark_learned"); shot("03-lesson-top")
+        tapTag("lesson_f1"); waitText("Recognition is the gateway to most startup-specific benefits, and its definition changed on 4 February 2026."); shot("03-lesson-top")
         tapTag("mark_learned"); waitText("✓ Learned — tap to undo")
         shot("04-lesson-learned")
         tapTag("next_lesson"); waitText("Choosing the entity: private company, LLP or OPC"); shot("05-next-lesson")
@@ -86,10 +86,10 @@ class AppFlowTest {
         back()
 
         // Playbook: story + trap
-        tab("playbook"); waitTag("story_byjus"); shot("08-playbook")
-        tapTag("story_byjus"); waitTag("mark_studied"); shot("09-story")
+        tab("playbook"); waitTag("story_anthropic-ltbt"); shot("08-playbook")
+        tapTag("story_byjus"); waitText("WHAT HAPPENED"); shot("09-story")
         tapTag("mark_studied"); waitText("✓ Studied — tap to undo")
-        back(); waitTag("story_byjus")
+        back(); waitTag("tab_playbook")
         scrollTo(hasText("Term-sheet traps ·", substring = true)); rule.onNodeWithText("Term-sheet traps ·", substring = true).tap(); rule.waitForIdle()
         tapTag("trap_participating-pref"); waitText("ASK FOR INSTEAD"); shot("10-trap-open")
 
