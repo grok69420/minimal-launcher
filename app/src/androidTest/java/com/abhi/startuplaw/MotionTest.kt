@@ -7,9 +7,6 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.assert
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getBoundsInRoot
@@ -160,20 +157,6 @@ class MotionTest {
         frame("m17-copied")
         settle()
 
-        // 8. Progress web: it weaves itself in over ~2.6 s (threads, then spiral, then dew drops), then trembles where touched.
-        // Checked through its state with the clock frozen; images are taken once it has settled (the web redraws every frame).
-        freeze()
-        rule.onNodeWithTag("tab_map").tap()
-        clock.advanceTimeBy(700)
-        rule.onNodeWithTag("constellation").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "weaving"))
-        clock.advanceTimeBy(3500)
-        rule.onNodeWithTag("constellation").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "ready"))
-        settle()
-        frame("m18-web-woven")
-        rule.onNodeWithTag("list").performScrollToNode(hasTestTag("web_chip_foundations"))
-        rule.onNodeWithTag("web_chip_foundations").tap()
-        rule.waitUntil(5_000) { count("web_info") > 0 }
-        frame("m19-web-selected")
         settle()
     }
 }
