@@ -101,7 +101,6 @@ fun MapScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit) {
                 }
             }
         }
-        item(key = "sky") { SpiderWeb(bs, pct, go) }
         val next = bs.filter { !it.small }.mapNotNull { b -> b.leaves.firstOrNull { !it.on }?.let { b to it } }.take(4)
         if (next.isNotEmpty()) item(key = "next") {
             FrostCard(Modifier.fillMaxWidth(), accent = Ice.Cyan) {

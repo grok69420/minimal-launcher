@@ -142,14 +142,6 @@ class AppFlowTest {
 
         // Progress map shows the learned lesson
         tab("map"); waitTag("progress_card"); shot("15-map")
-        scrollTo(hasTestTag("constellation"))
-        shot("15a-mind-map")
-        // Minimal mind map: tapping the top line (Vol. 0) or one of its dots opens a card; tapping the centre clears it.
-        rule.onNodeWithTag("constellation").performTouchInput { click(Offset(width / 2f, height * 0.22f)) }
-        waitTag("web_info"); shot("15b-mind-map-selected")
-        rule.onNodeWithTag("constellation").performTouchInput { click(center) }
-        rule.waitForIdle()
-        assertTrue(rule.onAllNodes(hasTestTag("web_info")).fetchSemanticsNodes().isEmpty())
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
         shot("16-map-branches")
