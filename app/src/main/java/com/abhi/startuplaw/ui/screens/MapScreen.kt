@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abhi.startuplaw.AppViewModel
 import com.abhi.startuplaw.data.Game
@@ -91,21 +92,29 @@ fun MapScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit) {
             FrostCard(Modifier.fillMaxWidth()) {
                 Hud("Badges · ${earned.size} of ${Game.allBadges.size}")
                 Spacer(Modifier.height(10.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Game.allBadges.forEach { b ->
-                        val got = b.id in earned
-                        Column(
-                            Modifier.width(96.dp).clip(RoundedCornerShape(14.dp))
-                                .background(if (got) Ice.Aurora.copy(alpha = 0.14f) else Color.Transparent)
-                                .border(1.dp, if (got) Ice.Aurora else Ice.EdgeLo, RoundedCornerShape(14.dp))
-                                .semantics(mergeDescendants = true) { contentDescription = b.title + if (got) ", earned" else ", locked: " + b.how }
-                                .testTag("badge_${b.id}").padding(10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            com.abhi.startuplaw.ui.components.Icon(com.abhi.startuplaw.ui.components.Glyph.Spark, if (got) Ice.Aurora else Ice.Dim, 20.dp)
-                            Spacer(Modifier.height(6.dp))
-                            Text(b.title, style = MaterialTheme.typography.labelMedium, color = if (got) Ice.Frost else Ice.Dim, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                            if (!got) Text(b.how, style = MaterialTheme.typography.labelSmall, color = Ice.Dim, maxLines = 3, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Game.allBadges.chunked(3).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { b ->
+                                val got = b.id in earned
+                                Column(
+                                    Modifier.weight(1f).heightIn(min = 104.dp).clip(RoundedCornerShape(14.dp))
+                                        .background(if (got) Ice.Aurora.copy(alpha = 0.14f) else Color.Transparent)
+                                        .border(1.dp, if (got) Ice.Aurora else Ice.EdgeLo, RoundedCornerShape(14.dp))
+                                        .semantics(mergeDescendants = true) { contentDescription = b.title + if (got) ", earned" else ", locked: " + b.how }
+                                        .testTag("badge_${b.id}").padding(horizontal = 8.dp, vertical = 10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    com.abhi.startuplaw.ui.components.Icon(com.abhi.startuplaw.ui.components.Glyph.Spark, if (got) Ice.Aurora else Ice.Dim, 20.dp)
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(b.title, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 16.sp), color = if (got) Ice.Frost else Ice.Mist,
+                                        maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(if (got) "Earned" else b.how, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, lineHeight = 14.sp),
+                                        color = if (got) Ice.Aurora else Ice.Dim, maxLines = 3, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                }
+                            }
+                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }

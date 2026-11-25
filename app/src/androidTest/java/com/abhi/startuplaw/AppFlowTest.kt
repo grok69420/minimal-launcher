@@ -123,6 +123,7 @@ class AppFlowTest {
 
         // Progress map shows the learned lesson
         tab("map"); waitTag("player_card"); shot("15-map")
+        scrollTo(hasTestTag("badge_unicorn")); shot("15b-badges")
         scrollTo(hasTestTag("constellation"))
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
@@ -160,13 +161,13 @@ class AppFlowTest {
 
         // Rotation keeps the app working
         rule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-        Thread.sleep(1500); waitTag("open_search"); shot("22-landscape")
+        Thread.sleep(1500); waitTag("player_card"); shot("22-landscape")
         rule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
-        Thread.sleep(1500); waitTag("open_search")
+        Thread.sleep(1500); waitTag("player_card")
 
         // Progress survives the activity being recreated
         rule.activityRule.scenario.recreate()
-        waitTag("open_search")
+        waitTag("player_card")
         tab("map"); waitTag("player_card")
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
