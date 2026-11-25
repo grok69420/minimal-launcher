@@ -168,7 +168,7 @@ class AppFlowTest {
         // Progress survives the activity being recreated
         rule.activityRule.scenario.recreate()
         waitTag("player_card")
-        tab("map"); waitTag("player_card")
+        tab("map"); waitTag("list")
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
     }
