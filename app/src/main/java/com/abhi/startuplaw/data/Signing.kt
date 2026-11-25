@@ -34,23 +34,6 @@ object Signing {
     fun appKeys(context: Context): List<PublicKey> =
         signatureBytes(context.packageManager, context.packageName, null).mapNotNull { toCert(it)?.publicKey }
 
-    fun appCertDigests(context: Context): Set<String> =
-        signatureBytes(context.packageManager, context.packageName, null).map { sha256(it) }.toSet()
-
-    /** Signing-certificate digests of an APK file that has not been installed yet. */
-    fun archiveCertDigests(pm: PackageManager, apkPath: String): Pair<String?, Set<String>> {
-        val info = archiveInfo(pm, apkPath) ?: return null to emptySet()
-        return info.packageName to signatureBytes(pm, null, info).map { sha256(it) }.toSet()
-    }
-
-    @SuppressLint("PackageManagerGetSignatures")
-    @Suppress("DEPRECATION")
-    private fun archiveInfo(pm: PackageManager, path: String): PackageInfo? = runCatching {
-        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
-        if (Build.VERSION.SDK_INT >= 33) pm.getPackageArchiveInfo(path, PackageManager.PackageInfoFlags.of(flags.toLong()))
-        else pm.getPackageArchiveInfo(path, flags)
-    }.getOrNull()
-
     @SuppressLint("PackageManagerGetSignatures")
     @Suppress("DEPRECATION")
     private fun signatureBytes(pm: PackageManager, pkg: String?, given: PackageInfo?): List<ByteArray> = runCatching {

@@ -258,7 +258,7 @@ fun AboutScreen(vm: AppViewModel, lib: Library, back: () -> Unit) {
                 listOf(
                     "No account and no tracking. Your progress is stored only on this phone (and in your phone's own backup).",
                     "Library downloads are accepted only when signed with this app's own release key, and never replace a newer copy with an older one.",
-                    "App updates install only if the download is this app, signed with the same key.",
+                    "App updates come only from the official release page and open in your browser; Android installs them over this app only if they carry the same signature.",
                     "HTTPS only. Source links open in your browser.",
                 ).forEach { Text("· $it", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist, modifier = Modifier.padding(vertical = 3.dp)) }
             }

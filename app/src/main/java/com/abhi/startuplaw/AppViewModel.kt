@@ -1,7 +1,6 @@
 package com.abhi.startuplaw
 
 import android.app.Application
-import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.abhi.startuplaw.data.Card
@@ -59,12 +58,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- sync & updates ----
     fun syncNow() = la.refresh(true)
 
-    private val _installIntent = MutableStateFlow<Intent?>(null)
-    val installIntent: StateFlow<Intent?> = _installIntent.asStateFlow()
-    fun consumeInstall() { _installIntent.value = null }
-    fun canInstall() = la.updater.canInstall()
-    fun allowInstallsIntent() = la.updater.allowInstallsIntent()
-    fun downloadUpdate() = viewModelScope.launch { la.updater.download()?.let { _installIntent.value = it } }
 
     // ---- quiz ----
     private val _quiz = MutableStateFlow(QuizSession())

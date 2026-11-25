@@ -1,6 +1,5 @@
 package com.abhi.startuplaw
 
-import android.content.ActivityNotFoundException
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -66,6 +65,7 @@ import com.abhi.startuplaw.ui.components.Icon
 import com.abhi.startuplaw.ui.components.IceBackground
 import com.abhi.startuplaw.ui.components.IceButton
 import com.abhi.startuplaw.ui.components.Hud
+import com.abhi.startuplaw.ui.components.openExternal
 import com.abhi.startuplaw.ui.screens.AboutScreen
 import com.abhi.startuplaw.ui.screens.CaseScreen
 import com.abhi.startuplaw.ui.screens.CasesScreen
@@ -125,15 +125,6 @@ fun AppRoot(vm: AppViewModel) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route.orEmpty()
     val tab = Tab.entries.firstOrNull { route.substringBefore('?') == it.route }
-    val ctx = LocalContext.current
-    val install by vm.installIntent.collectAsStateWithLifecycle()
-
-    LaunchedEffect(install) {
-        val i = install ?: return@LaunchedEffect
-        vm.consumeInstall()
-        try { ctx.startActivity(i) } catch (_: ActivityNotFoundException) {}
-    }
-
     val library = lib
     if (library == null) { IceBackground { }; return }
 
@@ -238,15 +229,10 @@ private fun UpdateBanner(vm: AppViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Hud(if (up.downloading) "Downloading ${(up.progress * 100).toInt()}%" else "App update ready", color = Ice.Cyan)
-                Text(
-                    if (up.error.isNotBlank()) up.error else "Installs over this app. Your progress stays.",
-                    style = MaterialTheme.typography.bodyMedium, color = if (up.error.isNotBlank()) Ice.Coral else Ice.Mist,
-                )
+                Hud("App update ready", color = Ice.Cyan)
+                Text("Downloads in your browser. Open it to install over this app; your progress stays.", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
             }
-            IceButton(if (up.downloading) "…" else "Install", enabled = !up.downloading, onClick = {
-                if (!vm.canInstall()) runCatching { ctx.startActivity(vm.allowInstallsIntent()) } else vm.downloadUpdate()
-            })
+            IceButton("Get", onClick = { openExternal(ctx, BuildConfig.APK_URL) })
         }
     }
 }
