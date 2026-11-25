@@ -160,23 +160,20 @@ class MotionTest {
         frame("m17-copied")
         settle()
 
-        // 8. Progress web: it weaves itself in (threads, then spiral, then dew drops), then trembles where it is touched.
+        // 8. Progress web: it weaves itself in over ~2.6 s (threads, then spiral, then dew drops), then trembles where touched.
+        // Checked through its state with the clock frozen; images are taken once it has settled (the web redraws every frame).
         freeze()
         rule.onNodeWithTag("tab_map").tap()
         clock.advanceTimeBy(700)
-        frame("m18-web-weaving")
         rule.onNodeWithTag("constellation").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "weaving"))
         clock.advanceTimeBy(3500)
         rule.onNodeWithTag("constellation").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "ready"))
-        frame("m19-web-woven")
         settle()
+        frame("m18-web-woven")
         rule.onNodeWithTag("list").performScrollToNode(hasTestTag("web_chip_foundations"))
-        freeze()
         rule.onNodeWithTag("web_chip_foundations").tap()
-        clock.advanceTimeBy(180)
-        frame("m20-web-plucked")
-        clock.advanceTimeBy(2000)
-        frame("m21-web-settled")
+        rule.waitUntil(5_000) { count("web_info") > 0 }
+        frame("m19-web-selected")
         settle()
     }
 }
