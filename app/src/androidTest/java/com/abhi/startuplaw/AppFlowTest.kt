@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
@@ -67,6 +68,8 @@ class AppFlowTest {
     private fun tapTag(tag: String) { scrollTo(hasTestTag(tag)); rule.onNodeWithTag(tag).tap(); rule.waitForIdle() }
     private fun tapText(text: String) { scrollTo(hasText(text)); rule.onNodeWithText(text).tap(); rule.waitForIdle() }
     private fun tab(route: String) { rule.onNodeWithTag("tab_$route").tap(); rule.waitForIdle() }
+    /** Home keeps its scroll position; jump back to the top so the search bar is on screen. */
+    private fun top() { rule.waitForIdle(); rule.onNodeWithTag("list").performScrollToIndex(0); rule.waitForIdle() }
     private fun back() { rule.onNodeWithTag("back").tap(); rule.waitForIdle() }
 
     @Test
@@ -100,9 +103,10 @@ class AppFlowTest {
         // New volumes: GTM, IP, marketing, sales
         tapTag("vol_gtm"); waitTag("lesson_gtm2"); shot("05c-volume-gtm")
         tapTag("lesson_gtm2"); waitText("Pricing, discounts and competition law"); shot("05d-lesson-pricing")
-        back(); waitTag("lesson_gtm2"); back(); waitTag("open_search")
+        back(); waitTag("lesson_gtm2"); back(); waitTag("vol_gtm")
         tapTag("vol_ip"); waitTag("lesson_ip2"); tapTag("lesson_ip2"); waitText("Patents for software, AI and medicines"); shot("05e-lesson-patents")
-        back(); waitTag("lesson_ip2"); back(); waitTag("open_search")
+        back(); waitTag("lesson_ip2"); back(); waitTag("vol_ip")
+        top(); waitTag("open_search")
 
         // Cases
         tab("cases"); waitTag("case_tiger-global-2026"); shot("06-cases")
