@@ -1,0 +1,494 @@
+{
+ "date": "2026-11-25",
+ "upserts": [
+  {
+   "c": "cases",
+   "id": "amazon-future-2021",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/104517457/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "azadi-2003",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/1960330/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "cox-kings-2023",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/198803407/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "engineering-analysis-2021",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/170521216/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "formula-one-2017",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/23544710/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "golikari-1967",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/452434/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "interplay-2023",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/139003074/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "louboutin-2018",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/99622088/"
+    },
+    "citation": "CS (COMM) 344/2018, Delhi High Court (single judge), 2 Nov 2018",
+    "status": "Narrowed: a Delhi High Court Division Bench disapproved its reasoning on 4 Apr 2019 (RFA (OS)(COMM) 1/2019)"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "mcdowell-1985",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/1022888/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "nestle-2023",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/111682906/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "pasl-2021",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/79928496/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "percept-2006",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/571375/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "puttaswamy-2017",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/91938676/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "rangaraj-1992",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/140212/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "shreya-singhal-2015",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/110813550/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "tata-mistry-2021",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/5416696/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "vijay-karia-2020",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/52650140/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "vodafone-2012",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/115852355/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "dabur-colortek-2010",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/82383482/"
+    },
+    "citation": "FAO (OS) 625/2009, (2010) 167 DLT 278 (DB)"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "biocon-2020",
+   "data": {
+    "citation": "CIT (LTU) v Biocon Ltd, [2020] 121 taxmann.com 351 (Karnataka HC, 11 Nov 2020)",
+    "date": "11 Nov 2020",
+    "src": {
+     "t": "ITAT Special Bench ruling (2013) that the High Court upheld, on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/101460341/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "google-android-2023",
+   "data": {
+    "citation": "Competition Appeal (AT) No. 01 of 2023, NCLAT, 29 Mar 2023",
+    "src": {
+     "t": "NCLAT judgment (PDF via LiveLaw)",
+     "u": "https://www.livelaw.in/pdf_upload/nclat-order-29032023-478569.pdf"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "amazon-flipkart-cci-2021",
+   "data": {
+    "citation": "Writ Appeal No. 562/2021 c/w 563/2021, Karnataka High Court (DB), 23 Jul 2021",
+    "src": {
+     "t": "Karnataka High Court judgment (PDF via LiveLaw)",
+     "u": "https://www.livelaw.in/pdf_upload/flipkart-398070.pdf"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "burger-king-pune",
+   "data": {
+    "citation": "Bombay High Court IA No. 11936/2024 (order 2 Dec 2024); Supreme Court Diary No. 9767/2025 (order 7 Mar 2025)"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "rapido-ccpa-2025",
+   "data": {
+    "citation": "CCPA suo motu order against Roppen Transportation Services Pvt Ltd, announced 20 Aug 2025"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "indirect-transfer",
+   "data": {
+    "src": [
+     {
+      "t": "Vodafone v Union of India (SC, 2012) on Indian Kanoon",
+      "u": "https://indiankanoon.org/doc/115852355/"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "mfn-clause",
+   "data": {
+    "src": [
+     {
+      "t": "AO v Nestle SA (SC, 2023) on Indian Kanoon",
+      "u": "https://indiankanoon.org/doc/111682906/"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "marketplace-inventory",
+   "data": {
+    "src": [
+     {
+      "t": "DPIIT Press Note 2 (2018 Series)",
+      "u": "https://www.dpiit.gov.in/static/uploads/2025/07/2959b696766693441f5eb45d3eb49f97.pdf"
+     },
+     {
+      "t": "PIB: FDI policy on e-commerce, effective 1 Feb 2019",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=1562493&reg=48&lang=2"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "c1",
+   "data": {
+    "sources": [
+     {
+      "t": "Tata v Cyrus (SC, 2021) on Indian Kanoon",
+      "u": "https://indiankanoon.org/doc/5416696/"
+     },
+     {
+      "t": "Bar & Bench on USAR Commerce v Utsav Soi",
+      "u": "https://www.barandbench.com/view-point/when-arbitration-clauses-meet-oppression-petitions-lessons-from-usar-commerce-technologies-v-utsav-soi"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "c2",
+   "data": {
+    "sources": [
+     {
+      "t": "Percept D’Mark v Zaheer Khan (SC, 2006) on Indian Kanoon",
+      "u": "https://indiankanoon.org/doc/571375/"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "d3",
+   "data": {
+    "sources": [
+     {
+      "t": "Shreya Singhal v Union of India (SC, 2015) on Indian Kanoon",
+      "u": "https://indiankanoon.org/doc/110813550/"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "f3",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp5",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp6",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "p1",
+   "data": {
+    "sources": [
+     {
+      "t": "RBI Master Direction: Foreign Investment in India (NDI Rules)",
+      "u": "https://www.rbi.org.in/scripts/bs_viewmasdirections.aspx?id=11200"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b1",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b2",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b3",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b4",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Indian Contract Act, 1872",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2187"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b5",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Arbitration and Conciliation Act, 1996 (PDF)",
+      "u": "https://www.indiacode.nic.in/bitstream/123456789/1978/1/a199626.pdf"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b6",
+   "data": {
+    "sources": [
+     {
+      "t": "Income-tax Act, 2025 (as amended by Finance Act 2026), Income Tax Department",
+      "u": "https://www.incometaxindia.gov.in/documents/d/guest/income_tax_act_2025_as_amended_by_fa_act_2026-pdf"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b7",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Foreign Exchange Management Act, 1999",
+      "u": "https://www.indiacode.nic.in/handle/123456789/1988"
+     },
+     {
+      "t": "RBI Master Direction: Foreign Investment in India (NDI Rules)",
+      "u": "https://www.rbi.org.in/scripts/bs_viewmasdirections.aspx?id=11200"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "gtm1",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Competition Act, 2002",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2010"
+     },
+     {
+      "t": "DPIIT Press Note 2 (2018 Series): FDI in e-commerce",
+      "u": "https://www.dpiit.gov.in/static/uploads/2025/07/2959b696766693441f5eb45d3eb49f97.pdf"
+     }
+    ]
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "sl2",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: MSMED Act, 2006 (ss.15–16 on payment within 45 days)",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2013"
+     },
+     {
+      "t": "India Code: Indian Contract Act, 1872",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2187"
+     }
+    ]
+   }
+  }
+ ]
+}

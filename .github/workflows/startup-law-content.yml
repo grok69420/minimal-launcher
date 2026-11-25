@@ -23,7 +23,7 @@ jobs:
       - name: Build and validate the library
         run: |
           mkdir -p out
-          REV=$(git log -1 --format=%ct) python3 tools/build_content.py content.json patches out/content.json
+          STRICT=1 REV=$(git log -1 --format=%ct) python3 tools/build_content.py content.json patches out/content.json
 
       - name: Sign with the app's release key
         env:
