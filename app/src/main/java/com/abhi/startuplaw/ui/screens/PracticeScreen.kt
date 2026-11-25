@@ -1,6 +1,22 @@
 package com.abhi.startuplaw.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
+import com.abhi.startuplaw.ui.components.Motion
+import com.abhi.startuplaw.ui.components.Reveal
+import com.abhi.startuplaw.ui.components.pressScale
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -66,7 +82,14 @@ fun PracticeScreen(vm: AppViewModel, lib: Library) {
                 FilterPill("Flashcards · ${vm.deck(lib).size}", tab == 1, { tab = 1 })
             }
         }
-        if (tab == 0) item(key = "quiz") { Quiz(vm, lib) } else item(key = "cards") { Flashcards(vm, lib) }
+        item(key = "body") {
+            AnimatedContent(tab, transitionSpec = {
+                val dir = if (targetState > initialState) 1 else -1
+                (slideInHorizontally(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { dir * it / 8 } + fadeIn(androidx.compose.animation.core.tween(Motion.MEDIUM)))
+                    .togetherWith(slideOutHorizontally(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { -dir * it / 8 } + fadeOut(androidx.compose.animation.core.tween(150)))
+                    .using(SizeTransform(clip = false))
+            }, label = "practiceTab") { t -> if (t == 0) Quiz(vm, lib) else Flashcards(vm, lib) }
+        }
     }
 }
 
@@ -106,28 +129,36 @@ private fun Quiz(vm: AppViewModel, lib: Library) {
         val q = lib.quiz.firstOrNull { it.id == s.order.getOrNull(s.index) }
         if (q == null) { EmptyNote("Loading questions…"); return@Column }
         Bar((s.index) / s.order.size.toFloat(), Ice.Cyan)
+        AnimatedContent(q.id, transitionSpec = {
+            (slideInHorizontally(androidx.compose.animation.core.tween(380, easing = Motion.Emphasized)) { it / 5 } + fadeIn(androidx.compose.animation.core.tween(300)))
+                .togetherWith(slideOutHorizontally(androidx.compose.animation.core.tween(380, easing = Motion.Emphasized)) { -it / 5 } + fadeOut(androidx.compose.animation.core.tween(160)))
+                .using(SizeTransform(clip = false))
+        }, label = "question") { qid ->
+        val q = lib.quiz.firstOrNull { it.id == qid } ?: return@AnimatedContent
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.fillMaxWidth().hudFrame().padding(16.dp)) {
             Hud(lib.moduleTitle(q.module), color = Ice.Aurora, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.height(8.dp))
             Text(q.q, style = MaterialTheme.typography.titleLarge, color = Ice.Frost, modifier = Modifier.testTag("quiz_question"))
         }
         q.opts.forEachIndexed { i, opt ->
-            val picked = s.picked
-            val color = when {
+            val picked = if (s.order.getOrNull(s.index) == qid) s.picked else null
+            val color by animateColorAsState(when {
                 picked == null -> Ice.Edge
                 i == q.a -> Ice.Mint
                 i == picked -> Ice.Coral
                 else -> Ice.EdgeLo
-            }
-            val fill = when {
+            }, androidx.compose.animation.core.tween(Motion.MEDIUM), label = "optEdge")
+            val fill by animateColorAsState(when {
                 picked == null -> Ice.Glass
                 i == q.a -> Ice.Mint.copy(alpha = 0.14f)
                 i == picked -> Ice.Coral.copy(alpha = 0.14f)
                 else -> Color.Transparent
-            }
+            }, androidx.compose.animation.core.tween(Motion.MEDIUM), label = "optFill")
+            val source = remember { MutableInteractionSource() }
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(fill).border(1.dp, color, RoundedCornerShape(16.dp))
-                    .clickable(enabled = picked == null, role = Role.Button) {
+                Modifier.fillMaxWidth().pressScale(source, enabled = picked == null, to = 0.97f).heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp)).background(fill).border(1.dp, color, RoundedCornerShape(16.dp))
+                    .clickable(interactionSource = source, indication = LocalIndication.current, enabled = picked == null, role = Role.Button) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); vm.pick(lib, i)
                     }
                     .testTag("opt_$i").padding(horizontal = 16.dp, vertical = 12.dp),
@@ -135,18 +166,23 @@ private fun Quiz(vm: AppViewModel, lib: Library) {
             ) {
                 Text("ABCDEFG"[i].toString(), style = MaterialTheme.typography.labelLarge, color = if (picked != null && i == q.a) Ice.Mint else Ice.Cyan, modifier = Modifier.width(26.dp))
                 Text(opt, style = MaterialTheme.typography.bodyLarge, color = Ice.Frost, modifier = Modifier.weight(1f))
-                if (picked != null && i == q.a) Text("✓", color = Ice.Mint, style = MaterialTheme.typography.titleMedium)
-                if (picked == i && i != q.a) Text("✕", color = Ice.Coral, style = MaterialTheme.typography.titleMedium)
+                AnimatedVisibility(picked != null && (i == q.a || i == picked), enter = androidx.compose.animation.scaleIn(Motion.touch()) + fadeIn(), exit = fadeOut()) {
+                    Text(if (i == q.a) "✓" else "✕", color = if (i == q.a) Ice.Mint else Ice.Coral, style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
-        if (s.picked != null) {
+        }
+        }
+        AnimatedVisibility(s.picked != null, enter = Reveal, exit = ExitTransition.None) {
             val right = s.picked == q.a
-            FrostCard(Modifier.fillMaxWidth(), accent = if (right) Ice.Mint else Ice.Coral) {
-                Hud(if (right) "Correct" else "Not quite", color = if (right) Ice.Mint else Ice.Coral)
-                Spacer(Modifier.height(6.dp))
-                Text(q.why, style = MaterialTheme.typography.bodyMedium, color = Ice.Frost)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FrostCard(Modifier.fillMaxWidth(), accent = if (right) Ice.Mint else Ice.Coral) {
+                    Hud(if (right) "Correct" else "Not quite", color = if (right) Ice.Mint else Ice.Coral)
+                    Spacer(Modifier.height(6.dp))
+                    Text(q.why, style = MaterialTheme.typography.bodyMedium, color = Ice.Frost)
+                }
+                IceButton(if (s.index + 1 >= s.order.size) "See score" else "Next question", onClick = { vm.nextQuestion() }, modifier = Modifier.fillMaxWidth().testTag("quiz_next"))
             }
-            IceButton(if (s.index + 1 >= s.order.size) "See score" else "Next question", onClick = { vm.nextQuestion() }, modifier = Modifier.fillMaxWidth().testTag("quiz_next"))
         }
     }
 }
@@ -177,7 +213,16 @@ private fun Flashcards(vm: AppViewModel, lib: Library) {
             return@Column
         }
         Hud("Card ${s.index + 1} / ${deck.size}", color = Ice.Cyan)
-        val rot by animateFloatAsState(if (s.flipped) 180f else 0f, tween(if (reduced) 0 else 420), label = "flip")
+        AnimatedContent(card.id, transitionSpec = {
+            (slideInHorizontally(tween(if (reduced) 0 else 360, easing = Motion.Emphasized)) { it / 3 } + fadeIn(tween(if (reduced) 0 else 260)))
+                .togetherWith(slideOutHorizontally(tween(if (reduced) 0 else 360, easing = Motion.Emphasized)) { -it / 3 } + fadeOut(tween(if (reduced) 0 else 200)))
+                .using(SizeTransform(clip = false))
+        }, label = "card") { cid ->
+        val card = all.firstOrNull { it.id == cid } ?: return@AnimatedContent
+        // The card sliding away keeps the side it was showing.
+        val held = remember { booleanArrayOf(false) }
+        if (cid == s.let { deck.getOrNull(it.index)?.id }) held[0] = s.flipped
+        val rot by animateFloatAsState(if (held[0]) 180f else 0f, tween(if (reduced) 0 else 420, easing = Motion.Emphasized), label = "flip")
         Box(
             Modifier.fillMaxWidth().heightIn(min = 300.dp)
                 .graphicsLayer { rotationY = rot; cameraDistance = 14f * density }
@@ -205,6 +250,7 @@ private fun Flashcards(vm: AppViewModel, lib: Library) {
                     card.points.take(4).forEach { Bullet(it, tappable = false) }
                 }
             }
+        }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             IceButton("Again", onClick = { vm.answerCard(card.id, false) }, modifier = Modifier.weight(1f).testTag("card_again"), primary = false, color = Ice.Amber)

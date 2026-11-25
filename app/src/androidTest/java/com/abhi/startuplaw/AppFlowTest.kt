@@ -76,8 +76,9 @@ class AppFlowTest {
 
         // Start here: the first lesson of Volume 0 from the Continue card
         tapTag("continue"); waitTag("plain"); shot("01b-first-lesson")
-        tapTag("mark_learned"); waitText("✓ LEARNED — TAP TO UNDO"); shot("01c-xp")
-        back(); waitTag("open_search"); shot("01d-home-after-xp")
+        tapTag("mark_learned"); waitText("✓ LEARNED — TAP TO UNDO"); shot("01c-learned")
+        assertTrue("no XP or levels anywhere", rule.onAllNodes(hasText(" XP", substring = true)).fetchSemanticsNodes().isEmpty())
+        back(); waitTag("open_search"); shot("01d-home-after")
 
         // Library -> volume -> lesson -> mark learned -> next lesson
         tapTag("vol_foundations"); waitTag("lesson_f1"); shot("02-volume")
@@ -86,7 +87,6 @@ class AppFlowTest {
         scrollTo(hasTestTag("kp_0")); rule.onNodeWithTag("kp_0").performTouchInput { click(Offset(10f, 20f)) }
         waitTag("term_popup"); shot("03b-word-popup")
         rule.onNodeWithTag("term_close").tap(); rule.waitForIdle()
-        tapTag("qc_opt_0"); waitText("QUICK CHECK", substring = true)
         tapTag("mark_learned"); waitText("✓ LEARNED — TAP TO UNDO")
         shot("04-lesson-learned")
         tapTag("next_lesson"); waitText("Choosing the entity: private company, LLP or OPC"); shot("05-next-lesson")
@@ -97,9 +97,18 @@ class AppFlowTest {
         back(); waitTag("lesson_f1")
         back(); waitTag("open_search")
 
+        // New volumes: GTM, IP, marketing, sales
+        tapTag("vol_gtm"); waitTag("lesson_gtm2"); shot("05c-volume-gtm")
+        tapTag("lesson_gtm2"); waitText("Pricing, discounts and competition law"); shot("05d-lesson-pricing")
+        back(); waitTag("lesson_gtm2"); back(); waitTag("open_search")
+        tapTag("vol_ip"); waitTag("lesson_ip2"); tapTag("lesson_ip2"); waitText("Patents for software, AI and medicines"); shot("05e-lesson-patents")
+        back(); waitTag("lesson_ip2"); back(); waitTag("open_search")
+
         // Cases
         tab("cases"); waitTag("case_tiger-global-2026"); shot("06-cases")
         tapTag("case_tiger-global-2026"); waitText("HELD"); shot("07-case")
+        back(); waitTag("case_tiger-global-2026")
+        tapTag("case_google-drs-2023"); waitText("Google LLC v DRS Logistics (P) Ltd"); shot("07b-case-keywords")
         back()
 
         // Playbook: story + trap
@@ -109,6 +118,12 @@ class AppFlowTest {
         back(); waitTag("tab_playbook")
         scrollTo(hasText("Term-sheet traps ·", substring = true)); rule.onNodeWithText("Term-sheet traps ·", substring = true).tap(); rule.waitForIdle()
         tapTag("trap_participating-pref"); waitText("ASK FOR INSTEAD"); shot("10-trap-open")
+        // Mood boards: open one, see the preview, copy a colour
+        scrollTo(hasText("Mood boards ·", substring = true)); rule.onNodeWithText("Mood boards ·", substring = true).tap(); rule.waitForIdle()
+        waitTag("palette_rolls-royce"); shot("10b-mood-boards")
+        tapTag("palette_rolex"); waitTag("preview_rolex"); shot("10c-mood-board-open")
+        tapTag("swatch_006039"); waitText("COPIED"); shot("10d-colour-copied")
+        scrollTo(hasText("LEGAL GUARDRAIL")); shot("10e-mood-board-guardrail")
 
         // Practice: quiz + flashcards
         tab("practice"); waitTag("quiz_question"); shot("11-quiz")
@@ -122,8 +137,7 @@ class AppFlowTest {
         tapTag("card_know")
 
         // Progress map shows the learned lesson
-        tab("map"); waitTag("player_card"); shot("15-map")
-        scrollTo(hasTestTag("badge_unicorn")); shot("15b-badges")
+        tab("map"); waitTag("progress_card"); shot("15-map")
         scrollTo(hasTestTag("constellation"))
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
@@ -139,7 +153,7 @@ class AppFlowTest {
 
         // Search
         tapTag("open_search"); waitTag("search_field")
-        rule.onNodeWithTag("search_field").performTextInput("ESOP")
+        rule.onNodeWithTag("search_field").performTextInput("dark patterns")
         waitText("MATCHES", substring = true); shot("19-search")
         back(); waitTag("open_search")
 
@@ -161,13 +175,13 @@ class AppFlowTest {
 
         // Rotation keeps the app working
         rule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-        Thread.sleep(1500); waitTag("player_card"); shot("22-landscape")
+        Thread.sleep(1500); waitTag("open_search"); shot("22-landscape")
         rule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
-        Thread.sleep(1500); waitTag("player_card")
+        Thread.sleep(1500); waitTag("open_search")
 
         // Progress survives the activity being recreated
         rule.activityRule.scenario.recreate()
-        waitTag("player_card")
+        waitTag("open_search")
         tab("map"); waitTag("list")
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())

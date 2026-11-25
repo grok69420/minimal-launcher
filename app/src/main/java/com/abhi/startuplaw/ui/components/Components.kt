@@ -9,7 +9,11 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,13 +80,17 @@ fun FrostCard(
     padding: PaddingValues = PaddingValues(18.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val edge = Brush.verticalGradient(listOf(accent?.copy(alpha = 0.55f) ?: Ice.Edge, Ice.EdgeLo))
+    val top by animateColorAsState(accent?.copy(alpha = 0.55f) ?: Ice.Edge, androidx.compose.animation.core.tween(Motion.MEDIUM), label = "edge")
+    val edge = Brush.verticalGradient(listOf(top, Ice.EdgeLo))
+    val source = remember { MutableInteractionSource() }
     Column(
         modifier
+            .appear()
+            .pressScale(source, enabled = onClick != null, to = 0.975f)
             .clip(CardShape)
             .background(Brush.verticalGradient(listOf(Ice.GlassHi, Ice.Glass)))
             .border(BorderStroke(1.dp, edge), CardShape)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(interactionSource = source, indication = LocalIndication.current, role = Role.Button, onClick = onClick) else Modifier)
             .padding(padding),
         content = content,
     )
@@ -134,30 +142,38 @@ fun Pill(text: String, color: Color = Ice.Cyan, modifier: Modifier = Modifier, f
 /** Selectable filter chip (48dp touch target). */
 @Composable
 fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit, color: Color = Ice.Cyan) {
+    val source = remember { MutableInteractionSource() }
+    val fill by animateColorAsState(if (selected) color else Color.Transparent, androidx.compose.animation.core.tween(Motion.SHORT), label = "pill")
+    val line by animateColorAsState(if (selected) color else Ice.Edge, androidx.compose.animation.core.tween(Motion.SHORT), label = "pillEdge")
+    val ink by animateColorAsState(if (selected) Ice.OnCyan else Ice.Frost, androidx.compose.animation.core.tween(Motion.SHORT), label = "pillInk")
     Box(
         Modifier
+            .pressScale(source, to = 0.94f)
             .heightIn(min = 40.dp)
             .clip(PillShape)
-            .background(if (selected) color else Color.Transparent)
-            .border(1.dp, if (selected) color else Ice.Edge, PillShape)
-            .clickable(role = Role.Tab, onClick = onClick)
+            .background(fill)
+            .border(1.dp, line, PillShape)
+            .clickable(interactionSource = source, indication = LocalIndication.current, role = Role.Tab, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) Ice.OnCyan else Ice.Frost, maxLines = 1)
+        Text(text, style = MaterialTheme.typography.labelLarge, color = ink, maxLines = 1)
     }
 }
 
 @Composable
 fun IceButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = true, enabled: Boolean = true, color: Color = Ice.Cyan) {
-    val c = if (enabled) color else Ice.Dim
+    val c by animateColorAsState(if (enabled) color else Ice.Dim, androidx.compose.animation.core.tween(Motion.MEDIUM), label = "btn")
+    val fill by animateColorAsState(if (primary) c else Color.Transparent, androidx.compose.animation.core.tween(Motion.MEDIUM), label = "btnFill")
+    val source = remember { MutableInteractionSource() }
     Box(
         modifier
+            .pressScale(source, enabled = enabled, to = 0.95f)
             .heightIn(min = 48.dp)
             .clip(PillShape)
-            .background(if (primary) c else Color.Transparent)
+            .background(fill)
             .border(1.dp, if (primary) c else c.copy(alpha = 0.6f), PillShape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(interactionSource = source, indication = LocalIndication.current, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 13.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -180,7 +196,7 @@ fun Modifier.hudFrame(color: Color = Ice.Cyan.copy(alpha = 0.5f), len: Dp = 14.d
 fun ProgressRing(fraction: Float, size: Dp, stroke: Dp = 6.dp, color: Color = Ice.Cyan, content: @Composable () -> Unit = {}) {
     val reduced = LocalReducedMotion.current
     val anim = remember { Animatable(if (reduced) fraction else 0f) }
-    LaunchedEffect(fraction) { if (reduced) anim.snapTo(fraction) else anim.animateTo(fraction, tween(900, easing = FastOutSlowInEasing)) }
+    LaunchedEffect(fraction) { if (reduced) anim.snapTo(fraction) else anim.animateTo(fraction, tween(900, easing = Motion.Emphasized)) }
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
             val w = stroke.toPx()
@@ -196,8 +212,12 @@ fun ProgressRing(fraction: Float, size: Dp, stroke: Dp = 6.dp, color: Color = Ic
 
 @Composable
 fun Bar(fraction: Float, color: Color, modifier: Modifier = Modifier) {
+    val reduced = LocalReducedMotion.current
+    val target = fraction.coerceIn(0f, 1f)
+    val anim = remember { Animatable(if (reduced) target else 0f) }
+    LaunchedEffect(target) { if (reduced) anim.snapTo(target) else anim.animateTo(target, tween(700, easing = Motion.Emphasized)) }
     Box(modifier.fillMaxWidth().height(4.dp).clip(PillShape).background(Ice.Edge)) {
-        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(4.dp).clip(PillShape).background(color))
+        Box(Modifier.fillMaxWidth(anim.value).height(4.dp).clip(PillShape).background(color))
     }
 }
 

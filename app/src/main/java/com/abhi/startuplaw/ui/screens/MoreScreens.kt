@@ -117,9 +117,9 @@ private fun QueryField(value: String, onChange: (String) -> Unit, placeholder: S
 }
 
 @Composable
-private fun HitCard(lib: Library, h: Hit, go: (String) -> Unit) {
+private fun HitCard(lib: Library, h: Hit, go: (String) -> Unit, modifier: Modifier = Modifier) {
     val lookup = com.abhi.startuplaw.ui.components.LocalWordLookup.current
-    FrostCard(Modifier.fillMaxWidth(), onClick = {
+    FrostCard(modifier.fillMaxWidth(), onClick = {
         val t = if (h.kind == com.abhi.startuplaw.data.Kind.Term) lib.termById[h.id] else null
         if (t != null && lookup != null) lookup.open(t.term, t, "") else go(routeFor(h.kind, h.id))
     }) {
@@ -157,7 +157,7 @@ fun SearchScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit, back: () 
         } else {
             item(key = "count") { Hud("${hits.size} matches", color = Ice.Dim) }
             if (hits.isEmpty()) item(key = "none") { EmptyNote("No matches. Try fewer words, or ask the tutor.") }
-            items(hits, key = { it.kind.name + it.id }) { h -> HitCard(lib, h, go) }
+            items(hits, key = { it.kind.name + it.id }) { h -> HitCard(lib, h, go, Modifier.animateItem()) }
         }
     }
 }
@@ -206,7 +206,7 @@ fun TutorScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit, back: () -
                 }
             }
             item(key = "nh") { Hud(if (answer.notes.isEmpty()) "Not covered in the library notes" else "From the library · ${answer.notes.size} notes", color = Ice.Dim) }
-            items(answer.notes, key = { "n-" + it.kind.name + it.id }) { h -> HitCard(lib, h, go) }
+            items(answer.notes, key = { "n-" + it.kind.name + it.id }) { h -> HitCard(lib, h, go, Modifier.animateItem()) }
         }
     }
 }
@@ -274,12 +274,12 @@ fun GlossaryScreen(vm: AppViewModel, lib: Library, back: () -> Unit) {
             .sortedBy { it.term.lowercase() }
     }
     val seen = lib.glossary.count { it.id in prog.terms }
-    Screen(title = "Glossary", hud = "$seen of ${lib.glossary.size} looked up · +${com.abhi.startuplaw.data.Game.TERM} XP each", onBack = back) {
+    Screen(title = "Glossary", hud = "$seen of ${lib.glossary.size} looked up", onBack = back) {
         item(key = "field") { QueryField(q, { q = it }, "Find a word", {}, "glossary_field", autoFocus = false) }
         items(terms, key = { it.id }) { t ->
             val got = t.id in prog.terms
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(14.dp))
+                Modifier.animateItem().fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(14.dp))
                     .clickable { lookup?.open(t.term, t, "") }.testTag("term_${t.id}").padding(horizontal = 6.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

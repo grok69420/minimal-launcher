@@ -34,6 +34,7 @@ ice = sum(1 for r, g, b in px if b > 170 and g > 150 and b - r > 50)
 sys.exit(0 if dark > 0.35 else 1)
 PY
 }
+anims()   { for k in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global $k "$1"; done; }
 front()   { adb shell dumpsys activity activities | grep -m1 -E "topResumedActivity|mResumedActivity" | grep -q "$PKG"; }
 check_shot() { shot "$1"; img content "$1" || fail "$1 is blank"; front || fail "$1: app is not in front"; img ice "$1" || fail "$1 does not show the app"; }
 
@@ -57,6 +58,19 @@ if ! grep -q "OK (1 test)" "$OUT/ui-test.txt"; then
   fail "UI test failed (see ui-test.txt)"
 fi
 log "  UI test passed"
+
+log "1b. Animations play (instrumented motion test with the phone's animations ON)"
+anims 1
+adb shell am instrument -w -r -e class com.abhi.startuplaw.MotionTest "$DBG.test/androidx.test.runner.AndroidJUnitRunner" > "$OUT/motion-test.txt" 2>&1
+adb exec-out run-as "$DBG" tar -cf - files/shots 2>/dev/null | tar -xf - -C "$OUT/ui" 2>/dev/null
+log "  $(ls "$OUT/ui/files/shots" 2>/dev/null | grep -c '^m') mid-animation frames"
+anims 0
+if ! grep -q "OK (1 test)" "$OUT/motion-test.txt"; then
+  grep -E "Error|Exception|at com.abhi|AssertionError" "$OUT/motion-test.txt" | head -30 | tee -a "$OUT/report.txt"
+  adb logcat -d > "$OUT/logcat.txt"
+  fail "motion test failed (see motion-test.txt)"
+fi
+log "  motion test passed"
 adb uninstall "$DBG.test" >/dev/null 2>&1; adb uninstall "$DBG" >/dev/null 2>&1
 adb logcat -c
 
@@ -117,14 +131,15 @@ adb shell settings put system user_rotation 0; sleep 3
 adb shell input keyevent KEYCODE_HOME; sleep 3
 launch; sleep 3; alive "resume"; nocrash "resume"; check_shot resumed
 
-log "8. Scroll smoothness (informational on a software-rendered emulator)"
+log "8. Scroll smoothness with animations ON (informational on a software-rendered emulator)"
+anims 1
 adb shell cmd package compile -m speed-profile -f "$PKG" >/dev/null 2>&1; launch >/dev/null; sleep 3
 adb shell dumpsys gfxinfo "$PKG" reset >/dev/null
 for i in 1 2 3 4 5 6; do adb shell input swipe 540 1800 540 500 250; sleep 0.5; done
 for i in 1 2 3; do adb shell input swipe 540 600 540 1900 250; sleep 0.5; done
 adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|Slow UI thread|Slow issue draw|Frame deadline missed|Number High input" | sed 's/^/  /' | tee -a "$OUT/report.txt"
 
-log "9. Monkey test (2000 random taps and swipes)"
+log "9. Monkey test with animations ON (2000 random taps and swipes)"
 adb shell monkey -p "$PKG" --pct-syskeys 0 --pct-appswitch 2 --throttle 50 -s 4242 -v 2000 > "$OUT/monkey.txt" 2>&1
 grep -qE "CRASH|ANR in" "$OUT/monkey.txt" && { grep -A20 -E "CRASH|ANR" "$OUT/monkey.txt" | head -40 | tee -a "$OUT/report.txt"; fail "monkey found a crash"; }
 nocrash "monkey"

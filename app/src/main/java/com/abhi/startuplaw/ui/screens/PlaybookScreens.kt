@@ -48,6 +48,9 @@ import com.abhi.startuplaw.data.Library
 import com.abhi.startuplaw.data.Trap
 import com.abhi.startuplaw.ui.components.Block
 import com.abhi.startuplaw.ui.components.EmptyNote
+import com.abhi.startuplaw.ui.components.ExpandMark
+import com.abhi.startuplaw.ui.components.Reveal
+import com.abhi.startuplaw.ui.components.Conceal
 import com.abhi.startuplaw.ui.components.FilterPill
 import com.abhi.startuplaw.ui.components.FrostCard
 import com.abhi.startuplaw.ui.components.Glyph
@@ -65,26 +68,27 @@ import com.abhi.startuplaw.ui.theme.Mono
 @Composable
 fun PlaybookScreen(vm: AppViewModel, lib: Library, initialTab: Int, focus: String?, go: (String) -> Unit) {
     val prog by vm.progress.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableStateOf(initialTab.coerceIn(0, 1)) }
+    var tab by rememberSaveable { mutableStateOf(initialTab.coerceIn(0, 2)) }
     var open by rememberSaveable { mutableStateOf(focus) }
     val state = rememberLazyListState()
     LaunchedEffect(focus) {
         if (focus != null) {
-            val i = lib.trapsSorted.indexOfFirst { it.id == focus }
+            val i = if (tab == 2) lib.palettesSorted.indexOfFirst { it.id == focus } else lib.trapsSorted.indexOfFirst { it.id == focus }
             if (i >= 0) state.scrollToItem(i + 1)
         }
     }
-    Screen(title = "Founder playbook", hud = "Control · term sheets · survival", onBack = null, state = state) {
+    Screen(title = "Founder playbook", hud = "Stories · term sheets · mood boards", onBack = null, state = state) {
         item(key = "tabs") {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterPill("Stories · ${lib.stories.size}", tab == 0, { tab = 0 })
                 FilterPill("Term-sheet traps · ${lib.traps.size}", tab == 1, { tab = 1 })
+                if (lib.palettes.isNotEmpty()) FilterPill("Mood boards · ${lib.palettes.size}", tab == 2, { tab = 2 })
             }
         }
         if (tab == 0) {
             items(lib.storiesSorted, key = { "s-" + it.id }) { s ->
                 val studied = s.id in prog.stories
-                FrostCard(Modifier.fillMaxWidth().testTag("story_${s.id}"), onClick = { go("story/${s.id}") }, accent = if (studied) Ice.Cyan else null) {
+                FrostCard(Modifier.animateItem().fillMaxWidth().testTag("story_${s.id}"), onClick = { go("story/${s.id}") }, accent = if (studied) Ice.Cyan else null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Hud("${s.country} · ${s.year} · ${s.kind}", color = Ice.Dim, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                         if (studied) Icon(Glyph.Check, Ice.Cyan, 16.dp)
@@ -97,24 +101,32 @@ fun PlaybookScreen(vm: AppViewModel, lib: Library, initialTab: Int, focus: Strin
                     Pill(s.outcome, statusColor(s.outcome))
                 }
             }
-        } else {
+        } else if (tab == 1) {
             items(lib.trapsSorted, key = { "t-" + it.id }) { t ->
-                TrapCard(t, expanded = open == t.id) { open = if (open == t.id) null else t.id }
+                TrapCard(t, expanded = open == t.id, Modifier.animateItem()) { open = if (open == t.id) null else t.id }
+            }
+        } else {
+            items(lib.palettesSorted, key = { "p-" + it.id }) { p ->
+                PaletteCard(p, expanded = open == p.id, Modifier.animateItem()) { open = if (open == p.id) null else p.id }
+            }
+            item(key = "p-note") {
+                Text("Inspiration for your own strategy decks and mood boards. Brand names, logos and signature looks belong to their owners; see Volume IX before using a look in the same market.",
+                    style = MaterialTheme.typography.bodyMedium, color = Ice.Dim, modifier = Modifier.animateItem().padding(top = 4.dp))
             }
         }
     }
 }
 
 @Composable
-private fun TrapCard(t: Trap, expanded: Boolean, toggle: () -> Unit) {
-    FrostCard(Modifier.fillMaxWidth().testTag("trap_${t.id}"), onClick = toggle, accent = if (expanded) Ice.Mint else null) {
+private fun TrapCard(t: Trap, expanded: Boolean, modifier: Modifier = Modifier, toggle: () -> Unit) {
+    FrostCard(modifier.fillMaxWidth().testTag("trap_${t.id}"), onClick = toggle, accent = if (expanded) Ice.Mint else null) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Hud("Trap ${t.order.toString().padStart(2, '0')}", color = Ice.Mint, modifier = Modifier.weight(1f))
-            Text(if (expanded) "–" else "+", style = MaterialTheme.typography.titleLarge, color = Ice.Mist)
+            ExpandMark(expanded)
         }
         Spacer(Modifier.height(6.dp))
         Text(t.clause, style = MaterialTheme.typography.titleMedium, color = Ice.Frost)
-        AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        AnimatedVisibility(expanded, enter = Reveal, exit = Conceal) {
             Column(Modifier.padding(top = 8.dp)) {
                 if (t.looks.isNotBlank()) {
                     Hud("Looks like", color = Ice.Dim)
@@ -164,7 +176,7 @@ fun StoryScreen(vm: AppViewModel, lib: Library, id: String, back: () -> Unit) {
         item(key = "act") {
             val done = s.id in prog.stories
             IceButton(
-                if (done) "✓ Studied — tap to undo" else "Mark as studied · +${com.abhi.startuplaw.data.Game.STORY} XP",
+                if (done) "✓ Studied — tap to undo" else "Mark as studied",
                 onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.toggleStory(s.id) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("mark_studied"), primary = !done,
             )
@@ -191,13 +203,13 @@ private fun GapCard(lib: Library, g: Gap, expanded: Boolean, toggle: () -> Unit)
     FrostCard(Modifier.fillMaxWidth().testTag("gap_${g.id}"), onClick = toggle, accent = if (expanded) c else null) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { Pill(g.status, c) }
-            Text(if (expanded) "–" else "+", style = MaterialTheme.typography.titleLarge, color = Ice.Mist)
+            ExpandMark(expanded)
         }
         Spacer(Modifier.height(6.dp))
         Hud(lib.moduleTitle(g.module), color = Ice.Dim, style = MaterialTheme.typography.labelSmall)
         Spacer(Modifier.height(6.dp))
         Text(g.title, style = MaterialTheme.typography.titleMedium, color = Ice.Frost)
-        AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        AnimatedVisibility(expanded, enter = Reveal, exit = Conceal) {
             Column(Modifier.padding(top = 6.dp)) {
                 Block("The gap", g.gap, Ice.Amber)
                 Block("How it was used", g.used, Ice.Aurora)

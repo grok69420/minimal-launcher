@@ -57,7 +57,7 @@ fun CasesScreen(vm: AppViewModel, lib: Library, initialModule: String?, go: (Str
         item(key = "filter") { ModuleFilter(lib, module, { module = it }, lib.cases.map { it.module }.toSet()) }
         if (list.isEmpty()) item(key = "empty") { EmptyNote("No cases in this volume yet.") }
         items(list, key = { it.id }) { c ->
-            FrostCard(Modifier.fillMaxWidth().testTag("case_${c.id}"), onClick = { go("case/${c.id}") }) {
+            FrostCard(Modifier.animateItem().fillMaxWidth().testTag("case_${c.id}"), onClick = { go("case/${c.id}") }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Hud("${c.year} · ${c.court}", color = Ice.Dim, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                     Pill(c.status, statusColor(c.status))

@@ -30,7 +30,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abhi.startuplaw.AppViewModel
-import com.abhi.startuplaw.data.Game
 import com.abhi.startuplaw.data.Library
 import com.abhi.startuplaw.data.QuizQ
 import com.abhi.startuplaw.ui.components.LawText
@@ -116,8 +115,6 @@ fun LessonScreen(vm: AppViewModel, lib: Library, id: String, go: (String) -> Uni
     val pos = siblings.indexOfFirst { it.id == id }
     val color = Ice.volume[((m?.order ?: 1) - 1).mod(Ice.volume.size)]
     val related = l?.let { lesson -> lib.casesSorted.filter { it.module == lesson.module && lesson.body.any { p -> p.contains(caseKey(it.name)) } } }.orEmpty()
-    // One question from this volume that hasn't been answered right yet (stable while on the page).
-    val check = remember(id) { lib.quiz.filter { it.module == l?.module }.let { qs -> qs.firstOrNull { prog.quiz[it.id] != 1 } ?: qs.firstOrNull() } }
 
     Screen(title = m?.title ?: "Lesson", hud = "Vol. ${m?.vol.orEmpty()} · Lesson ${pos + 1} of ${siblings.size}", onBack = back) {
         if (l == null) { item { EmptyNote("This lesson is no longer in the library.") }; return@Screen }
@@ -156,13 +153,12 @@ fun LessonScreen(vm: AppViewModel, lib: Library, id: String, go: (String) -> Uni
                 related.forEach { c -> IceButton("Case: " + c.name.substringBefore(" v ").take(24), onClick = { go("case/${c.id}") }, primary = false, color = Ice.Aurora) }
             }
         }
-        if (check != null) item(key = "check") { QuickCheck(vm, check) }
         item(key = "src") { SourceLinks(l.sources) }
         item(key = "actions") {
             val done = l.id in prog.lessons
             Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 IceButton(
-                    if (done) "✓ Learned — tap to undo" else "Mark as learned · +${Game.LESSON} XP",
+                    if (done) "✓ Learned — tap to undo" else "Mark as learned",
                     onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.toggleLesson(l.id) },
                     modifier = Modifier.fillMaxWidth().testTag("mark_learned"), primary = !done, color = color,
                 )
@@ -173,39 +169,6 @@ fun LessonScreen(vm: AppViewModel, lib: Library, id: String, go: (String) -> Uni
                     else Spacer(Modifier.weight(1f))
                 }
             }
-        }
-    }
-}
-
-/** A single quiz question answered inside the lesson. */
-@Composable
-fun QuickCheck(vm: AppViewModel, q: QuizQ) {
-    var picked by rememberSaveable(q.id) { mutableStateOf<Int?>(null) }
-    FrostCard(Modifier.fillMaxWidth().testTag("quick_check"), accent = Ice.Aurora) {
-        Hud("Quick check · +${Game.QUIZ} XP", color = Ice.Aurora)
-        Spacer(Modifier.height(8.dp))
-        LawText(q.q, MaterialTheme.typography.titleMedium, Ice.Frost)
-        Spacer(Modifier.height(10.dp))
-        q.opts.forEachIndexed { i, opt ->
-            val p = picked
-            val c = when { p == null -> Ice.Edge; i == q.a -> Ice.Mint; i == p -> Ice.Coral; else -> Ice.EdgeLo }
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
-                    .background(if (p != null && i == q.a) Ice.Mint.copy(alpha = 0.12f) else if (p == i) Ice.Coral.copy(alpha = 0.12f) else Color.Transparent)
-                    .border(1.dp, c, RoundedCornerShape(14.dp))
-                    .clickable(enabled = p == null) { picked = i; vm.quickCheck(q, i) }
-                    .testTag("qc_opt_$i").padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(opt, style = MaterialTheme.typography.bodyMedium, color = Ice.Frost, modifier = Modifier.weight(1f))
-                if (p != null && i == q.a) Text("✓", color = Ice.Mint)
-                if (p == i && i != q.a) Text("✕", color = Ice.Coral)
-            }
-        }
-        picked?.let { p ->
-            Spacer(Modifier.height(6.dp))
-            Hud(if (p == q.a) "Correct" else "Not quite", color = if (p == q.a) Ice.Mint else Ice.Coral)
-            LawText(q.why, MaterialTheme.typography.bodyMedium, Ice.Frost)
         }
     }
 }

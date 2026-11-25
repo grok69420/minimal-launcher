@@ -7,6 +7,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.graphicsLayer
+import com.abhi.startuplaw.ui.components.Motion
+import com.abhi.startuplaw.ui.components.pressScale
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -69,12 +83,13 @@ import com.abhi.startuplaw.ui.components.openExternal
 import com.abhi.startuplaw.ui.screens.AboutScreen
 import com.abhi.startuplaw.ui.screens.CaseScreen
 import com.abhi.startuplaw.ui.screens.GlossaryScreen
-import com.abhi.startuplaw.ui.components.Celebrations
 import com.abhi.startuplaw.ui.components.LocalWordLookup
 import com.abhi.startuplaw.ui.components.LookupCard
 import com.abhi.startuplaw.ui.components.WordLookup
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.abhi.startuplaw.ui.screens.CasesScreen
 import com.abhi.startuplaw.ui.screens.HomeScreen
 import com.abhi.startuplaw.ui.screens.LessonScreen
@@ -124,6 +139,7 @@ fun routeFor(kind: Kind, id: String): String = when (kind) {
     Kind.Update -> "updates"
     Kind.Quiz -> "practice"
     Kind.Term -> "glossary"
+    Kind.Palette -> "playbook?tab=2&focus=$id"
 }
 
 @Composable
@@ -148,14 +164,19 @@ fun AppRoot(vm: AppViewModel) {
                     BottomBar(tab) { t -> nav.navigateTab(t.route) }
                 }
             }
-            Celebrations(vm.rewards)
-            lookup?.let { l ->
-                LookupCard(l.word, l.term, l.context, online, onClose = vm::closeLookup,
+            // Keep the last word while the card slides away.
+            var held by remember { mutableStateOf<Lookup?>(null) }
+            LaunchedEffect(lookup) { if (lookup != null) held = lookup }
+            (lookup ?: held)?.let { l ->
+                LookupCard(lookup != null, l.word, l.term, l.context, online, onClose = vm::closeLookup,
                     onOpenGlossary = if (route == "glossary") null else ({ vm.closeLookup(); nav.navigate("glossary") { launchSingleTop = true } }))
             }
         }
     }
 }
+
+private val tabRoutes = Tab.entries.map { it.route }.toSet()
+fun isTab(route: String?): Boolean = route?.substringBefore('?') in tabRoutes
 
 fun NavHostController.navigateTab(route: String) = navigate(route) {
     popUpTo(graph.findStartDestination().id) { saveState = true }
@@ -167,12 +188,29 @@ fun NavHostController.navigateTab(route: String) = navigate(route) {
 private fun AppNav(nav: NavHostController, vm: AppViewModel, lib: Library) {
     val back: () -> Unit = { if (!nav.popBackStack()) nav.navigateTab("home") }
     val go: (String) -> Unit = { r -> nav.navigate(r) { launchSingleTop = true } }
+    val reduced = com.abhi.startuplaw.ui.theme.LocalReducedMotion.current
+    val ms = { d: Int -> if (reduced) 0 else d }
     NavHost(
         nav, startDestination = "home",
-        enterTransition = { fadeIn(androidx.compose.animation.core.tween(220)) + scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.985f) },
-        exitTransition = { fadeOut(androidx.compose.animation.core.tween(160)) },
-        popEnterTransition = { fadeIn(androidx.compose.animation.core.tween(220)) },
-        popExitTransition = { fadeOut(androidx.compose.animation.core.tween(160)) + scaleOut(androidx.compose.animation.core.tween(160), targetScale = 0.985f) },
+        // Tab to tab: a quick fade-through. Going deeper: a shared-axis slide forward; back reverses it.
+        enterTransition = {
+            if (isTab(initialState.destination.route) && isTab(targetState.destination.route))
+                fadeIn(tween(ms(260), delayMillis = ms(70))) + scaleIn(tween(ms(320), easing = Motion.Emphasized), initialScale = 0.96f)
+            else slideInHorizontally(tween(ms(380), easing = Motion.Emphasized)) { it / 4 } + fadeIn(tween(ms(260)))
+        },
+        exitTransition = {
+            if (isTab(initialState.destination.route) && isTab(targetState.destination.route)) fadeOut(tween(ms(110)))
+            else slideOutHorizontally(tween(ms(380), easing = Motion.Emphasized)) { -it / 10 } + fadeOut(tween(ms(220)))
+        },
+        popEnterTransition = {
+            if (isTab(initialState.destination.route) && isTab(targetState.destination.route))
+                fadeIn(tween(ms(260), delayMillis = ms(70))) + scaleIn(tween(ms(320), easing = Motion.Emphasized), initialScale = 0.96f)
+            else slideInHorizontally(tween(ms(380), easing = Motion.Emphasized)) { -it / 10 } + fadeIn(tween(ms(300)))
+        },
+        popExitTransition = {
+            if (isTab(initialState.destination.route) && isTab(targetState.destination.route)) fadeOut(tween(ms(110)))
+            else slideOutHorizontally(tween(ms(340), easing = Motion.Emphasized)) { it / 4 } + fadeOut(tween(ms(220)))
+        },
     ) {
         composable("home") { HomeScreen(vm, lib, go) }
         composable("cases?module={module}", arguments = listOf(navArgument("module") { type = NavType.StringType; nullable = true; defaultValue = null })) {
@@ -203,33 +241,53 @@ private fun AppNav(nav: NavHostController, vm: AppViewModel, lib: Library) {
 
 @Composable
 private fun BottomBar(current: Tab?, onSelect: (Tab) -> Unit) {
+    val reduced = com.abhi.startuplaw.ui.theme.LocalReducedMotion.current
     Box(
         Modifier.fillMaxWidth()
             .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to Ice.Night, 1f to Ice.Night))
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Row(
+        BoxWithConstraints(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
                 .background(Color(0xFA0A121C))
                 .border(1.dp, Ice.Edge, RoundedCornerShape(26.dp))
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(4.dp),
         ) {
-            Tab.entries.forEach { t ->
-                val on = t == current
-                Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(22.dp))
-                        .background(if (on) Ice.Cyan.copy(alpha = 0.14f) else Color.Transparent)
-                        .clickable(role = Role.Tab) { onSelect(t) }
-                        .semantics { selected = on; contentDescription = t.label }
-                        .testTag("tab_${t.route}")
-                        .padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(t.glyph, if (on) Ice.Cyan else Ice.Mist, 22.dp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = if (on) Ice.Cyan else Ice.Mist, maxLines = 1)
+            val slot = maxWidth / Tab.entries.size
+            // Remember the last tab so the highlight glides from there when you come back from a detail screen.
+            val lastTab = remember { intArrayOf(0) }
+            val idx = current?.ordinal ?: -1
+            if (idx >= 0) lastTab[0] = idx
+            val x by animateDpAsState(slot * lastTab[0], if (reduced) tween(0) else spring(dampingRatio = 0.78f, stiffness = 420f), label = "tabX")
+            val glow by animateFloatAsState(if (idx >= 0) 1f else 0f, tween(Motion.SHORT), label = "tabGlow")
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    Modifier.offset(x = x).width(slot).fillMaxHeight().graphicsLayer { alpha = glow }
+                        .clip(RoundedCornerShape(22.dp)).background(Ice.Cyan.copy(alpha = 0.14f))
+                        .border(1.dp, Ice.Cyan.copy(alpha = 0.22f), RoundedCornerShape(22.dp))
+                )
+            }
+            Row(Modifier.fillMaxWidth()) {
+                Tab.entries.forEach { t ->
+                    val on = t == current
+                    val tint by animateColorAsState(if (on) Ice.Cyan else Ice.Mist, tween(Motion.MEDIUM), label = "tabTint")
+                    val lift by animateFloatAsState(if (on) 1f else 0f, if (reduced) tween(0) else spring(dampingRatio = 0.45f, stiffness = 500f), label = "tabLift")
+                    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    Column(
+                        Modifier.weight(1f).pressScale(source, to = 0.9f).clip(RoundedCornerShape(22.dp))
+                            .clickable(interactionSource = source, indication = androidx.compose.foundation.LocalIndication.current, role = Role.Tab) { onSelect(t) }
+                            .semantics { selected = on; contentDescription = t.label }
+                            .testTag("tab_${t.route}")
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box(Modifier.graphicsLayer { val sc = 1f + 0.12f * lift; scaleX = sc; scaleY = sc; translationY = -2.dp.toPx() * lift }) {
+                            Icon(t.glyph, tint, 22.dp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(t.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+                    }
                 }
             }
         }

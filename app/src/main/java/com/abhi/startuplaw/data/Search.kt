@@ -3,7 +3,7 @@ package com.abhi.startuplaw.data
 import java.text.Normalizer
 import kotlin.math.ln
 
-enum class Kind(val label: String) { Lesson("Lesson"), Case("Case"), Loophole("Loophole"), Story("Founder story"), Trap("Term-sheet trap"), Update("Update"), Quiz("Quiz"), Term("Meaning") }
+enum class Kind(val label: String) { Lesson("Lesson"), Case("Case"), Loophole("Loophole"), Story("Founder story"), Trap("Term-sheet trap"), Update("Update"), Quiz("Quiz"), Term("Meaning"), Palette("Mood board") }
 
 data class Hit(val kind: Kind, val id: String, val title: String, val snippet: String, val module: String, val score: Double, val text: String)
 
@@ -25,6 +25,8 @@ class SearchIndex(lib: Library) {
             listOf(it.who, it.country, it.kind, it.outcome, it.what, it.move, it.lesson, it.apply, it.status).joinToString(" "))) }
         lib.traps.forEach { add(Doc(Kind.Trap, it.id, it.clause, "founders", it.risk,
             listOf(it.looks, it.risk, it.ask, it.india, it.seen).joinToString(" "))) }
+        lib.palettes.forEach { add(Doc(Kind.Palette, it.id, "${it.brand}: ${it.title}", "founders", it.mood,
+            listOf(it.mood, it.use, it.guardrail, it.swatches.joinToString(" ") { s -> s.name + " " + s.hex + " " + s.role }).joinToString(" "))) }
         lib.glossary.forEach { add(Doc(Kind.Term, it.id, it.term, "", it.plain, it.aliases.joinToString(" ") + " " + it.plain)) }
         lib.updates.forEach { add(Doc(Kind.Update, it.id, it.title, it.module, it.summary, it.date + " " + it.kind + " " + it.summary)) }
     }

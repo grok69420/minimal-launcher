@@ -26,8 +26,6 @@ data class Progress(
     val seen: String = "",
     /** glossary terms the user has looked up */
     val terms: Set<String> = emptySet(),
-    /** yyyy-MM-dd -> XP earned that day (streaks and the daily goal) */
-    val days: Map<String, Int> = emptyMap(),
 ) {
     fun toggleLesson(id: String) = copy(lessons = lessons.toggle(id))
     fun toggleStory(id: String) = copy(stories = stories.toggle(id))
@@ -35,11 +33,6 @@ data class Progress(
     fun knowCard(id: String, known: Boolean) = copy(cards = if (known) cards + (id to "k") else cards - id)
     fun markSeen(date: String) = if (date > seen) copy(seen = date) else this
     fun lookedUp(termId: String) = if (termId in terms) this else copy(terms = terms + termId)
-    fun addDayXp(day: String, xp: Int): Progress {
-        if (xp <= 0) return this
-        val d = days + (day to (days[day] ?: 0) + xp)
-        return copy(days = if (d.size > 400) d.toSortedMap().entries.drop(d.size - 400).associate { it.key to it.value } else d)
-    }
 
     private fun Set<String>.toggle(id: String) = if (id in this) this - id else this + id
 

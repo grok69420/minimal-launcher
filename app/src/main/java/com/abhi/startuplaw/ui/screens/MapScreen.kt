@@ -48,13 +48,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abhi.startuplaw.AppViewModel
-import com.abhi.startuplaw.data.Game
 import com.abhi.startuplaw.data.Library
 import com.abhi.startuplaw.data.Progress
 import com.abhi.startuplaw.ui.components.Bar
 import com.abhi.startuplaw.ui.components.FrostCard
 import com.abhi.startuplaw.ui.components.Hud
 import com.abhi.startuplaw.ui.components.Screen
+import com.abhi.startuplaw.ui.components.Stat
 import com.abhi.startuplaw.ui.components.ScrambleText
 import com.abhi.startuplaw.ui.theme.Ice
 import com.abhi.startuplaw.ui.theme.LocalReducedMotion
@@ -85,37 +85,18 @@ fun MapScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit) {
     val all = bs.flatMap { it.leaves }
     val on = all.count { it.on }
     val pct = if (all.isEmpty()) 0 else on * 100 / all.size
-    val earned = remember(lib, prog) { Game.earned(prog, lib) }
     Screen(title = "Progress", hud = "$on of ${all.size} learned · $pct%", onBack = null) {
-        item(key = "player") { PlayerCard(prog, lib, null) }
-        item(key = "badges") {
-            FrostCard(Modifier.fillMaxWidth()) {
-                Hud("Badges · ${earned.size} of ${Game.allBadges.size}")
-                Spacer(Modifier.height(10.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Game.allBadges.chunked(3).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { b ->
-                                val got = b.id in earned
-                                Column(
-                                    Modifier.weight(1f).heightIn(min = 104.dp).clip(RoundedCornerShape(14.dp))
-                                        .background(if (got) Ice.Aurora.copy(alpha = 0.14f) else Color.Transparent)
-                                        .border(1.dp, if (got) Ice.Aurora else Ice.EdgeLo, RoundedCornerShape(14.dp))
-                                        .semantics(mergeDescendants = true) { contentDescription = b.title + if (got) ", earned" else ", locked: " + b.how }
-                                        .testTag("badge_${b.id}").padding(horizontal = 8.dp, vertical = 10.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    com.abhi.startuplaw.ui.components.Icon(com.abhi.startuplaw.ui.components.Glyph.Spark, if (got) Ice.Aurora else Ice.Dim, 20.dp)
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(b.title, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 16.sp), color = if (got) Ice.Frost else Ice.Mist,
-                                        maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(if (got) "Earned" else b.how, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, lineHeight = 14.sp),
-                                        color = if (got) Ice.Aurora else Ice.Dim, maxLines = 3, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                }
-                            }
-                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                        }
+        item(key = "overview") {
+            FrostCard(Modifier.fillMaxWidth().testTag("progress_card"), accent = Ice.Cyan) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    com.abhi.startuplaw.ui.components.ProgressRing(pct / 100f, 72.dp) {
+                        Text("$pct%", style = MaterialTheme.typography.titleMedium, color = Ice.Frost)
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Row(Modifier.weight(1f)) {
+                        Stat("${lib.lessons.count { it.id in prog.lessons }}/${lib.lessons.size}", "Lessons")
+                        Stat("${lib.stories.count { it.id in prog.stories }}/${lib.stories.size}", "Stories")
+                        Stat("${lib.quiz.count { prog.quiz[it.id] == 1 }}/${lib.quiz.size}", "Quiz right")
                     }
                 }
             }

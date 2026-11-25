@@ -22,7 +22,8 @@ class CoreTest {
     private val lib = Library.parse(text)!!
 
     @Test fun bundledLibraryIsComplete() {
-        assertEquals(8, lib.modules.size)
+        assertEquals(12, lib.modules.size)
+        assertTrue(listOf("gtm", "ip", "marketing", "sales").all { m -> lib.lessonsByModule[m].orEmpty().size >= 3 })
         assertTrue(lib.glossary.size >= 150)
         assertEquals("basics", lib.lessonsInOrder.first().module)
         assertTrue(lib.lessons.all { it.plain.isNotBlank() })
@@ -149,25 +150,25 @@ class CoreTest {
         assertNull(com.abhi.startuplaw.data.Glossary.wordAt(t, 34))
     }
 
-    @Test fun gamification() {
-        val G = com.abhi.startuplaw.data.Game
-        var p = Progress()
-        assertEquals(0, G.xp(p, lib)); assertEquals("Idea", G.level(0).name)
-        p = p.toggleLesson("b1").toggleLesson("b2").toggleLesson("b3").answer("q00a", true).lookedUp("esop")
-        assertEquals(3 * G.LESSON + G.QUIZ + G.TERM, G.xp(p, lib))
-        assertEquals("Pre-seed", G.level(G.xp(p, lib)).name)
-        val r = G.reward(Progress(), p, lib)!!
-        assertEquals(G.xp(p, lib), r.xp); assertEquals("Pre-seed", r.levelUp?.name)
-        assertTrue(r.badges.any { it.id == "first" })
-        assertNull(G.reward(p, p, lib))
-        assertNull(G.reward(p, p.toggleLesson("b1"), lib)) // un-learning never rewards
-        val today = LocalDate.of(2026, 11, 25)
-        var d = Progress().addDayXp("2026-11-23", 10).addDayXp("2026-11-24", 5).addDayXp("2026-11-25", 20)
-        assertEquals(3, G.streak(d, today))
-        assertEquals(2, G.streak(Progress().addDayXp("2026-11-23", 10).addDayXp("2026-11-24", 5), today)) // today not started yet
-        assertEquals(0, G.streak(Progress().addDayXp("2026-11-20", 10), today))
-        assertEquals(20, G.todayXp(d, today))
-        assertEquals("Unicorn", G.level(5000).name); assertEquals(1f, G.level(5000).progress(5000))
+    @Test fun moodBoardsAreHonestAndValid() {
+        assertTrue(lib.palettes.size >= 5)
+        lib.palettes.forEach { p ->
+            assertTrue(p.id, p.basis.isNotBlank() && p.guardrail.isNotBlank() && p.swatches.size >= 3)
+            p.swatches.forEach { s -> assertTrue("${p.id}/${s.name}", s.argb != null && s.basis.isNotBlank()) }
+        }
+        // Malformed colours are dropped, never crash a screen.
+        val bad = Library.parse(text.replaceFirst("\"#006039\"", "\"green\""))!!
+        assertTrue(bad.palettes.first { it.id == "rolex" }.swatches.none { it.name == "Rolex green" })
+        assertEquals(0xFF006039L, lib.palettes.first { it.id == "rolex" }.swatches.first().argb)
+        // Mood boards are searchable.
+        assertTrue(SearchIndex(lib).search("Purple Spirit").any { it.kind == com.abhi.startuplaw.data.Kind.Palette && it.id == "rolls-royce" })
+    }
+
+    @Test fun oldProgressWithGameFieldsStillLoads() {
+        // Older builds stored XP per day; that field is now ignored and everything else survives.
+        val p = Progress.parse("""{"lessons":["b1"],"quiz":{"q00a":1},"terms":["esop"],"days":{"2026-11-24":40}}""")
+        assertEquals(setOf("b1"), p.lessons); assertEquals(1, p.quiz["q00a"]); assertEquals(setOf("esop"), p.terms)
+        assertFalse(Progress.encode(p).contains("days"))
     }
 
     @Test fun caseKeysAreDistinctive() {

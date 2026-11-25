@@ -90,7 +90,8 @@ private fun Motes() {
         List(46) { Mote(rnd.nextFloat(), rnd.nextFloat(), 0.6f + rnd.nextFloat() * 1.8f, 0.004f + rnd.nextFloat() * 0.012f, rnd.nextFloat() * 6.28f, 0.15f + rnd.nextFloat() * 0.45f) }
     }
     var t by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) { while (true) withFrameMillis { t = it } }
+    // Infinite-animation frames: paused automatically by UI tests and when animations are off.
+    LaunchedEffect(Unit) { while (true) androidx.compose.ui.platform.withInfiniteAnimationFrameMillis { t = it } }
     Canvas(Modifier.fillMaxSize().graphicsLayer()) {
         val sec = t / 1000f
         motes.forEach { m ->
@@ -115,9 +116,11 @@ fun Screen(
     particles: Boolean = false,
     content: LazyListScope.() -> Unit,
 ) {
+    val entrance = remember { Entrance() }
     IceBackground(particles) {
         Column(Modifier.fillMaxSize()) {
             TopBar(title, hud, onBack, actions)
+            androidx.compose.runtime.CompositionLocalProvider(LocalEntrance provides entrance) {
             LazyColumn(
                 modifier.fillMaxSize().testTag("list"),
                 state = state,
@@ -125,6 +128,7 @@ fun Screen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 content = content,
             )
+            }
         }
     }
 }
@@ -136,8 +140,10 @@ fun TopBar(title: String, hud: String, onBack: (() -> Unit)?, actions: @Composab
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
+            val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             Box(
-                Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBack).semantics { contentDescription = "Back" }.testTag("back"),
+                Modifier.size(48.dp).pressScale(source, to = 0.86f).clip(CircleShape)
+                    .clickable(interactionSource = source, indication = androidx.compose.foundation.LocalIndication.current, role = Role.Button, onClick = onBack).semantics { contentDescription = "Back" }.testTag("back"),
                 contentAlignment = Alignment.Center,
             ) { Icon(Glyph.Back, Ice.Frost) }
         } else Spacer(Modifier.width(12.dp))

@@ -35,7 +35,10 @@ object Ice {
     val OnCyan = Color(0xFF03121A)
 
     /** One accent per volume, all cold hues. */
-    val volume = listOf(Color(0xFF8FE8FF), Color(0xFFB59CFF), Color(0xFF7CF5C8), Color(0xFF8DB8FF), Color(0xFFFFC46B), Color(0xFFFF9EC7), Color(0xFFCFE9FF))
+    val volume = listOf(
+        Color(0xFF8FE8FF), Color(0xFFB59CFF), Color(0xFF7CF5C8), Color(0xFF8DB8FF), Color(0xFFFFC46B), Color(0xFFFF9EC7),
+        Color(0xFF6FE3D6), Color(0xFFD7C2FF), Color(0xFFFFD9A0), Color(0xFFA8D8FF), Color(0xFF9EF0B0), Color(0xFFCFE9FF),
+    )
 }
 
 val Mono = FontFamily.Monospace

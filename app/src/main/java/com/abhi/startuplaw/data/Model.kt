@@ -131,6 +131,32 @@ data class Term(
     val hl: Boolean = true,
 )
 
+/** One colour in a mood board. [basis] says whether the value is published by the brand or approximated. */
+@Serializable
+data class Swatch(val name: String = "", val hex: String = "", val role: String = "", val basis: String = "") {
+    val isValid: Boolean get() = HEX.matches(hex) && name.isNotBlank()
+    /** 0xAARRGGBB, or null if the hex is malformed. */
+    val argb: Long? get() = if (HEX.matches(hex)) 0xFF000000L or hex.drop(1).toLong(16) else null
+    companion object { private val HEX = Regex("^#[0-9A-Fa-f]{6}$") }
+}
+
+/** A brand-inspired mood board for strategy work: palette, mood, how to use it, and the legal line not to cross. */
+@Serializable
+data class Palette(
+    val id: String,
+    val order: Int = 0,
+    val brand: String = "",
+    val title: String = "",
+    val mood: String = "",
+    val swatches: List<Swatch> = emptyList(),
+    val use: String = "",
+    val guardrail: String = "",
+    val basis: String = "",
+    val src: List<Link> = emptyList(),
+) {
+    fun role(r: String): Swatch? = swatches.firstOrNull { it.role.equals(r, ignoreCase = true) }
+}
+
 @Serializable
 data class Meta(val lastChecked: String = "", val note: String = "")
 
@@ -149,6 +175,7 @@ data class Library(
     val updates: List<LawUpdate> = emptyList(),
     val meta: Meta = Meta(),
     val glossary: List<Term> = emptyList(),
+    val palettes: List<Palette> = emptyList(),
 ) {
     // Pre-sorted views, computed once per library instance.
     val modulesSorted: List<Module> by lazy { modules.sortedBy { it.order } }
@@ -161,6 +188,7 @@ data class Library(
     val gapsSorted: List<Gap> by lazy { gaps.sortedBy { it.order } }
     val storiesSorted: List<Story> by lazy { stories.sortedBy { it.order } }
     val trapsSorted: List<Trap> by lazy { traps.sortedBy { it.order } }
+    val palettesSorted: List<Palette> by lazy { palettes.sortedBy { it.order } }
     val updatesSorted: List<LawUpdate> by lazy { updates.sortedByDescending { it.date } }
     val latestUpdateDate: String by lazy { updates.maxOfOrNull { it.date } ?: "" }
     val glossaryIndex: Glossary by lazy { Glossary(glossary) }
@@ -195,6 +223,8 @@ data class Library(
             traps = uniq(traps) { it.id }.filter { it.clause.isNotBlank() },
             quiz = uniq(quiz) { it.id }.filter { it.q.isNotBlank() && it.opts.size >= 2 && it.a in it.opts.indices },
             updates = uniq(updates) { it.id }.filter { it.title.isNotBlank() }.map { it.copy(src = safeOne(it.src)) },
+            palettes = uniq(palettes) { it.id }.map { p -> p.copy(swatches = p.swatches.filter { it.isValid }, src = safeAll(p.src)) }
+                .filter { it.brand.isNotBlank() && it.swatches.isNotEmpty() },
             glossary = uniq(glossary) { it.id }.filter { it.term.isNotBlank() && it.plain.isNotBlank() }.map { t -> t.copy(aliases = t.aliases.filter { it.isNotBlank() }) },
         )
     }
