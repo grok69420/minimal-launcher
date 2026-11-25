@@ -118,10 +118,11 @@ adb shell input keyevent KEYCODE_HOME; sleep 3
 launch; sleep 3; alive "resume"; nocrash "resume"; check_shot resumed
 
 log "8. Scroll smoothness (informational on a software-rendered emulator)"
+adb shell cmd package compile -m speed-profile -f "$PKG" >/dev/null 2>&1; launch >/dev/null; sleep 3
 adb shell dumpsys gfxinfo "$PKG" reset >/dev/null
 for i in 1 2 3 4 5 6; do adb shell input swipe 540 1800 540 500 250; sleep 0.5; done
 for i in 1 2 3; do adb shell input swipe 540 600 540 1900 250; sleep 0.5; done
-adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile" | sed 's/^/  /' | tee -a "$OUT/report.txt"
+adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|Slow UI thread|Slow issue draw|Frame deadline missed|Number High input" | sed 's/^/  /' | tee -a "$OUT/report.txt"
 
 log "9. Monkey test (2000 random taps and swipes)"
 adb shell monkey -p "$PKG" --pct-syskeys 0 --pct-appswitch 2 --throttle 50 -s 4242 -v 2000 > "$OUT/monkey.txt" 2>&1

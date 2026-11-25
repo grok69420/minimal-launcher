@@ -65,7 +65,8 @@ fun IceBackground(particles: Boolean = false, content: @Composable BoxScope.() -
             Brush.verticalGradient(0f to Color(0xFF07101A), 0.45f to Ice.Night, 1f to Color(0xFF04060A))
         )
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        // Own layer: the glow is recorded once and not redrawn while lists scroll above it.
+        Canvas(Modifier.fillMaxSize().graphicsLayer()) {
             drawCircle(
                 Brush.radialGradient(listOf(Ice.CyanDeep.copy(alpha = 0.16f), Color.Transparent), center = Offset(size.width * 0.85f, -size.height * 0.02f), radius = size.width * 0.9f),
                 radius = size.width * 0.9f, center = Offset(size.width * 0.85f, -size.height * 0.02f),
