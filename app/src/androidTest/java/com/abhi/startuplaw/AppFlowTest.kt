@@ -21,6 +21,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.pinch
 import androidx.compose.ui.geometry.Offset
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -143,6 +145,15 @@ class AppFlowTest {
         // Progress map shows the learned lesson
         tab("map"); waitTag("progress_card"); shot("15-map")
         scrollTo(hasTestTag("constellation"))
+        Thread.sleep(3200); shot("15a-web-woven")
+        // Spider-web map: picking a volume lights its thread and opens a card; pinch zooms; double-tap zooms back out.
+        tapTag("web_chip_foundations"); waitTag("web_info"); Thread.sleep(400); shot("15b-web-volume")
+        rule.onNodeWithTag("constellation").performTouchInput { pinch(center - Offset(60f, 0f), center - Offset(260f, 0f), center + Offset(60f, 0f), center + Offset(260f, 0f)) }
+        rule.waitForIdle(); Thread.sleep(300); shot("15c-web-zoomed")
+        rule.onNodeWithTag("constellation").performTouchInput { doubleClick(center) }
+        rule.waitForIdle(); Thread.sleep(700)
+        rule.onNodeWithTag("constellation").performTouchInput { click(center) }
+        rule.waitForIdle(); Thread.sleep(600); shot("15d-web-reset")
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
         shot("16-map-branches")

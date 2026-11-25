@@ -7,6 +7,9 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getBoundsInRoot
@@ -155,6 +158,25 @@ class MotionTest {
         clock.advanceTimeBy(600)
         assertTrue(rule.onAllNodes(hasText("COPIED")).fetchSemanticsNodes().isNotEmpty())
         frame("m17-copied")
+        settle()
+
+        // 8. Progress web: it weaves itself in (threads, then spiral, then dew drops), then trembles where it is touched.
+        freeze()
+        rule.onNodeWithTag("tab_map").tap()
+        clock.advanceTimeBy(700)
+        frame("m18-web-weaving")
+        rule.onNodeWithTag("constellation").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "weaving"))
+        clock.advanceTimeBy(3500)
+        rule.onNodeWithTag("constellation").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "ready"))
+        frame("m19-web-woven")
+        settle()
+        rule.onNodeWithTag("list").performScrollToNode(hasTestTag("web_chip_foundations"))
+        freeze()
+        rule.onNodeWithTag("web_chip_foundations").tap()
+        clock.advanceTimeBy(180)
+        frame("m20-web-plucked")
+        clock.advanceTimeBy(2000)
+        frame("m21-web-settled")
         settle()
     }
 }
