@@ -1,0 +1,62 @@
+name: Publish Startup Law library content
+
+on:
+  push:
+    branches: [startup-law-content]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: startup-law-content
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Build and validate the library
+        run: |
+          mkdir -p out
+          REV=$(git log -1 --format=%ct) python3 tools/build_content.py content.json patches out/content.json
+
+      - name: Sign with the app's release key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.STARTUP_LAW_KEYSTORE_BASE64 }}
+        run: |
+          set -e
+          [ -n "$KEYSTORE_BASE64" ] || { echo "::error::signing key secret missing"; exit 1; }
+          umask 077
+          K="$RUNNER_TEMP/k"; mkdir -p "$K"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$K/release.jks"
+          keytool -importkeystore -noprompt -srckeystore "$K/release.jks" -srcstorepass startuplaw -srcalias startuplaw \
+            -destkeystore "$K/k.p12" -deststoretype PKCS12 -deststorepass startuplaw -destkeypass startuplaw >/dev/null 2>&1
+          openssl pkcs12 -in "$K/k.p12" -passin pass:startuplaw -nocerts -nodes -out "$K/key.pem" 2>/dev/null || \
+            openssl pkcs12 -legacy -in "$K/k.p12" -passin pass:startuplaw -nocerts -nodes -out "$K/key.pem"
+          keytool -exportcert -rfc -alias startuplaw -keystore "$K/release.jks" -storepass startuplaw > "$K/cert.pem"
+          openssl x509 -in "$K/cert.pem" -pubkey -noout > "$K/pub.pem"
+          openssl dgst -sha256 -sign "$K/key.pem" -out "$K/sig.bin" out/content.json
+          openssl dgst -sha256 -verify "$K/pub.pem" -signature "$K/sig.bin" out/content.json
+          base64 -w0 "$K/sig.bin" > out/content.json.sig
+          echo "cert sha256: $(openssl x509 -in "$K/cert.pem" -noout -fingerprint -sha256)"
+          rm -rf "$K"
+
+      - name: Publish for the app to download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: startup-law-content
+          name: Startup Law Library – content
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          files: |
+            out/content.json
+            out/content.json.sig
+          body: |
+            Signed library content downloaded by the Startup Law app when online.
+            Built from ${{ github.sha }}. Do not edit by hand: change content.json or add a file in patches/ on the startup-law-content branch.
