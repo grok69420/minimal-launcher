@@ -220,15 +220,16 @@ fun Block(label: String, text: String, color: Color = Ice.Cyan) {
             Hud(label, color = color)
         }
         Spacer(Modifier.height(6.dp))
-        Text(text, style = MaterialTheme.typography.bodyLarge, color = Ice.Frost.copy(alpha = 0.92f))
+        LawText(text, MaterialTheme.typography.bodyLarge, Ice.Frost.copy(alpha = 0.92f))
     }
 }
 
 @Composable
-fun Bullet(text: String, color: Color = Ice.Cyan) {
+fun Bullet(text: String, color: Color = Ice.Cyan, modifier: Modifier = Modifier, tappable: Boolean = true) {
     Row(Modifier.padding(vertical = 4.dp)) {
         Text("◆", color = color, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 4.dp, end = 10.dp))
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = Ice.Frost)
+        if (tappable) LawText(text, MaterialTheme.typography.bodyMedium, Ice.Frost, modifier)
+        else Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = Ice.Frost)
     }
 }
 

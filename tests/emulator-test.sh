@@ -91,7 +91,7 @@ grep -q "did not validate" "$OUT/applog.txt" && fail "published library did not 
 log "5. Every tab on the release build"
 for t in Cases Playbook Practice Progress Library; do tap "$t"; alive "$t"; nocrash "$t"; check_shot "release-$t"; done
 tap "Loopholes"; check_shot release-loopholes; adb shell input keyevent KEYCODE_BACK; sleep 2
-tap "Ask the tutor"; check_shot release-tutor; adb shell input keyevent KEYCODE_BACK; sleep 2
+tap "Tutor"; check_shot release-tutor; adb shell input keyevent KEYCODE_BACK; sleep 2
 
 log "6. Offline"
 adb shell svc wifi disable; adb shell svc data disable; sleep 5

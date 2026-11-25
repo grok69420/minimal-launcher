@@ -24,7 +24,7 @@ object Study {
     data class TutorAnswer(val notes: List<Hit>, val prompt: String)
 
     fun tutor(lib: Library, index: SearchIndex, question: String, today: LocalDate = LocalDate.now()): TutorAnswer {
-        val top = index.search(question, 6)
+        val top = index.search(question, 14).filter { it.kind != Kind.Term }.take(6)
         val recent = lib.updatesSorted.take(3)
         val notes = buildString {
             top.forEach { h -> append("[").append(h.kind.label).append("] ").append(h.title).append('\n').append(h.text.take(1100)).append("\n\n") }
@@ -39,7 +39,8 @@ Rules:
 3. The Income-tax Act, 2025 replaced the 1961 Act from 1 April 2026; mention both section numbers only when the notes give them.
 4. Explain lawful planning and the anti-avoidance consequences; do not help conceal income or evade tax.
 5. Educational, not legal or tax advice; for a real decision suggest a CA or lawyer in one short sentence.
-6. Under 220 words unless I ask for more.
+6. Assume I have zero background in law, business or tax: use simple everyday words, explain every technical term the first time, and give a small example.
+7. Under 250 words unless I ask for more.
 
 QUESTION: $question
 

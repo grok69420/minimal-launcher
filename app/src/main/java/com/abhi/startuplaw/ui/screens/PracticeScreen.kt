@@ -202,7 +202,7 @@ private fun Flashcards(vm: AppViewModel, lib: Library) {
                     Hud("Answer", color = Ice.Cyan, style = MaterialTheme.typography.labelSmall)
                     Spacer(Modifier.height(12.dp))
                     Text(card.back, style = MaterialTheme.typography.bodyLarge, color = Ice.Frost)
-                    card.points.take(4).forEach { Bullet(it) }
+                    card.points.take(4).forEach { Bullet(it, tappable = false) }
                 }
             }
         }

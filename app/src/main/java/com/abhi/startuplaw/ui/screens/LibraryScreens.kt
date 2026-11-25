@@ -30,7 +30,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abhi.startuplaw.AppViewModel
+import com.abhi.startuplaw.data.Game
 import com.abhi.startuplaw.data.Library
+import com.abhi.startuplaw.data.QuizQ
+import com.abhi.startuplaw.ui.components.LawText
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import com.abhi.startuplaw.ui.components.Bullet
 import com.abhi.startuplaw.ui.components.EmptyNote
 import com.abhi.startuplaw.ui.components.FrostCard
@@ -55,11 +66,7 @@ fun VolumeScreen(vm: AppViewModel, lib: Library, id: String, go: (String) -> Uni
     Screen(title = m?.title ?: "Volume", hud = "Vol. ${m?.vol.orEmpty()} · ${lessons.size} lessons", onBack = back) {
         if (m == null) { item { EmptyNote("This volume is no longer in the library.") }; return@Screen }
         item(key = "head") {
-            Column(Modifier.padding(vertical = 10.dp)) {
-                ScrambleText(m.title, MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.height(8.dp))
-                Text(m.blurb, style = MaterialTheme.typography.bodyLarge, color = Ice.Mist)
-            }
+            Text(m.blurb, style = MaterialTheme.typography.bodyLarge, color = Ice.Mist, modifier = Modifier.padding(vertical = 6.dp))
         }
         itemsIndexed(lessons, key = { _, l -> l.id }) { i, l ->
             val done = l.id in prog.lessons
@@ -109,50 +116,53 @@ fun LessonScreen(vm: AppViewModel, lib: Library, id: String, go: (String) -> Uni
     val pos = siblings.indexOfFirst { it.id == id }
     val color = Ice.volume[((m?.order ?: 1) - 1).mod(Ice.volume.size)]
     val related = l?.let { lesson -> lib.casesSorted.filter { it.module == lesson.module && lesson.body.any { p -> p.contains(caseKey(it.name)) } } }.orEmpty()
+    // One question from this volume that hasn't been answered right yet (stable while on the page).
+    val check = remember(id) { lib.quiz.filter { it.module == l?.module }.let { qs -> qs.firstOrNull { prog.quiz[it.id] != 1 } ?: qs.firstOrNull() } }
 
-    Screen(title = l?.title ?: "Lesson", hud = "Vol. ${m?.vol.orEmpty()} · Lesson ${pos + 1} of ${siblings.size}", onBack = back) {
+    Screen(title = m?.title ?: "Lesson", hud = "Vol. ${m?.vol.orEmpty()} · Lesson ${pos + 1} of ${siblings.size}", onBack = back) {
         if (l == null) { item { EmptyNote("This lesson is no longer in the library.") }; return@Screen }
         item(key = "head") {
-            Column(Modifier.padding(top = 10.dp)) {
-                Hud(m?.title.orEmpty(), color = color)
-                Spacer(Modifier.height(8.dp))
-                ScrambleText(l.title, MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.height(12.dp))
-                Text(l.summary, style = MaterialTheme.typography.titleMedium, color = Ice.Cyan.copy(alpha = 0.9f))
+            Column(Modifier.padding(top = 6.dp)) {
+                Text(l.title, style = MaterialTheme.typography.headlineMedium, color = Ice.Frost)
+                if (prog.terms.isEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Hud("Tip · tap any word to see what it means", color = Ice.Cyan, modifier = Modifier.testTag("tap_tip"))
+                }
             }
         }
+        if (l.plain.isNotBlank()) item(key = "plain") {
+            FrostCard(Modifier.fillMaxWidth(), accent = Ice.Cyan) {
+                Hud("In plain words")
+                Spacer(Modifier.height(8.dp))
+                LawText(l.plain, MaterialTheme.typography.bodyLarge, Ice.Frost, Modifier.testTag("plain"))
+            }
+        }
+        item(key = "detailhead") { Hud(if (l.plain.isNotBlank()) "The detail" else l.summary, color = Ice.Dim) }
         item(key = "body") {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                l.body.forEach { Text(it, style = MaterialTheme.typography.bodyLarge, color = Ice.Frost.copy(alpha = 0.92f)) }
+                if (l.plain.isNotBlank()) LawText(l.summary, MaterialTheme.typography.titleMedium, color.copy(alpha = 0.95f))
+                l.body.forEach { LawText(it, MaterialTheme.typography.bodyLarge, Ice.Frost.copy(alpha = 0.92f)) }
             }
         }
         if (l.keyPoints.isNotEmpty()) item(key = "kp") {
             FrostCard(Modifier.fillMaxWidth(), accent = color) {
-                Hud("Key points", color = color)
+                Hud("Remember", color = color)
                 Spacer(Modifier.height(6.dp))
-                l.keyPoints.forEach { Bullet(it, color) }
+                l.keyPoints.forEachIndexed { i, k -> Bullet(k, color, Modifier.testTag("kp_$i")) }
             }
         }
         if (related.isNotEmpty()) item(key = "rel") {
-            Column {
-                Hud("Cases mentioned", color = Ice.Dim)
-                Spacer(Modifier.height(8.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    related.forEach { c ->
-                        Box(Modifier.clip(CircleShape)) {
-                            IceButton(c.name.substringBefore(" v ").take(28), onClick = { go("case/${c.id}") }, primary = false, color = Ice.Aurora)
-                        }
-                    }
-                }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                related.forEach { c -> IceButton("Case: " + c.name.substringBefore(" v ").take(24), onClick = { go("case/${c.id}") }, primary = false, color = Ice.Aurora) }
             }
         }
+        if (check != null) item(key = "check") { QuickCheck(vm, check) }
         item(key = "src") { SourceLinks(l.sources) }
-        item(key = "meta") { if (l.updated.isNotBlank()) Hud("Updated ${l.updated}", color = Ice.Dim, style = MaterialTheme.typography.labelSmall) }
         item(key = "actions") {
             val done = l.id in prog.lessons
             Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 IceButton(
-                    if (done) "✓ Learned — tap to undo" else "Mark as learned",
+                    if (done) "✓ Learned — tap to undo" else "Mark as learned · +${Game.LESSON} XP",
                     onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.toggleLesson(l.id) },
                     modifier = Modifier.fillMaxWidth().testTag("mark_learned"), primary = !done, color = color,
                 )
@@ -163,6 +173,39 @@ fun LessonScreen(vm: AppViewModel, lib: Library, id: String, go: (String) -> Uni
                     else Spacer(Modifier.weight(1f))
                 }
             }
+        }
+    }
+}
+
+/** A single quiz question answered inside the lesson. */
+@Composable
+fun QuickCheck(vm: AppViewModel, q: QuizQ) {
+    var picked by rememberSaveable(q.id) { mutableStateOf<Int?>(null) }
+    FrostCard(Modifier.fillMaxWidth().testTag("quick_check"), accent = Ice.Aurora) {
+        Hud("Quick check · +${Game.QUIZ} XP", color = Ice.Aurora)
+        Spacer(Modifier.height(8.dp))
+        LawText(q.q, MaterialTheme.typography.titleMedium, Ice.Frost)
+        Spacer(Modifier.height(10.dp))
+        q.opts.forEachIndexed { i, opt ->
+            val p = picked
+            val c = when { p == null -> Ice.Edge; i == q.a -> Ice.Mint; i == p -> Ice.Coral; else -> Ice.EdgeLo }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp).heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
+                    .background(if (p != null && i == q.a) Ice.Mint.copy(alpha = 0.12f) else if (p == i) Ice.Coral.copy(alpha = 0.12f) else Color.Transparent)
+                    .border(1.dp, c, RoundedCornerShape(14.dp))
+                    .clickable(enabled = p == null) { picked = i; vm.quickCheck(q, i) }
+                    .testTag("qc_opt_$i").padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(opt, style = MaterialTheme.typography.bodyMedium, color = Ice.Frost, modifier = Modifier.weight(1f))
+                if (p != null && i == q.a) Text("✓", color = Ice.Mint)
+                if (p == i && i != q.a) Text("✕", color = Ice.Coral)
+            }
+        }
+        picked?.let { p ->
+            Spacer(Modifier.height(6.dp))
+            Hud(if (p == q.a) "Correct" else "Not quite", color = if (p == q.a) Ice.Mint else Ice.Coral)
+            LawText(q.why, MaterialTheme.typography.bodyMedium, Ice.Frost)
         }
     }
 }

@@ -3,7 +3,7 @@ package com.abhi.startuplaw.data
 import java.text.Normalizer
 import kotlin.math.ln
 
-enum class Kind(val label: String) { Lesson("Lesson"), Case("Case"), Loophole("Loophole"), Story("Founder story"), Trap("Term-sheet trap"), Update("Update"), Quiz("Quiz") }
+enum class Kind(val label: String) { Lesson("Lesson"), Case("Case"), Loophole("Loophole"), Story("Founder story"), Trap("Term-sheet trap"), Update("Update"), Quiz("Quiz"), Term("Meaning") }
 
 data class Hit(val kind: Kind, val id: String, val title: String, val snippet: String, val module: String, val score: Double, val text: String)
 
@@ -16,7 +16,7 @@ class SearchIndex(lib: Library) {
 
     private val docs: List<Doc> = buildList {
         lib.lessons.forEach { add(Doc(Kind.Lesson, it.id, it.title, it.module, it.summary,
-            listOf(it.summary, it.body.joinToString(" "), it.keyPoints.joinToString(". ")).joinToString(" "))) }
+            listOf(it.plain, it.summary, it.body.joinToString(" "), it.keyPoints.joinToString(". ")).joinToString(" "))) }
         lib.cases.forEach { add(Doc(Kind.Case, it.id, it.name, it.module, it.held,
             listOf(it.court, it.date, it.citation, it.status, it.tags.joinToString(" "), it.facts, it.held, it.why).joinToString(" "))) }
         lib.gaps.forEach { add(Doc(Kind.Loophole, it.id, it.title, it.module, it.gap,
@@ -25,6 +25,7 @@ class SearchIndex(lib: Library) {
             listOf(it.who, it.country, it.kind, it.outcome, it.what, it.move, it.lesson, it.apply, it.status).joinToString(" "))) }
         lib.traps.forEach { add(Doc(Kind.Trap, it.id, it.clause, "founders", it.risk,
             listOf(it.looks, it.risk, it.ask, it.india, it.seen).joinToString(" "))) }
+        lib.glossary.forEach { add(Doc(Kind.Term, it.id, it.term, "", it.plain, it.aliases.joinToString(" ") + " " + it.plain)) }
         lib.updates.forEach { add(Doc(Kind.Update, it.id, it.title, it.module, it.summary, it.date + " " + it.kind + " " + it.summary)) }
     }
 

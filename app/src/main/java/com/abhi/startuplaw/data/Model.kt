@@ -29,6 +29,8 @@ data class Lesson(
     val keyPoints: List<String> = emptyList(),
     val sources: List<Link> = emptyList(),
     val updated: String = "",
+    /** The lesson in simple words, for someone with zero background. */
+    val plain: String = "",
 )
 
 @Serializable
@@ -119,6 +121,16 @@ data class LawUpdate(
     val src: Link? = null,
 )
 
+/** A glossary entry: tap a word anywhere to see this. [hl] = underline it in text (false for everyday words). */
+@Serializable
+data class Term(
+    val id: String,
+    val term: String = "",
+    val aliases: List<String> = emptyList(),
+    val plain: String = "",
+    val hl: Boolean = true,
+)
+
 @Serializable
 data class Meta(val lastChecked: String = "", val note: String = "")
 
@@ -136,6 +148,7 @@ data class Library(
     val quiz: List<QuizQ> = emptyList(),
     val updates: List<LawUpdate> = emptyList(),
     val meta: Meta = Meta(),
+    val glossary: List<Term> = emptyList(),
 ) {
     // Pre-sorted views, computed once per library instance.
     val modulesSorted: List<Module> by lazy { modules.sortedBy { it.order } }
@@ -150,6 +163,10 @@ data class Library(
     val trapsSorted: List<Trap> by lazy { traps.sortedBy { it.order } }
     val updatesSorted: List<LawUpdate> by lazy { updates.sortedByDescending { it.date } }
     val latestUpdateDate: String by lazy { updates.maxOfOrNull { it.date } ?: "" }
+    val glossaryIndex: Glossary by lazy { Glossary(glossary) }
+    val termById: Map<String, Term> by lazy { glossary.associateBy { it.id } }
+    /** Every lesson in reading order: Volume 0 first. */
+    val lessonsInOrder: List<Lesson> by lazy { modulesSorted.flatMap { lessonsByModule[it.id].orEmpty() } }
 
     fun moduleTitle(id: String): String = moduleById[id]?.title ?: ""
 
@@ -178,6 +195,7 @@ data class Library(
             traps = uniq(traps) { it.id }.filter { it.clause.isNotBlank() },
             quiz = uniq(quiz) { it.id }.filter { it.q.isNotBlank() && it.opts.size >= 2 && it.a in it.opts.indices },
             updates = uniq(updates) { it.id }.filter { it.title.isNotBlank() }.map { it.copy(src = safeOne(it.src)) },
+            glossary = uniq(glossary) { it.id }.filter { it.term.isNotBlank() && it.plain.isNotBlank() }.map { t -> t.copy(aliases = t.aliases.filter { it.isNotBlank() }) },
         )
     }
 }

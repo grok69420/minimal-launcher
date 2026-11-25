@@ -71,7 +71,7 @@ fun PlaybookScreen(vm: AppViewModel, lib: Library, initialTab: Int, focus: Strin
     LaunchedEffect(focus) {
         if (focus != null) {
             val i = lib.trapsSorted.indexOfFirst { it.id == focus }
-            if (i >= 0) state.scrollToItem(i + 2)
+            if (i >= 0) state.scrollToItem(i + 1)
         }
     }
     Screen(title = "Founder playbook", hud = "Control · term sheets · survival", onBack = null, state = state) {
@@ -82,9 +82,6 @@ fun PlaybookScreen(vm: AppViewModel, lib: Library, initialTab: Int, focus: Strin
             }
         }
         if (tab == 0) {
-            item(key = "sintro") {
-                Text("Real founders who lost control, ended up in court, or kept control well — and what to copy.", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
-            }
             items(lib.storiesSorted, key = { "s-" + it.id }) { s ->
                 val studied = s.id in prog.stories
                 FrostCard(Modifier.fillMaxWidth().testTag("story_${s.id}"), onClick = { go("story/${s.id}") }, accent = if (studied) Ice.Cyan else null) {
@@ -101,9 +98,6 @@ fun PlaybookScreen(vm: AppViewModel, lib: Library, initialTab: Int, focus: Strin
                 }
             }
         } else {
-            item(key = "tintro") {
-                Text("Clauses that quietly move money or control away from founders, what to ask for instead, and the Indian-law angle.", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
-            }
             items(lib.trapsSorted, key = { "t-" + it.id }) { t ->
                 TrapCard(t, expanded = open == t.id) { open = if (open == t.id) null else t.id }
             }
@@ -126,7 +120,7 @@ private fun TrapCard(t: Trap, expanded: Boolean, toggle: () -> Unit) {
                     Hud("Looks like", color = Ice.Dim)
                     Spacer(Modifier.height(6.dp))
                     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x33000000)).border(1.dp, Ice.EdgeLo, RoundedCornerShape(12.dp)).padding(12.dp)) {
-                        Text(t.looks, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontStyle = FontStyle.Normal), color = Ice.Frost.copy(alpha = 0.85f))
+                        com.abhi.startuplaw.ui.components.LawText(t.looks, MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono, fontStyle = FontStyle.Normal), Ice.Frost.copy(alpha = 0.85f))
                     }
                 }
                 Block("The risk", t.risk, Ice.Coral)
@@ -170,7 +164,7 @@ fun StoryScreen(vm: AppViewModel, lib: Library, id: String, back: () -> Unit) {
         item(key = "act") {
             val done = s.id in prog.stories
             IceButton(
-                if (done) "✓ Studied — tap to undo" else "Mark as studied",
+                if (done) "✓ Studied — tap to undo" else "Mark as studied · +${com.abhi.startuplaw.data.Game.STORY} XP",
                 onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.toggleStory(s.id) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("mark_studied"), primary = !done,
             )
@@ -184,12 +178,9 @@ fun LoopholesScreen(lib: Library, focus: String?, back: () -> Unit) {
     val state = rememberLazyListState()
     LaunchedEffect(focus) {
         val i = lib.gapsSorted.indexOfFirst { it.id == focus }
-        if (i >= 0) state.scrollToItem(i + 1)
+        if (i >= 0) state.scrollToItem(i)
     }
-    Screen(title = "Loopholes", hud = "${lib.gaps.size} gaps · how they were used and closed", onBack = back, state = state) {
-        item(key = "intro") {
-            Text("Lawful planning that worked until the law changed. Each card shows the gap, how it was used, how it was closed, and what is still allowed today.", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
-        }
+    Screen(title = "Loopholes", hud = "How gaps were used, then closed", onBack = back, state = state) {
         items(lib.gapsSorted, key = { it.id }) { g -> GapCard(lib, g, open == g.id) { open = if (open == g.id) null else g.id } }
     }
 }

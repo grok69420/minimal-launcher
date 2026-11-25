@@ -18,6 +18,9 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.geometry.Offset
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
@@ -71,12 +74,26 @@ class AppFlowTest {
         waitTag("open_search", 30_000)
         shot("01-home")
 
+        // Start here: the first lesson of Volume 0 from the Continue card
+        tapTag("continue"); waitTag("plain"); shot("01b-first-lesson")
+        tapTag("mark_learned"); waitText("✓ LEARNED — TAP TO UNDO"); shot("01c-xp")
+        back(); waitTag("open_search"); shot("01d-home-after-xp")
+
         // Library -> volume -> lesson -> mark learned -> next lesson
         tapTag("vol_foundations"); waitTag("lesson_f1"); shot("02-volume")
         tapTag("lesson_f1"); waitText("Recognition is the gateway to most startup-specific benefits, and its definition changed on 4 February 2026."); shot("03-lesson-top")
+        // Tap an everyday word: explains it isn't a legal term
+        scrollTo(hasTestTag("kp_0")); rule.onNodeWithTag("kp_0").performTouchInput { click(Offset(10f, 20f)) }
+        waitTag("term_popup"); shot("03b-word-popup")
+        rule.onNodeWithTag("term_close").tap(); rule.waitForIdle()
+        tapTag("qc_opt_0"); waitText("QUICK CHECK", substring = true)
         tapTag("mark_learned"); waitText("✓ LEARNED — TAP TO UNDO")
         shot("04-lesson-learned")
         tapTag("next_lesson"); waitText("Choosing the entity: private company, LLP or OPC"); shot("05-next-lesson")
+        // Tap a legal term ("LLPs") and get its plain meaning
+        scrollTo(hasTestTag("kp_1")); rule.onNodeWithTag("kp_1").performTouchInput { click(Offset(10f, 20f)) }
+        waitText("LLP (limited liability partnership)"); shot("05b-term-popup")
+        rule.onNodeWithTag("term_scrim").tap(); rule.waitForIdle()
         back(); waitTag("lesson_f1")
         back(); waitTag("open_search")
 
@@ -105,7 +122,8 @@ class AppFlowTest {
         tapTag("card_know")
 
         // Progress map shows the learned lesson
-        tab("map"); waitTag("constellation"); shot("15-map")
+        tab("map"); waitTag("player_card"); shot("15-map")
+        scrollTo(hasTestTag("constellation"))
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
         shot("16-map-branches")
@@ -125,7 +143,12 @@ class AppFlowTest {
         back(); waitTag("open_search")
 
         // Tutor
-        tapText("Ask the tutor"); waitTag("tutor_field")
+        tapTag("chip_glossary"); waitTag("glossary_field"); shot("20a-glossary")
+        rule.onNodeWithTag("glossary_field").performTextInput("sweat")
+        waitTag("term_sweat-equity"); rule.onNodeWithTag("term_sweat-equity").tap(); waitTag("term_popup"); shot("20b-glossary-term")
+        rule.onNodeWithTag("term_close").tap(); rule.waitForIdle()
+        back(); waitTag("open_search")
+        tapText("Tutor"); waitTag("tutor_field")
         rule.onNodeWithTag("tutor_field").performTextInput("Can investors stop me starting another company?")
         tapTag("tutor_find"); waitText("FROM THE LIBRARY", substring = true); shot("20-tutor")
         back(); waitTag("open_search")
@@ -144,7 +167,7 @@ class AppFlowTest {
         // Progress survives the activity being recreated
         rule.activityRule.scenario.recreate()
         waitTag("open_search")
-        tab("map"); waitTag("constellation")
+        tab("map"); waitTag("player_card")
         scrollTo(hasTestTag("branch_foundations"))
         assertTrue(rule.onAllNodes(hasText("✓ What counts as a ‘startup’: the DPIIT 2026 framework")).fetchSemanticsNodes().isNotEmpty())
     }

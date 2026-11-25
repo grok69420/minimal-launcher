@@ -32,19 +32,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abhi.startuplaw.AppViewModel
+import com.abhi.startuplaw.data.Game
 import com.abhi.startuplaw.data.Library
-import com.abhi.startuplaw.data.Source
+import com.abhi.startuplaw.data.Progress
 import com.abhi.startuplaw.ui.components.Bar
 import com.abhi.startuplaw.ui.components.FrostCard
 import com.abhi.startuplaw.ui.components.Glyph
 import com.abhi.startuplaw.ui.components.Hud
+import com.abhi.startuplaw.ui.components.IceButton
 import com.abhi.startuplaw.ui.components.Icon
 import com.abhi.startuplaw.ui.components.ProgressRing
 import com.abhi.startuplaw.ui.components.Screen
-import com.abhi.startuplaw.ui.components.ScrambleText
-import com.abhi.startuplaw.ui.components.hudFrame
 import com.abhi.startuplaw.ui.theme.Ice
 
 @Composable
@@ -52,28 +53,36 @@ fun HomeScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit) {
     val prog by vm.progress.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
     val content by vm.content.collectAsStateWithLifecycle()
-    val total = lib.lessons.size + lib.stories.size + lib.quiz.size
-    val done = lib.lessons.count { it.id in prog.lessons } + lib.stories.count { it.id in prog.stories } + lib.quiz.count { prog.quiz[it.id] == 1 }
     val newUpdates = lib.updates.count { it.date > prog.seen }
+    val next = lib.lessonsInOrder.firstOrNull { it.id !in prog.lessons }
 
-    Screen(title = "Startup Law", hud = "Library // India", onBack = null, particles = true, actions = {
+    Screen(title = "Startup Law", hud = "Learn it from zero", onBack = null, particles = true, actions = {
         StatusChip(online, content.syncing) { go("about") }
     }) {
-        item(key = "hero") {
-            Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 6.dp).hudFrame().padding(18.dp)) {
-                Hud("Vol. I–${lib.modulesSorted.lastOrNull()?.vol ?: "I"} · ${lib.lessons.size} lessons · ${lib.cases.size} cases")
-                Spacer(Modifier.height(10.dp))
-                ScrambleText("Know the law before you need it.", MaterialTheme.typography.displaySmall)
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Indian startup law, the cases behind it, the loopholes that closed, and the founder fights worth learning from. Works offline; updates itself when you're online.",
-                    style = MaterialTheme.typography.bodyMedium, color = Ice.Mist,
-                )
+        item(key = "player") { PlayerCard(prog, lib) { go("map") } }
+        item(key = "continue") {
+            if (next != null) {
+                val m = lib.moduleById[next.module]
+                val pos = lib.lessonsByModule[next.module].orEmpty().indexOf(next) + 1
+                FrostCard(Modifier.fillMaxWidth().testTag("continue"), onClick = { go("lesson/${next.id}") }, accent = Ice.Cyan) {
+                    Hud(if (prog.lessons.isEmpty()) "Start here" else "Up next · Vol. ${m?.vol} · Lesson $pos")
+                    Spacer(Modifier.height(6.dp))
+                    Text(next.title, style = MaterialTheme.typography.headlineSmall, color = Ice.Frost)
+                    Spacer(Modifier.height(6.dp))
+                    Text(next.plain.ifBlank { next.summary }, style = MaterialTheme.typography.bodyMedium, color = Ice.Mist, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(14.dp))
+                    IceButton(if (prog.lessons.isEmpty()) "Start · +${Game.LESSON} XP" else "Continue · +${Game.LESSON} XP", onClick = { go("lesson/${next.id}") }, modifier = Modifier.fillMaxWidth())
+                }
+            } else {
+                FrostCard(Modifier.fillMaxWidth(), accent = Ice.Mint) {
+                    Hud("All lessons learned", color = Ice.Mint)
+                    Text("Keep your streak with the quiz and flashcards. New lessons appear as the law changes.", style = MaterialTheme.typography.bodyMedium, color = Ice.Frost)
+                }
             }
         }
         item(key = "search") {
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(16.dp))
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(16.dp))
                     .background(Ice.Glass).border(1.dp, Ice.Edge, RoundedCornerShape(16.dp))
                     .clickable(role = Role.Button) { go("search") }.testTag("open_search")
                     .padding(horizontal = 16.dp),
@@ -81,75 +90,79 @@ fun HomeScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit) {
             ) {
                 Icon(Glyph.Search, Ice.Mist, 20.dp)
                 Spacer(Modifier.width(12.dp))
-                Text("Search cases, sections, founders…", color = Ice.Dim, style = MaterialTheme.typography.bodyMedium)
+                Text("Search anything", color = Ice.Dim, style = MaterialTheme.typography.bodyMedium)
             }
         }
-        item(key = "progress") {
-            FrostCard(Modifier.fillMaxWidth(), onClick = { go("map") }, accent = Ice.Cyan) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val f = if (total == 0) 0f else done / total.toFloat()
-                    ProgressRing(f, 78.dp) { Text("${(f * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = Ice.Frost) }
-                    Spacer(Modifier.width(18.dp))
-                    Column(Modifier.weight(1f)) {
-                        Hud("Your progress")
-                        Text("$done of $total learned", style = MaterialTheme.typography.titleLarge, color = Ice.Frost)
-                        Text("Lessons, founder stories and quiz answers. Tap for your map.", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
-                    }
-                }
+        item(key = "chips") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                QuickChip("Glossary", Ice.Cyan, Modifier.weight(1f), tag = "chip_glossary") { go("glossary") }
+                QuickChip("Loopholes", Ice.Coral, Modifier.weight(1f)) { go("loopholes") }
+                QuickChip("Updates", Ice.Amber, Modifier.weight(1f), badge = newUpdates) { go("updates") }
+                QuickChip("Tutor", Ice.Aurora, Modifier.weight(1f)) { go("tutor") }
             }
         }
-        item(key = "tiles") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Tile("Loopholes", "${lib.gaps.size} closed & open gaps", Ice.Coral, Modifier.weight(1f)) { go("loopholes") }
-                    Tile("Updates", if (newUpdates > 0) "$newUpdates new" else "Checked ${lib.meta.lastChecked}", Ice.Amber, Modifier.weight(1f), badge = newUpdates) { go("updates") }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Tile("Ask the tutor", "Answers from your library", Ice.Aurora, Modifier.weight(1f)) { go("tutor") }
-                    Tile("Term-sheet traps", "${lib.traps.size} clauses to fight", Ice.Mint, Modifier.weight(1f)) { go("playbook?tab=1") }
-                }
-            }
-        }
-        item(key = "volhead") {
-            Column(Modifier.padding(top = 12.dp)) {
-                Hud("Volumes", color = Ice.Dim)
-                Text("The library", style = MaterialTheme.typography.headlineMedium, color = Ice.Frost)
-            }
-        }
+        item(key = "volhead") { Hud("Volumes", color = Ice.Dim, modifier = Modifier.padding(top = 8.dp)) }
         items(lib.modulesSorted, key = { "m-" + it.id }) { m ->
             val ls = lib.lessonsByModule[m.id].orEmpty()
             val d = ls.count { it.id in prog.lessons }
             val color = Ice.volume[(m.order - 1).mod(Ice.volume.size)]
-            FrostCard(Modifier.fillMaxWidth().testTag("vol_${m.id}"), onClick = { go("volume/${m.id}") }) {
+            FrostCard(Modifier.fillMaxWidth().testTag("vol_${m.id}"), onClick = { go("volume/${m.id}") }, padding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.12f)).border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                        Text(m.vol, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = color)
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.12f)).border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                        if (ls.isNotEmpty() && d == ls.size) Icon(Glyph.Check, color, 18.dp)
+                        else Text(m.vol, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = color)
                     }
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.title, style = MaterialTheme.typography.titleMedium, color = Ice.Frost, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(m.blurb, style = MaterialTheme.typography.bodyMedium, color = Ice.Mist, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Bar(if (ls.isEmpty()) 0f else d / ls.size.toFloat(), color, Modifier.weight(1f))
+                            Spacer(Modifier.width(10.dp))
+                            Hud("$d/${ls.size}", color = Ice.Dim, style = MaterialTheme.typography.labelSmall)
+                        }
                     }
-                    Icon(Glyph.Chevron, Ice.Dim, 18.dp)
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Bar(if (ls.isEmpty()) 0f else d / ls.size.toFloat(), color, Modifier.weight(1f))
-                    Spacer(Modifier.width(10.dp))
-                    Hud("$d/${ls.size}", color = Ice.Dim, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
-        item(key = "foot") {
-            Column(Modifier.padding(top = 10.dp)) {
-                Hud(
-                    when (content.source) { Source.Synced -> "Synced this session"; Source.Saved -> "Saved copy on this phone"; Source.Bundled -> "Built-in copy" } +
-                        " · last checked ${lib.meta.lastChecked}",
-                    color = Ice.Dim, style = MaterialTheme.typography.labelSmall,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text("Educational only. Not legal or tax advice.", style = MaterialTheme.typography.bodyMedium, color = Ice.Dim)
+        item(key = "foot") { Text("Educational only. Not legal or tax advice.", style = MaterialTheme.typography.bodyMedium, color = Ice.Dim, modifier = Modifier.padding(top = 6.dp)) }
+    }
+}
+
+/** Level, XP to next level, streak and today's goal. */
+@Composable
+fun PlayerCard(prog: Progress, lib: Library, onClick: (() -> Unit)?) {
+    val xp = Game.xp(prog, lib)
+    val lv = Game.level(xp)
+    val streak = Game.streak(prog)
+    val today = Game.todayXp(prog)
+    FrostCard(Modifier.fillMaxWidth().testTag("player_card"), onClick = onClick, accent = Ice.Cyan) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProgressRing((today / Game.DAILY_GOAL.toFloat()).coerceAtMost(1f), 68.dp, color = Ice.Mint) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("$today", style = MaterialTheme.typography.titleMedium, color = Ice.Frost)
+                    Hud("/${Game.DAILY_GOAL}", color = Ice.Dim, style = MaterialTheme.typography.labelSmall)
+                }
             }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Hud("Level ${lv.index + 1}")
+                Text(lv.name, style = MaterialTheme.typography.headlineSmall, color = Ice.Frost)
+                Spacer(Modifier.height(6.dp))
+                Bar(lv.progress(xp), Ice.Cyan)
+                Spacer(Modifier.height(4.dp))
+                Hud(Game.nextLevelName(lv)?.let { "$xp XP · ${lv.to!! - xp} to $it" } ?: "$xp XP · top level", color = Ice.Dim, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (streak > 0) Ice.Amber else Ice.Dim))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                when { streak == 0 -> "Learn something today to start a streak"; streak == 1 -> "1-day streak"; else -> "$streak-day streak" } +
+                    if (today >= Game.DAILY_GOAL) " · daily goal done" else " · ${Game.DAILY_GOAL - minOf(today, Game.DAILY_GOAL)} XP to today's goal",
+                style = MaterialTheme.typography.bodyMedium, color = Ice.Mist, modifier = Modifier.semantics { contentDescription = "Streak $streak days, $today XP today" },
+            )
         }
     }
 }
@@ -170,17 +183,20 @@ fun StatusChip(online: Boolean, syncing: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Tile(title: String, sub: String, color: Color, modifier: Modifier, badge: Int = 0, onClick: () -> Unit) {
-    FrostCard(modifier.heightIn(min = 112.dp), onClick = onClick, accent = color, padding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Glyph.Spark, color, 18.dp)
-            Spacer(Modifier.weight(1f))
-            if (badge > 0) Box(Modifier.clip(RoundedCornerShape(50)).background(color).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                Text("$badge", style = MaterialTheme.typography.labelSmall, color = Ice.OnCyan)
-            }
+private fun QuickChip(label: String, color: Color, modifier: Modifier, badge: Int = 0, tag: String = "chip_" + label.lowercase(), onClick: () -> Unit) {
+    Box(
+        modifier.heightIn(min = 64.dp).clip(RoundedCornerShape(16.dp)).background(color.copy(alpha = 0.08f))
+            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(16.dp)).clickable(role = Role.Button, onClick = onClick).testTag(tag)
+            .padding(horizontal = 6.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Glyph.Spark, color, 16.dp)
+            Spacer(Modifier.height(6.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = Ice.Frost, maxLines = 1)
         }
-        Spacer(Modifier.height(14.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, color = Ice.Frost, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(sub, style = MaterialTheme.typography.bodyMedium, color = Ice.Mist, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (badge > 0) Box(Modifier.align(Alignment.TopEnd).clip(RoundedCornerShape(50)).background(color).padding(horizontal = 6.dp, vertical = 1.dp)) {
+            Text("$badge", style = MaterialTheme.typography.labelSmall, color = Ice.OnCyan)
+        }
     }
 }

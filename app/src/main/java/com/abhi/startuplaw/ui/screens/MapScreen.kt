@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.abhi.startuplaw.AppViewModel
+import com.abhi.startuplaw.data.Game
 import com.abhi.startuplaw.data.Library
 import com.abhi.startuplaw.data.Progress
 import com.abhi.startuplaw.ui.components.Bar
@@ -83,11 +84,31 @@ fun MapScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit) {
     val all = bs.flatMap { it.leaves }
     val on = all.count { it.on }
     val pct = if (all.isEmpty()) 0 else on * 100 / all.size
-    Screen(title = "Progress map", hud = "$on of ${all.size} learned · $pct%", onBack = null) {
-        item(key = "intro") {
-            Column(Modifier.padding(top = 6.dp)) {
-                ScrambleText("Your constellation", MaterialTheme.typography.headlineMedium)
-                Text("Every lesson, founder story and quiz question is a star. Lit stars are done. Tap a spoke to open that volume.", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
+    val earned = remember(lib, prog) { Game.earned(prog, lib) }
+    Screen(title = "Progress", hud = "$on of ${all.size} learned · $pct%", onBack = null) {
+        item(key = "player") { PlayerCard(prog, lib, null) }
+        item(key = "badges") {
+            FrostCard(Modifier.fillMaxWidth()) {
+                Hud("Badges · ${earned.size} of ${Game.allBadges.size}")
+                Spacer(Modifier.height(10.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Game.allBadges.forEach { b ->
+                        val got = b.id in earned
+                        Column(
+                            Modifier.width(96.dp).clip(RoundedCornerShape(14.dp))
+                                .background(if (got) Ice.Aurora.copy(alpha = 0.14f) else Color.Transparent)
+                                .border(1.dp, if (got) Ice.Aurora else Ice.EdgeLo, RoundedCornerShape(14.dp))
+                                .semantics(mergeDescendants = true) { contentDescription = b.title + if (got) ", earned" else ", locked: " + b.how }
+                                .testTag("badge_${b.id}").padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            com.abhi.startuplaw.ui.components.Icon(com.abhi.startuplaw.ui.components.Glyph.Spark, if (got) Ice.Aurora else Ice.Dim, 20.dp)
+                            Spacer(Modifier.height(6.dp))
+                            Text(b.title, style = MaterialTheme.typography.labelMedium, color = if (got) Ice.Frost else Ice.Dim, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            if (!got) Text(b.how, style = MaterialTheme.typography.labelSmall, color = Ice.Dim, maxLines = 3, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                }
             }
         }
         item(key = "sky") { Constellation(bs, pct) { b -> go(b.route) } }

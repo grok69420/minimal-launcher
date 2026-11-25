@@ -73,10 +73,7 @@ fun UpdatesScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit, back: ()
     val seenAtOpen = remember { prog.seen }
     // Mark as seen when leaving, so "new" badges stay visible while you read.
     DisposableEffect(Unit) { onDispose { vm.markUpdatesSeen(lib.latestUpdateDate) } }
-    Screen(title = "Updates", hud = "Law changes · founder watch · checked ${lib.meta.lastChecked}", onBack = back) {
-        item(key = "intro") {
-            Text(lib.meta.note.ifBlank { "New judgments, rules and founder developments, newest first." }, style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
-        }
+    Screen(title = "Updates", hud = "Checked ${lib.meta.lastChecked}", onBack = back) {
         items(lib.updatesSorted, key = { it.id }) { u ->
             val fresh = u.date > seenAtOpen
             FrostCard(Modifier.fillMaxWidth().testTag("update_${u.id}"), accent = if (fresh) Ice.Amber else null) {
@@ -90,8 +87,7 @@ fun UpdatesScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit, back: ()
                 Spacer(Modifier.height(8.dp))
                 Text(u.title, style = MaterialTheme.typography.titleMedium, color = Ice.Frost)
                 Spacer(Modifier.height(4.dp))
-                Text(u.summary, style = MaterialTheme.typography.bodyMedium, color = Ice.Mist)
-                Hud(lib.moduleTitle(u.module), color = Ice.Dim, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp).clickable { go("volume/${u.module}") })
+                com.abhi.startuplaw.ui.components.LawText(u.summary, MaterialTheme.typography.bodyMedium, Ice.Mist)
                 SourceLinks(listOfNotNull(u.src))
             }
         }
@@ -122,7 +118,11 @@ private fun QueryField(value: String, onChange: (String) -> Unit, placeholder: S
 
 @Composable
 private fun HitCard(lib: Library, h: Hit, go: (String) -> Unit) {
-    FrostCard(Modifier.fillMaxWidth(), onClick = { go(routeFor(h.kind, h.id)) }) {
+    val lookup = com.abhi.startuplaw.ui.components.LocalWordLookup.current
+    FrostCard(Modifier.fillMaxWidth(), onClick = {
+        val t = if (h.kind == com.abhi.startuplaw.data.Kind.Term) lib.termById[h.id] else null
+        if (t != null && lookup != null) lookup.open(t.term, t, "") else go(routeFor(h.kind, h.id))
+    }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Pill(h.kind.label, Ice.Aurora)
             Spacer(Modifier.width(8.dp))
@@ -177,12 +177,6 @@ fun TutorScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit, back: () -
     var asked by rememberSaveable { mutableStateOf("") }
     val answer = remember(asked, lib) { if (asked.isBlank()) null else Study.tutor(lib, vm.index(lib), asked) }
     Screen(title = "Ask the tutor", hud = "Notes first · then Claude", onBack = back) {
-        item(key = "how") {
-            Text(
-                "Type a question. The app finds the notes in your library that answer it (works offline). Online, tap Ask Claude to open Claude with those notes attached, so the answer stays grounded in the library. Educational only.",
-                style = MaterialTheme.typography.bodyMedium, color = Ice.Mist,
-            )
-        }
         item(key = "field") { QueryField(q, { q = it }, "Your question", { if (q.isNotBlank()) asked = q.trim() }, "tutor_field", autoFocus = false, singleLine = false) }
         item(key = "ask") {
             IceButton("Find in library", onClick = { if (q.isNotBlank()) asked = q.trim() }, enabled = q.isNotBlank(), modifier = Modifier.fillMaxWidth().testTag("tutor_find"))
@@ -203,8 +197,8 @@ fun TutorScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit, back: () -
                     Hud("Explain it with Claude", color = Ice.Aurora)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        if (online) "Opens a new Claude chat with your question and the ${answer.notes.size} matching notes filled in. Review and send it there."
-                        else "You're offline. The notes below are from your library; connect to the internet to ask Claude.",
+                        if (online) "Opens Claude with your question and these ${answer.notes.size} notes, explained simply."
+                        else "Offline: the notes below are from your library.",
                         style = MaterialTheme.typography.bodyMedium, color = Ice.Mist,
                     )
                     Spacer(Modifier.height(12.dp))
@@ -252,16 +246,7 @@ fun AboutScreen(vm: AppViewModel, lib: Library, back: () -> Unit) {
             }
         }
         item(key = "sec") {
-            FrostCard(Modifier.fillMaxWidth()) {
-                Hud("Privacy & security")
-                Spacer(Modifier.height(6.dp))
-                listOf(
-                    "No account and no tracking. Your progress is stored only on this phone (and in your phone's own backup).",
-                    "Library downloads are accepted only when signed with this app's own release key, and never replace a newer copy with an older one.",
-                    "App updates come only from the official release page and open in your browser; Android installs them over this app only if they carry the same signature.",
-                    "HTTPS only. Source links open in your browser.",
-                ).forEach { Text("· $it", style = MaterialTheme.typography.bodyMedium, color = Ice.Mist, modifier = Modifier.padding(vertical = 3.dp)) }
-            }
+            Text("No account, no tracking: progress stays on this phone. Library downloads are accepted only if signed with this app's key.", style = MaterialTheme.typography.bodyMedium, color = Ice.Dim)
         }
         item(key = "reset") {
             IceButton("Reset my progress", onClick = { confirm = true }, primary = false, color = Ice.Coral, modifier = Modifier.fillMaxWidth())
@@ -276,4 +261,34 @@ fun AboutScreen(vm: AppViewModel, lib: Library, back: () -> Unit) {
         confirmButton = { TextButton(onClick = { vm.resetProgress(); confirm = false }) { Text("Reset", color = Ice.Coral) } },
         dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel", color = Ice.Frost) } },
     )
+}
+
+@Composable
+fun GlossaryScreen(vm: AppViewModel, lib: Library, back: () -> Unit) {
+    val prog by vm.progress.collectAsStateWithLifecycle()
+    val lookup = com.abhi.startuplaw.ui.components.LocalWordLookup.current
+    var q by rememberSaveable { mutableStateOf("") }
+    val terms = remember(lib, q) {
+        val n = q.trim().lowercase()
+        lib.glossary.filter { n.isEmpty() || it.term.lowercase().contains(n) || it.aliases.any { a -> a.lowercase().contains(n) } || it.plain.lowercase().contains(n) }
+            .sortedBy { it.term.lowercase() }
+    }
+    val seen = lib.glossary.count { it.id in prog.terms }
+    Screen(title = "Glossary", hud = "$seen of ${lib.glossary.size} looked up · +${com.abhi.startuplaw.data.Game.TERM} XP each", onBack = back) {
+        item(key = "field") { QueryField(q, { q = it }, "Find a word", {}, "glossary_field", autoFocus = false) }
+        items(terms, key = { it.id }) { t ->
+            val got = t.id in prog.terms
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(14.dp))
+                    .clickable { lookup?.open(t.term, t, "") }.testTag("term_${t.id}").padding(horizontal = 6.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(t.term, style = MaterialTheme.typography.titleMedium, color = Ice.Frost)
+                    Text(t.plain, style = MaterialTheme.typography.bodyMedium, color = Ice.Mist, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (got) Text("✓", color = Ice.Cyan, modifier = Modifier.padding(start = 8.dp))
+            }
+        }
+    }
 }

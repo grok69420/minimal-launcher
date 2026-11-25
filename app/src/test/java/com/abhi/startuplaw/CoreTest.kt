@@ -22,8 +22,11 @@ class CoreTest {
     private val lib = Library.parse(text)!!
 
     @Test fun bundledLibraryIsComplete() {
-        assertEquals(7, lib.modules.size)
-        assertTrue(lib.lessons.size >= 28)
+        assertEquals(8, lib.modules.size)
+        assertTrue(lib.glossary.size >= 150)
+        assertEquals("basics", lib.lessonsInOrder.first().module)
+        assertTrue(lib.lessons.all { it.plain.isNotBlank() })
+        assertTrue(lib.lessons.size >= 35)
         assertTrue(lib.cases.size >= 22)
         assertTrue(lib.gaps.size >= 8)
         assertTrue(lib.stories.size >= 13)
@@ -86,7 +89,7 @@ class CoreTest {
         assertTrue(idx.search("   ").isEmpty())
         assertTrue(idx.search("zzzzqqq").isEmpty())
         assertTrue(idx.search("Byju’s").isNotEmpty())
-        val other = idx.search("Can investors stop me starting another company?").take(3).map { it.id }
+        val other = idx.search("Can investors stop me starting another company?", 20).filter { it.kind.name != "Term" }.take(3).map { it.id }
         assertTrue(other.toString(), "fp5" in other || "founder-exclusivity" in other)
     }
 
@@ -117,6 +120,54 @@ class CoreTest {
         val o = Study.quizOrder(lib, "tax", 42)
         assertEquals(lib.quiz.count { it.module == "tax" }, o.size)
         assertEquals(o, Study.quizOrder(lib, "tax", 42))
+    }
+
+    @Test fun glossaryFindsTermsInText() {
+        val g = lib.glossaryIndex
+        val text = "Founders got sweat equity and ESOPs under the SHA; LLPs cannot issue shares. The shareholders’ agreement was copied."
+        val ids = g.find(text).map { it.term.id }
+        assertTrue(ids.toString(), ids.containsAll(listOf("sweat-equity", "esop", "sha", "llp")))
+        val span = g.find(text).first { it.term.id == "esop" }
+        assertEquals("ESOPs", text.substring(span.start, span.end))
+        assertTrue(g.find(text).any { it.term.id == "sha" && text.substring(it.start, it.end).startsWith("shareholders") })
+        // whole words only, longest match wins
+        assertTrue(g.find("The reverse flip happened.").single().term.id == "reverse-flip")
+        assertTrue(g.find("ip address mishap").none { it.term.id == "ip" })
+        assertEquals("vesting", g.lookup("vested")?.id)
+        assertEquals("esop", g.lookup("ESOPs")?.id)
+        assertNull(g.lookup("banana"))
+        assertEquals("non-compete", g.find("A non-compete clause").single().term.id)
+        // every lesson has at least one underlined term
+        lib.lessons.forEach { l -> assertTrue(l.id, g.find(l.body.joinToString(" ")).any { it.term.hl }) }
+    }
+
+    @Test fun wordAndSentenceAtOffset() {
+        val t = "Founders hold sweat-equity shares. Investors want vetoes."
+        val r = com.abhi.startuplaw.data.Glossary.wordAt(t, 16)!!
+        assertEquals("sweat-equity", t.substring(r.first, r.last + 1))
+        assertEquals("Investors want vetoes.", com.abhi.startuplaw.data.Glossary.sentenceAt(t, 40))
+        assertNull(com.abhi.startuplaw.data.Glossary.wordAt(t, 34))
+    }
+
+    @Test fun gamification() {
+        val G = com.abhi.startuplaw.data.Game
+        var p = Progress()
+        assertEquals(0, G.xp(p, lib)); assertEquals("Idea", G.level(0).name)
+        p = p.toggleLesson("b1").toggleLesson("b2").toggleLesson("b3").answer("q00a", true).lookedUp("esop")
+        assertEquals(3 * G.LESSON + G.QUIZ + G.TERM, G.xp(p, lib))
+        assertEquals("Pre-seed", G.level(G.xp(p, lib)).name)
+        val r = G.reward(Progress(), p, lib)!!
+        assertEquals(G.xp(p, lib), r.xp); assertEquals("Pre-seed", r.levelUp?.name)
+        assertTrue(r.badges.any { it.id == "first" })
+        assertNull(G.reward(p, p, lib))
+        assertNull(G.reward(p, p.toggleLesson("b1"), lib)) // un-learning never rewards
+        val today = LocalDate.of(2026, 11, 25)
+        var d = Progress().addDayXp("2026-11-23", 10).addDayXp("2026-11-24", 5).addDayXp("2026-11-25", 20)
+        assertEquals(3, G.streak(d, today))
+        assertEquals(2, G.streak(Progress().addDayXp("2026-11-23", 10).addDayXp("2026-11-24", 5), today)) // today not started yet
+        assertEquals(0, G.streak(Progress().addDayXp("2026-11-20", 10), today))
+        assertEquals(20, G.todayXp(d, today))
+        assertEquals("Unicorn", G.level(5000).name); assertEquals(1f, G.level(5000).progress(5000))
     }
 
     @Test fun caseKeysAreDistinctive() {

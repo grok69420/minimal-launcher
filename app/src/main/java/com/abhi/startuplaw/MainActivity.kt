@@ -68,6 +68,13 @@ import com.abhi.startuplaw.ui.components.Hud
 import com.abhi.startuplaw.ui.components.openExternal
 import com.abhi.startuplaw.ui.screens.AboutScreen
 import com.abhi.startuplaw.ui.screens.CaseScreen
+import com.abhi.startuplaw.ui.screens.GlossaryScreen
+import com.abhi.startuplaw.ui.components.Celebrations
+import com.abhi.startuplaw.ui.components.LocalWordLookup
+import com.abhi.startuplaw.ui.components.LookupCard
+import com.abhi.startuplaw.ui.components.WordLookup
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import com.abhi.startuplaw.ui.screens.CasesScreen
 import com.abhi.startuplaw.ui.screens.HomeScreen
 import com.abhi.startuplaw.ui.screens.LessonScreen
@@ -116,6 +123,7 @@ fun routeFor(kind: Kind, id: String): String = when (kind) {
     Kind.Trap -> "playbook?tab=1&focus=$id"
     Kind.Update -> "updates"
     Kind.Quiz -> "practice"
+    Kind.Term -> "glossary"
 }
 
 @Composable
@@ -127,13 +135,23 @@ fun AppRoot(vm: AppViewModel) {
     val tab = Tab.entries.firstOrNull { route.substringBefore('?') == it.route }
     val library = lib
     if (library == null) { IceBackground { }; return }
+    val lookup by vm.lookup.collectAsStateWithLifecycle()
+    val online by vm.online.collectAsStateWithLifecycle()
+    val wordLookup = remember(library) { WordLookup(library.glossaryIndex) { w, t, c -> vm.openLookup(w, t, c) } }
 
-    Box(Modifier.fillMaxSize().background(Ice.Night)) {
-        AppNav(nav, vm, library)
-        Column(Modifier.align(Alignment.BottomCenter)) {
-            UpdateBanner(vm)
-            AnimatedVisibility(visible = tab != null, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-                BottomBar(tab) { t -> nav.navigateTab(t.route) }
+    CompositionLocalProvider(LocalWordLookup provides wordLookup) {
+        Box(Modifier.fillMaxSize().background(Ice.Night)) {
+            AppNav(nav, vm, library)
+            Column(Modifier.align(Alignment.BottomCenter)) {
+                UpdateBanner(vm)
+                AnimatedVisibility(visible = tab != null, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+                    BottomBar(tab) { t -> nav.navigateTab(t.route) }
+                }
+            }
+            Celebrations(vm.rewards)
+            lookup?.let { l ->
+                LookupCard(l.word, l.term, l.context, online, onClose = vm::closeLookup,
+                    onOpenGlossary = if (route == "glossary") null else ({ vm.closeLookup(); nav.navigate("glossary") { launchSingleTop = true } }))
             }
         }
     }
@@ -179,6 +197,7 @@ private fun AppNav(nav: NavHostController, vm: AppViewModel, lib: Library) {
         composable("tutor") { TutorScreen(vm, lib, go, back) }
         composable("search") { SearchScreen(vm, lib, go, back) }
         composable("about") { AboutScreen(vm, lib, back) }
+        composable("glossary") { GlossaryScreen(vm, lib, back) }
     }
 }
 
