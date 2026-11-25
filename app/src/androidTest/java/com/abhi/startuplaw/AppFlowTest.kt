@@ -13,7 +13,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -56,10 +58,13 @@ class AppFlowTest {
         rule.onNodeWithTag("list").performScrollToNode(m)
     }
 
-    private fun tapTag(tag: String) { scrollTo(hasTestTag(tag)); rule.onNodeWithTag(tag).performClick(); rule.waitForIdle() }
-    private fun tapText(text: String) { scrollTo(hasText(text)); rule.onNodeWithText(text).performClick(); rule.waitForIdle() }
-    private fun tab(route: String) { rule.onNodeWithTag("tab_$route").performClick(); rule.waitForIdle() }
-    private fun back() { rule.onNodeWithTag("back").performClick(); rule.waitForIdle() }
+    // Taps via the accessibility click action, so a node partly under the floating bottom bar still works.
+    private fun SemanticsNodeInteraction.tap() = performSemanticsAction(SemanticsActions.OnClick)
+
+    private fun tapTag(tag: String) { scrollTo(hasTestTag(tag)); rule.onNodeWithTag(tag).tap(); rule.waitForIdle() }
+    private fun tapText(text: String) { scrollTo(hasText(text)); rule.onNodeWithText(text).tap(); rule.waitForIdle() }
+    private fun tab(route: String) { rule.onNodeWithTag("tab_$route").tap(); rule.waitForIdle() }
+    private fun back() { rule.onNodeWithTag("back").tap(); rule.waitForIdle() }
 
     @Test
     fun everyScreenWorks() {
@@ -85,17 +90,17 @@ class AppFlowTest {
         tapTag("story_byjus"); waitTag("mark_studied"); shot("09-story")
         tapTag("mark_studied"); waitText("✓ Studied — tap to undo")
         back(); waitTag("story_byjus")
-        scrollTo(hasText("Term-sheet traps ·", substring = true)); rule.onNodeWithText("Term-sheet traps ·", substring = true).performClick(); rule.waitForIdle()
+        scrollTo(hasText("Term-sheet traps ·", substring = true)); rule.onNodeWithText("Term-sheet traps ·", substring = true).tap(); rule.waitForIdle()
         tapTag("trap_participating-pref"); waitText("ASK FOR INSTEAD"); shot("10-trap-open")
 
         // Practice: quiz + flashcards
         tab("practice"); waitTag("quiz_question"); shot("11-quiz")
-        rule.onNodeWithTag("opt_0").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("opt_0").tap(); rule.waitForIdle()
         waitTag("quiz_next"); shot("12-quiz-answered")
         tapTag("quiz_next"); waitTag("quiz_question")
-        scrollTo(hasText("Flashcards ·", substring = true)); rule.onNodeWithText("Flashcards ·", substring = true).performClick(); rule.waitForIdle()
+        scrollTo(hasText("Flashcards ·", substring = true)); rule.onNodeWithText("Flashcards ·", substring = true).tap(); rule.waitForIdle()
         waitTag("flashcard"); shot("13-card-front")
-        rule.onNodeWithTag("flashcard").performClick(); rule.waitForIdle(); Thread.sleep(600)
+        rule.onNodeWithTag("flashcard").tap(); rule.waitForIdle(); Thread.sleep(600)
         waitText("ANSWER"); shot("14-card-back")
         tapTag("card_know")
 
@@ -126,7 +131,7 @@ class AppFlowTest {
         back(); waitTag("open_search")
 
         // Sync & app screen
-        rule.onNodeWithTag("status_chip").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag("status_chip").tap(); rule.waitForIdle()
         waitTag("sync_now"); shot("21-about")
         back(); waitTag("open_search")
 

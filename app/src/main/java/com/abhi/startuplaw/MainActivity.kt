@@ -201,7 +201,7 @@ private fun BottomBar(current: Tab?, onSelect: (Tab) -> Unit) {
     ) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
-                .background(Color(0xE60B141F))
+                .background(Color(0xFA0A121C))
                 .border(1.dp, Ice.Edge, RoundedCornerShape(26.dp))
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
