@@ -1,0 +1,2239 @@
+{
+ "date": "2026-11-25",
+ "upserts": [
+  {
+   "c": "modules",
+   "id": "gtm",
+   "data": {
+    "title": "Go-to-Market & Pricing",
+    "vol": "VIII",
+    "order": 8,
+    "blurb": "Launch strategy, pricing and discounts under competition law, dealer deals, and selling through marketplaces."
+   }
+  },
+  {
+   "c": "modules",
+   "id": "ip",
+   "data": {
+    "title": "IP: Patents, Trademarks & Copyright",
+    "vol": "IX",
+    "order": 9,
+    "blurb": "Protecting what you build: brand names, patents (software and pharma), copyright, designs and trade secrets."
+   }
+  },
+  {
+   "c": "modules",
+   "id": "marketing",
+   "data": {
+    "title": "Marketing & Advertising Law",
+    "vol": "X",
+    "order": 10,
+    "blurb": "Ad claims, comparative ads, influencers, dark patterns and what regulators now punish."
+   }
+  },
+  {
+   "c": "modules",
+   "id": "sales",
+   "data": {
+    "title": "Sales, Consumers & Contracts",
+    "vol": "XI",
+    "order": 11,
+    "blurb": "Selling to consumers and businesses: consumer commissions, unfair terms, refunds, MRP and getting paid."
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "gtm1",
+   "data": {
+    "module": "gtm",
+    "order": 1,
+    "title": "Go-to-market: who you sell to, where, and how",
+    "summary": "A go-to-market (GTM) plan picks the first customer, the message, the channel, the sales motion and the price.",
+    "plain": "Go-to-market means your plan for getting a product into customers' hands and getting paid. You decide who exactly you sell to first, why they should care, where they will find you, who does the selling (the product itself, a sales team or partners) and what you charge. Each of those choices also comes with legal rules, which the rest of Volumes VIII to XI cover.",
+    "body": [
+     "A GTM plan answers five questions. (1) Ideal customer profile (ICP): the narrow group that feels the problem most and can pay. (2) Positioning: the one reason they should pick you over the alternative, including doing nothing. (3) Channels: where those customers already look, such as search, marketplaces, distributors, direct sales or communities. (4) Motion: product-led (users try and buy on their own), sales-led (people sell, usually to businesses) or partner-led (distributors, resellers, platforms). (5) Pricing and packaging.",
+     "Start with a beachhead: one segment you can win outright, then expand to the next. Track unit economics from day one: customer acquisition cost (CAC) against the gross margin a customer brings over their lifetime (LTV). If CAC is higher than LTV, growth only burns cash.",
+     "Legal checkpoints for each GTM choice: pricing and discounts (Competition Act, 2002, next lesson); dealers and distributors (rules on resale prices and exclusivity); marketplaces (Consumer Protection (E-Commerce) Rules, 2020 and FDI rules); ads and influencers (Volume X); consumer sales, refunds and contracts (Volume XI); your brand name and inventions (Volume IX). Build these into the plan before launch rather than after a notice arrives.",
+     "Use the Mood boards tab in the Playbook to set the look and feel of a launch, and check Volume IX before copying any brand's look too closely."
+    ],
+    "keyPoints": [
+     "ICP → positioning → channel → motion → price",
+     "Win one beachhead segment first",
+     "Each GTM choice has a legal checklist (Vols VIII–XI)"
+    ],
+    "sources": [],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "gtm2",
+   "data": {
+    "module": "gtm",
+    "order": 2,
+    "title": "Pricing, discounts and competition law",
+    "summary": "Discounting is legal; controlling your dealers' resale prices, or pricing below cost while dominant, is not.",
+    "plain": "You can set your own prices and run discounts. Two things get companies fined: telling independent dealers or resellers what price they must sell at (or how small a discount they may give), and, only if you dominate a market, selling below cost to push rivals out. Fines can reach 10% of turnover, and turnover now means global turnover.",
+    "body": [
+     "The Competition Act, 2002 polices pricing in two ways. Section 3 bans anti-competitive agreements; section 3(4) covers vertical agreements along the supply chain (tie-ins, exclusive supply or distribution, refusal to deal and resale price maintenance) when they cause an appreciable adverse effect on competition in India. Section 4 bans abuse of a dominant position, including unfair or discriminatory prices and predatory pricing, meaning selling below cost to reduce competition or eliminate competitors.",
+     "Resale price maintenance in practice: on 23 August 2021 the CCI fined Maruti Suzuki ₹200 crore for a 'Discount Control Policy' that capped the discounts its dealers could give, enforced through mystery shopping agencies and penalties on dealers. Maruti's appeal is pending before NCLAT, which stayed the penalty in November 2021 on a 10% deposit. Recommending a price is generally safe; policing it is the risk.",
+     "Predatory pricing needs dominance first. A new startup giving launch discounts is rarely dominant, but platforms that become dominant face scrutiny of deep discounting, exclusivity and self-preferencing, as the CCI's Google Android case and its investigation of Amazon and Flipkart show.",
+     "Penalty: up to 10% of the average turnover of the last three financial years. Since the Competition (Amendment) Act, 2023 and the CCI's penalty guidelines of 6 March 2024, 'turnover' for this purpose means global turnover."
+    ],
+    "keyPoints": [
+     "Recommend prices to dealers; never enforce them",
+     "Below-cost pricing is illegal only for a dominant firm",
+     "Penalty up to 10% of average global turnover"
+    ],
+    "sources": [
+     {
+      "t": "PIB: CCI penalty on Maruti, 23 Aug 2021",
+      "u": "https://pib.gov.in/PressReleasePage.aspx?PRID=1748288"
+     },
+     {
+      "t": "Tribune: NCLAT stays Maruti penalty",
+      "u": "https://m.tribuneindia.com/news/business/nclat-stays-competition-comms-rs-200-cr-penalty-on-maruti-suzuki-asks-co-to-deposit-10-pc-amount-in-3-weeks-341535"
+     },
+     {
+      "t": "Business Standard: penalty on global turnover",
+      "u": "https://www.business-standard.com/amp/opinion/columns/basis-for-penalty-in-competition-law-123051501164_1.html"
+     },
+     {
+      "t": "ELP: CCI Penalty Guidelines 2024",
+      "u": "https://elplaw.in/?p=9166"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "gtm3",
+   "data": {
+    "module": "gtm",
+    "order": 3,
+    "title": "Selling through marketplaces and your own online store",
+    "summary": "The E-Commerce Rules set disclosure, grievance and cancellation duties; FDI rules keep foreign-funded marketplaces out of inventory.",
+    "plain": "If you sell online, on Amazon or Flipkart or through your own site, the Consumer Protection (E-Commerce) Rules, 2020 apply. Show who the seller is, the total price, return and refund terms and the country of origin, and have a grievance officer who answers complaints. If you run a marketplace with foreign investment, you may not own the stock sold on it.",
+    "body": [
+     "The Consumer Protection (E-Commerce) Rules, 2020 were notified on 23 July 2020 and cover marketplace and inventory models, including platforms based abroad that systematically offer goods or services to people in India. A platform must appoint a grievance officer who acknowledges complaints within 48 hours and redresses them within one month; show the total price with a breakup of charges, seller details and country of origin; and must not charge cancellation fees unless it bears similar charges when it cancels an order itself.",
+     "FDI policy (Press Note 2 of 2018, in force from 1 February 2019) allows foreign investment only in the marketplace model. A foreign-funded marketplace cannot own or control the inventory sold on it; a seller in which the marketplace group holds equity cannot sell on that marketplace; and if more than 25% of a vendor's purchases come from the marketplace group, its inventory is treated as controlled by the marketplace.",
+     "A marketplace keeps 'intermediary' protection only while it stays passive. In Christian Louboutin v Nakul Bajaj (Delhi High Court, 2 November 2018) an online store that vouched for authenticity and ran the sale itself could not claim safe harbour for counterfeits. If you curate, warehouse or guarantee products, expect to carry the seller's legal risk."
+    ],
+    "keyPoints": [
+     "Grievance officer: acknowledge in 48 hours",
+     "No one-sided cancellation fees",
+     "Foreign-funded marketplaces can't own inventory"
+    ],
+    "sources": [
+     {
+      "t": "Mondaq: E-Commerce Rules 2020",
+      "u": "https://www.mondaq.com/india/dodd-frank-consumer-protection-act/985606/the-consumer-protection-e-commerce-rules-2020"
+     },
+     {
+      "t": "ONDC handbook: E-Commerce Rules",
+      "u": "https://www.ondc.org/legal-compliance-handbook/ANNEXURE-%E2%80%93-E.1086291982.html"
+     },
+     {
+      "t": "Khaitan: Louboutin v Nakul Bajaj",
+      "u": "https://khaitanco.com/thought-leadership/delhi-high-court-clarifies-the-extent-of-safe-harbour-provisions-for-intermediaries"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "ip1",
+   "data": {
+    "module": "ip",
+    "order": 1,
+    "title": "The IP toolkit: trademarks, copyright, patents, designs, trade secrets",
+    "summary": "Each right protects something different, lasts a different time and needs different paperwork.",
+    "plain": "Intellectual property (IP) means owning what you create: your brand name and logo (trademark), your code, writing and artwork (copyright), a new technical invention (patent), the look of a product (design) and secret know-how (trade secret). Some rights arise automatically; others exist only after registration. Register the ones that matter before you launch publicly, and make sure the company, not individual people, owns them.",
+    "body": [
+     "Trademark (Trade Marks Act, 1999): protects names, logos and slogans, and can cover the shape of goods, packaging or a combination of colours that identifies your business. Registration lasts 10 years and can be renewed again and again. Unregistered marks can still be protected through a 'passing off' action if you have built goodwill.",
+     "Copyright (Copyright Act, 1957): arises automatically for original code, text, art, music and film. For literary works, which include software, it lasts for the author's life plus 60 years. Registration is optional but is useful evidence. Copyright protects the expression, not the idea behind it.",
+     "Patent (Patents Act, 1970): a 20-year exclusive right over an invention that is new, inventive and capable of industrial use, granted only after examination. File before you disclose the invention publicly. Design (Designs Act, 2000): protects the visual shape, pattern or ornamentation of a product for 10 years, extendable by 5.",
+     "Trade secrets: India has no separate statute. Protection comes from contracts (NDAs, confidentiality and invention-assignment clauses) and the court action for breach of confidence. Every founder, employee and contractor should sign an IP assignment, or the company may not own what they build.",
+     "Startup benefits (SIPP scheme): DPIIT-recognised startups get an 80% rebate on patent filing fees, fast-tracked examination, and government-paid facilitator fees for patents, trademarks and designs; trademark filing fees for startups were cut by 50%."
+    ],
+    "keyPoints": [
+     "Trademark 10 yrs (renewable) · Patent 20 yrs · Design 10+5",
+     "Copyright is automatic; registration is evidence",
+     "Get IP assignments from everyone who builds"
+    ],
+    "sources": [
+     {
+      "t": "Startup India: IPR benefits",
+      "u": "https://www.startupindia.gov.in/content/sih/en/intellectual-property-rights.html"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "ip2",
+   "data": {
+    "module": "ip",
+    "order": 2,
+    "title": "Patents for software, AI and medicines",
+    "summary": "Software 'per se' and minor drug tweaks are not inventions; a technical effect or real extra efficacy can be.",
+    "plain": "India will not patent a computer program by itself, a business method or an algorithm. But software that produces a real technical result, such as faster or safer hardware, less memory, or a working device, can be patented. For medicines, a new form of a known drug is not patentable unless it works noticeably better as a treatment.",
+    "body": [
+     "Section 3 of the Patents Act lists what is 'not an invention'. Section 3(k) excludes 'a mathematical or business method or a computer programme per se or algorithms'. Section 3(d) excludes new forms of a known substance unless they differ significantly in efficacy.",
+     "Software: in Ferid Allani v Union of India (Delhi High Court, 12 December 2019) the court said the bar applies to computer programs 'per se', not to every invention based on a program, and sent the application back to be examined for technical effect and technical contribution. The Patent Office's Guidelines for Examination of Computer Related Inventions, 2025 (released 29 July 2025) apply this approach and cover AI, machine-learning and blockchain inventions.",
+     "Medicines: in Novartis AG v Union of India (Supreme Court, 1 April 2013) the court refused a patent for the beta-crystalline form of imatinib (Glivec). Better bioavailability alone did not show enhanced therapeutic efficacy under section 3(d). This stops 'evergreening'.",
+     "Startup tactics: draft claims around the technical problem and the technical result, not the business outcome; keep lab notes and benchmark data that prove the effect; use the startup fee rebate and fast-tracked examination; and consider a provisional specification to secure your filing date, then file the complete specification within 12 months."
+    ],
+    "keyPoints": [
+     "s.3(k): no patents for software 'per se'",
+     "Technical effect/contribution can make software patentable",
+     "s.3(d): a new form of a known drug needs better efficacy"
+    ],
+    "sources": [
+     {
+      "t": "Ferid Allani judgment (IP India)",
+      "u": "https://ipindia.gov.in/storage/uploads/media/2.%20Ferid%20Allani%20v.%20Union%20of%20India%2C%202019%2C%20M%20Pratibha.pdf"
+     },
+     {
+      "t": "IP India: CRI Guidelines 2025",
+      "u": "https://www.ipindia.gov.in/Patents/guidelines_patents"
+     },
+     {
+      "t": "UNCTAD: Novartis v Union of India",
+      "u": "https://unctad.org/ippcaselaw/novartis-ag-v-union-india-others-supreme-court-india-1-april-2013"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "ip3",
+   "data": {
+    "module": "ip",
+    "order": 3,
+    "title": "Brand names and trademarks: choose a name you can own",
+    "summary": "Invented names are strong, descriptive ones are weak, and earlier use can beat a later registration.",
+    "plain": "A brand name is valuable only if you can stop others using it. Invented or unrelated words are easy to protect; names that simply describe the service ('BookMy…') are hard to protect. Search before you pick a name, file early, and remember that a business that used a name first can sometimes keep it even against a global brand.",
+    "body": [
+     "Courts place marks on a spectrum: generic (never protectable), descriptive (protectable only after it gains a 'secondary meaning'), suggestive, and arbitrary or invented (strongest). In Bigtree Entertainment v Brain Seed Sportainment (Delhi High Court, 13 December 2017) BookMyShow could not stop 'bookmysports' because the prefix 'BOOKMY' described online booking and had not acquired distinctiveness.",
+     "Domain names are protected too. In Satyam Infoway v Sifynet Solutions (Supreme Court, 6 May 2004) the court held that domain names are protected like trademarks and that passing off applies to them.",
+     "Earlier use counts. Section 34 of the Trade Marks Act protects a person who has continuously used a mark from before the registered owner's use or registration, whichever is earlier. A Pune restaurant called Burger King since 1992 won at trial against Burger King Corporation in July 2024; the Bombay High Court restrained it on 2 December 2024; the Supreme Court stayed that order on 7 March 2025 and the appeal continues.",
+     "Search ads on a rival's name: in Google LLC v DRS Logistics (Delhi High Court, division bench, 10 August 2023) using a trademark as an ad keyword was 'use in advertising' but not infringement by itself; it infringes only if it causes confusion, takes unfair advantage or harms the mark. Google could not claim intermediary safe harbour for its Ads programme.",
+     "Colours and overall look: under section 2(1)(m) a 'mark' can include packaging or a combination of colours. Taking inspiration from a brand's mood is fine, but copying a famous brand's overall look in the same market invites a passing-off claim."
+    ],
+    "keyPoints": [
+     "Invented > suggestive > descriptive > generic",
+     "Search, then file before launch",
+     "Earlier continuous use can defeat a later registration (s.34)"
+    ],
+    "sources": [
+     {
+      "t": "SpicyIP: BookMyShow v bookmysports",
+      "u": "https://spicyip.com/2018/01/bookmy-row-delhi-high-court-denies-bookmyshow-an-injunction-against-bookmysports.html"
+     },
+     {
+      "t": "iPleaders: Satyam Infoway v Sifynet",
+      "u": "https://blog.ipleaders.in/satyam-infoway-ltd-v-sifynet-solutions-p-ltd-2004-case-analysis/"
+     },
+     {
+      "t": "LiveLaw: Bombay HC order, Dec 2024",
+      "u": "https://livelaw.in/high-court/bombay-high-court/bombay-high-court-relief-burger-king-pune-eatery-trademark-infringement-case-277054"
+     },
+     {
+      "t": "Business Standard: SC stays Bombay HC order",
+      "u": "https://www.business-standard.com/india-news/sc-stays-bombay-hc-order-allows-pune-eatery-to-use-burger-king-125031000800_1.html"
+     },
+     {
+      "t": "SCC Online: Google v DRS Logistics",
+      "u": "https://www.scconline.com/blog/post/2023/08/14/googles-use-of-trade-mark-as-keyword-for-display-of-advertisements-amounts-to-use-delhi-hc/"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "mk1",
+   "data": {
+    "module": "marketing",
+    "order": 1,
+    "title": "Ad claims and comparative advertising",
+    "summary": "You may boast and compare honestly; you may not mislead or run down a rival's product.",
+    "plain": "Ads can boast ('the best coffee in town') and can compare you with a rival, as long as the comparison is true and fair. You cannot make false or unproven claims, hide key conditions in tiny print, or unfairly make a rival look bad. The consumer regulator can fine advertisers and endorsers, and rivals can get court orders to pull the ad.",
+    "body": [
+     "The Consumer Protection Act, 2019 defines a 'misleading advertisement' in section 2(28). On 9 June 2022 the Central Consumer Protection Authority (CCPA) issued the Guidelines for Prevention of Misleading Advertisements and Endorsements for Misleading Advertisements, covering bait ads, 'free' claims, surrogate ads, ads aimed at children and endorsements. The CCPA can fine manufacturers, advertisers and endorsers up to ₹10 lakh, and up to ₹50 lakh for later contraventions, and can bar an endorser for up to 1 year, or 3 years for later contraventions.",
+     "Rivals enforce comparative-advertising limits in court. The principles from Reckitt & Colman v Kiwi TTK (Delhi High Court, 1996), Pepsi Co v Hindustan Coca Cola (Delhi High Court division bench, 2003) and Dabur India v Colortek Meghalaya (Delhi High Court division bench, 2 February 2010): puffery is allowed and you may say your product is the best or better, but you may not denigrate or defame a rival's goods. Courts look at the ad's intent, manner and overall message, and are stricter with TV because of its impact.",
+     "Same claim, different medium: Complan's 'one cup equals two cups of Horlicks' protein comparison survived as a print ad that explained the different serving sizes (Horlicks v Heinz, Delhi High Court, December 2018), but its TV commercial was restrained on 14 May 2020 (Horlicks v Zydus Wellness) because a few seconds on screen could not make the serving-size difference clear.",
+     "Working rules: hold substantiation (tests, data) before an ad runs; make disclaimers readable and in the same medium as the claim; compare like with like; never mock the rival's product."
+    ],
+    "keyPoints": [
+     "Puffery yes, denigration no",
+     "Substantiate every factual claim before it airs",
+     "CCPA fines up to ₹10 lakh, ₹50 lakh for repeats; endorser bans"
+    ],
+    "sources": [
+     {
+      "t": "PIB: Misleading ads guidelines 2022",
+      "u": "https://pib.gov.in/PressReleasePage.aspx?PRID=1832906"
+     },
+     {
+      "t": "Mondaq: Dabur v Colortek",
+      "u": "https://www.mondaq.com/india/patent/137354/colorteks-advertisement-found-not-disparaging-delhi-high-court"
+     },
+     {
+      "t": "Global Freedom of Expression: Horlicks v Heinz",
+      "u": "https://globalfreedomofexpression.columbia.edu/cases/horlicks-limited-v-heinz-india-private-limited"
+     },
+     {
+      "t": "Khaitan: Horlicks v Zydus",
+      "u": "https://khaitanco.com/thought-leaderships/Advertisement-in-electronic-media-has-an-indelible-impression-in-the-minds-of-viewers"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "mk2",
+   "data": {
+    "module": "marketing",
+    "order": 2,
+    "title": "Influencers, celebrities and the Patanjali rule",
+    "summary": "Advertisers and endorsers share responsibility, and a self-declaration must be filed before an ad runs.",
+    "plain": "If you pay influencers or celebrities to promote you, both you and they are answerable if the ad misleads. Paid posts must be clearly marked as ads. Since the Supreme Court's Patanjali order, advertisers must file a self-declaration that the ad follows the rules before it is published.",
+    "body": [
+     "Indian Medical Association v Union of India (the Patanjali misleading-ads case): on 7 May 2024 the Supreme Court (Justices Hima Kohli and Ahsanuddin Amanullah) said advertisers and endorsers are responsible for misleading ads and that celebrities and influencers must act responsibly, and directed that a self-declaration be submitted before any advertisement is printed, aired or displayed, on the lines of Rule 7 of the Cable Television Networks Rules, 1994.",
+     "The Ministry of Information and Broadcasting put this into practice from June 2024: self-declaration certificates are required for ads across broadcast, print and digital media (TV and radio through the Broadcast Seva portal), and proof of upload is given to the broadcaster or publisher.",
+     "The CCPA's 2022 guidelines also cover endorsements: an endorsement should reflect the endorser's genuine opinion based on adequate information or experience, and any material connection with the brand, such as payment or a stake, must be disclosed. Since November 2023, 'disguised advertisement' (paid content made to look like organic content) is also a specified dark pattern.",
+     "Working rules: start paid posts with 'Ad' or 'Sponsored'; brief endorsers in writing with substantiated claims only; keep a copy of every self-declaration and every approved script."
+    ],
+    "keyPoints": [
+     "Advertisers and endorsers are both answerable",
+     "Self-declare compliance before an ad runs",
+     "Label paid content clearly"
+    ],
+    "sources": [
+     {
+      "t": "LiveLaw: SC directions on misleading ads",
+      "u": "https://www.livelaw.in/top-stories/supreme-court-influencer-ads-misleading-guideliens-self-declaration-257318"
+     },
+     {
+      "t": "Bar & Bench: self-declaration mandate",
+      "u": "https://www.barandbench.com/law-firms/view-point/self-declaration-certificates-advertisements-supreme-court-mib-mandate"
+     },
+     {
+      "t": "PIB: Misleading ads guidelines 2022",
+      "u": "https://pib.gov.in/PressReleasePage.aspx?PRID=1832906"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "mk3",
+   "data": {
+    "module": "marketing",
+    "order": 3,
+    "title": "Dark patterns, surrogate ads and 'T&C apply' tricks",
+    "summary": "Thirteen dark patterns are specified, surrogate ads are prohibited, and a guarantee buried in fine print is misleading.",
+    "plain": "Some growth tricks are now illegal in India: fake countdown timers, sneaking items into the cart, shaming people who say no, making cancellation hard, revealing extra fees only at checkout, and ads disguised as content. Advertising a banned product such as alcohol through a 'soda' or 'music' line with the same name is banned too. A big promise whose real conditions sit in tiny print counts as misleading.",
+    "body": [
+     "On 30 November 2023 the CCPA notified the Guidelines for Prevention and Regulation of Dark Patterns, 2023, which list 13 specified dark patterns: false urgency, basket sneaking, confirm shaming, forced action, subscription trap, interface interference, bait and switch, drip pricing, disguised advertisement, nagging, trick question, SaaS billing and rogue malware. They apply to platforms systematically offering goods or services in India, and to advertisers and sellers.",
+     "Surrogate advertising: the 2022 misleading-ads guidelines prohibit surrogate or indirect ads for goods or services whose advertising is banned or restricted, for example promoting a liquor brand through a soda or music line carrying the same name.",
+     "Fine print is no defence. In August 2025 the CCPA fined Rapido ₹10 lakh over 'Guaranteed Auto' and 'Auto in 5 min or get ₹50' ads: the ₹50 was paid as Rapido coins usable only for bike rides and valid for 7 days, the 'T&C apply' text was too small to read, and the terms said the guarantee came from individual drivers rather than Rapido. It ordered the ads stopped and consumers compensated.",
+     "Audit your funnel: real stock and real deadlines only; add-ons only when the customer opts in; cancelling as easy as signing up; the full price shown up front; sponsored content labelled."
+    ],
+    "keyPoints": [
+     "13 specified dark patterns since 30 Nov 2023",
+     "Surrogate ads prohibited (2022 guidelines)",
+     "A headline promise must survive its own fine print"
+    ],
+    "sources": [
+     {
+      "t": "JSA: Dark Patterns Guidelines 2023",
+      "u": "https://jsalaw.com/wp-content/uploads/2023/12/JSA-Prism-Consumer-Protection-Guidelines-for-Prevention-and-Regulation-of-Dark-Patterns-20233-Final.pdf"
+     },
+     {
+      "t": "The Leaflet: surrogate ads banned",
+      "u": "https://theleaflet.in/?p=45109"
+     },
+     {
+      "t": "PIB: CCPA penalty on Rapido",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2158830"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "sl1",
+   "data": {
+    "module": "sales",
+    "order": 1,
+    "title": "Selling to consumers: the Consumer Protection Act, 2019",
+    "summary": "Consumers can complain cheaply to consumer commissions; one-sided terms and defective products carry real liability.",
+    "plain": "Anyone who buys from you for personal use is a 'consumer' and can complain to a consumer commission cheaply, even without a lawyer. One-sided contract terms can be struck down, you are liable if your product is defective, and an arbitration clause will not keep a consumer out of the consumer commission.",
+    "body": [
+     "The Consumer Protection Act, 2019 has three tiers of consumer commissions. Under rules notified on 30 December 2021, District Commissions hear complaints where the price paid is up to ₹50 lakh, State Commissions above ₹50 lakh and up to ₹2 crore, and the National Commission above ₹2 crore. Complaints can be filed online through e-Daakhil.",
+     "Unfair contracts: section 2(46) defines an 'unfair contract', for example one requiring manifestly excessive security deposits, imposing disproportionate penalties, refusing early repayment, allowing one side to terminate without reasonable cause, or imposing other unreasonable conditions. The State and National Commissions can declare such terms null and void. Even under the 1986 Act, the Supreme Court in Pioneer Urban Land v Govindan Raghavan (2 April 2019) held that one-sided builder–buyer clauses were an unfair trade practice that did not bind the buyer.",
+     "Arbitration does not oust consumer commissions: in Emaar MGF Land v Aftab Singh (Supreme Court, review decided 10 December 2018) a consumer could pursue a consumer complaint despite an arbitration clause in the purchase agreement.",
+     "Product liability (Chapter VI of the 2019 Act) can make the manufacturer, the service provider and the seller of a product liable for harm caused by a defective product or deficient service, each on the grounds the Act lists. Keep warnings, instructions and quality records."
+    ],
+    "keyPoints": [
+     "District ≤ ₹50 lakh · State ≤ ₹2 crore · National > ₹2 crore",
+     "One-sided terms can be declared void",
+     "An arbitration clause won't stop a consumer complaint"
+    ],
+    "sources": [
+     {
+      "t": "SCC Online: consumer commission limits",
+      "u": "https://www.scconline.com/blog/post/2022/01/03/pecuniary-jurisdiction-of-district-state-and-national-commissions-revised-vide-consumer-protection-jurisdiction-of-the-district-commission-the-state-commission-and-the-national-commission-rules-2/"
+     },
+     {
+      "t": "Supreme Court: Pioneer v Govindan Raghavan",
+      "u": "https://api.sci.gov.in/supremecourt/2018/46308/46308_2018_Judgement_02-Apr-2019.pdf"
+     },
+     {
+      "t": "Supreme Court: Emaar MGF v Aftab Singh",
+      "u": "https://api.sci.gov.in/supremecourt/2018/26696/26696_2018_Judgement_10-Dec-2018.pdf"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "sl2",
+   "data": {
+    "module": "sales",
+    "order": 2,
+    "title": "B2B sales contracts that get you paid",
+    "summary": "Clear scope, payment terms, a liability cap and the MSME 45-day rule protect your cash.",
+    "plain": "When you sell to other businesses, the contract decides whether you get paid and how much you risk. Define what you deliver, when you get paid and what happens if you aren't, cap your liability, and use the MSME law: if you are a registered micro or small enterprise, buyers must pay you within 45 days or owe heavy interest.",
+    "body": [
+     "Core clauses: scope and acceptance criteria; price, invoicing and payment period; interest on late payment; limitation of liability (usually a cap tied to fees paid, plus exclusion of indirect losses); indemnities limited to things you control, such as IP infringement; termination; and dispute resolution (governing law and seat of arbitration).",
+     "Damages: under sections 73 and 74 of the Indian Contract Act, 1872 you recover losses that naturally arise from a breach. An agreed amount ('liquidated damages') works as a ceiling: courts award reasonable compensation up to that figure rather than paying it automatically.",
+     "MSME payments: under section 15 of the MSMED Act, 2006 a buyer must pay a micro or small enterprise supplier by the date agreed in writing, which can never be more than 45 days from acceptance; with no agreement, payment is due within 15 days. Late payment carries compound interest at three times the bank rate notified by the RBI (section 16), and the supplier can approach the Micro and Small Enterprises Facilitation Council (section 18).",
+     "Sales hygiene: make purchase orders incorporate your terms; record acceptance of deliveries; invoice promptly; for large or new accounts, ask for milestone or advance payments."
+    ],
+    "keyPoints": [
+     "Cap liability; exclude indirect losses",
+     "Liquidated damages are a ceiling, not automatic",
+     "MSME suppliers must be paid within 45 days"
+    ],
+    "sources": [],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "sl3",
+   "data": {
+    "module": "sales",
+    "order": 3,
+    "title": "Prices, MRP, refunds and warranties",
+    "summary": "Show the full price, never charge above MRP on packaged goods, and honour your refund and warranty promises.",
+    "plain": "Packaged goods must carry a maximum retail price (MRP) that includes all taxes, and you cannot charge more than it. Online, show the total price including all charges before checkout. Publish your return, refund and warranty terms and follow them, because breaking your own promises gives customers a consumer complaint.",
+    "body": [
+     "The Legal Metrology (Packaged Commodities) Rules, 2011 require pre-packaged goods to declare the retail sale price as a maximum retail price inclusive of all taxes, along with the maker's or packer's details, net quantity and a consumer-care contact. Online listings must show these declarations too. Selling above the MRP is an offence.",
+     "Drip pricing, revealing extra charges only at checkout, is a specified dark pattern since 30 November 2023, and the E-Commerce Rules require the total price with a breakup of charges.",
+     "Refunds and cancellations: platforms must display return, refund, exchange, warranty and delivery terms, and cannot charge cancellation fees unless they bear similar charges when they cancel.",
+     "Warranties are promises. Failing to honour one, or selling defective goods, exposes you to consumer complaints and product-liability claims. Write warranty terms in plain language, say clearly what is excluded, and keep service records."
+    ],
+    "keyPoints": [
+     "MRP includes all taxes; never exceed it",
+     "Show the total price up front",
+     "Publish and honour return and refund terms"
+    ],
+    "sources": [
+     {
+      "t": "ONDC handbook: E-Commerce Rules",
+      "u": "https://www.ondc.org/legal-compliance-handbook/ANNEXURE-%E2%80%93-E.1086291982.html"
+     },
+     {
+      "t": "JSA: Dark Patterns Guidelines 2023",
+      "u": "https://jsalaw.com/wp-content/uploads/2023/12/JSA-Prism-Consumer-Protection-Guidelines-for-Prevention-and-Regulation-of-Dark-Patterns-20233-Final.pdf"
+     }
+    ],
+    "updated": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "maruti-dcp-2021",
+   "data": {
+    "name": "In re: Maruti Suzuki India Ltd (Discount Control Policy)",
+    "court": "Competition Commission of India",
+    "date": "23 Aug 2021",
+    "year": 2021,
+    "citation": "Case No. 01 of 2019",
+    "module": "gtm",
+    "status": "Under appeal (NCLAT)",
+    "tags": [
+     "resale price maintenance",
+     "dealers",
+     "discounts"
+    ],
+    "facts": "Acting on an anonymous email received in 2017, the CCI investigated Maruti's policy capping the discounts its dealers could give customers, enforced through mystery shopping agencies and penalties on dealers.",
+    "held": "The policy was resale price maintenance under section 3(4)(e) read with section 3(1) of the Competition Act, causing an appreciable adverse effect on competition. The CCI imposed a ₹200 crore penalty and a cease-and-desist order. NCLAT stayed the penalty on 22 November 2021 on a 10% deposit; the appeal is pending.",
+    "why": "Suggest retail prices to resellers if you like, but never police or punish their discounts.",
+    "src": {
+     "t": "PIB: CCI penalty on Maruti, 23 Aug 2021",
+     "u": "https://pib.gov.in/PressReleasePage.aspx?PRID=1748288"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "google-android-2023",
+   "data": {
+    "name": "Google LLC v Competition Commission of India (Android)",
+    "court": "NCLAT",
+    "date": "29 Mar 2023",
+    "year": 2023,
+    "citation": "",
+    "module": "gtm",
+    "status": "Pending in Supreme Court",
+    "tags": [
+     "abuse of dominance",
+     "platforms",
+     "pre-installation"
+    ],
+    "facts": "In October 2022 the CCI fined Google ₹1,337.76 crore for abusing its dominant position in the Android mobile ecosystem through its agreements with device makers, and issued directions to change its conduct.",
+    "held": "NCLAT upheld the finding of abuse and the ₹1,337.76 crore penalty but set aside some of the CCI's directions. Google and the CCI have both appealed to the Supreme Court.",
+    "why": "Once a company is dominant, bundling and exclusivity terms that lock out rivals can cost a share of turnover. Startups competing with platforms can use competition law as a tool.",
+    "src": {
+     "t": "SCC Online: NCLAT on Google Android",
+     "u": "https://www.scconline.com/blog/wp-json/wp/v2/posts/288174"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "amazon-flipkart-cci-2021",
+   "data": {
+    "name": "Amazon Seller Services v CCI; Flipkart Internet v CCI",
+    "court": "Karnataka High Court (Division Bench)",
+    "date": "23 Jul 2021",
+    "year": 2021,
+    "citation": "",
+    "module": "gtm",
+    "status": "Ongoing",
+    "tags": [
+     "marketplaces",
+     "deep discounting",
+     "preferred sellers"
+    ],
+    "facts": "On a complaint by Delhi Vyapar Mahasangh, a traders' body, the CCI ordered an investigation in January 2020 into exclusive phone launches, preferred sellers, deep discounting and preferential listing. Amazon and Flipkart challenged the order.",
+    "held": "The division bench refused to quash the probe, saying the companies should not hesitate to face an inquiry; the Supreme Court declined to interfere on 9 August 2021. Further challenges were later transferred to the Karnataka High Court.",
+    "why": "Marketplace design choices (who is promoted, exclusive launches, funded discounts) become competition-law questions once a platform is large.",
+    "src": {
+     "t": "LiveLaw: Karnataka HC on Amazon/Flipkart probe",
+     "u": "https://www.livelaw.in/top-stories/karnataka-high-court-dismisses-amazon-flipkart-pleas-against-cci-probe-177994"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "novartis-2013",
+   "data": {
+    "name": "Novartis AG v Union of India",
+    "court": "Supreme Court",
+    "date": "1 Apr 2013",
+    "year": 2013,
+    "citation": "(2013) 6 SCC 1",
+    "module": "ip",
+    "status": "Good law",
+    "tags": [
+     "section 3(d)",
+     "pharma",
+     "evergreening"
+    ],
+    "facts": "Novartis sought a patent for the beta-crystalline form of imatinib mesylate, sold as Glivec. The Patent Office rejected the application in 2006 and the IPAB upheld the rejection under section 3(d).",
+    "held": "A new form of a known substance is not an invention unless it shows significantly enhanced efficacy, which for a medicine means therapeutic efficacy. Improved bioavailability alone was not enough, so the rejection stood.",
+    "why": "Patent real improvements in outcome and keep the data that proves them; incremental tweaks will not extend a monopoly in India.",
+    "src": {
+     "t": "UNCTAD: Novartis v Union of India",
+     "u": "https://unctad.org/ippcaselaw/novartis-ag-v-union-india-others-supreme-court-india-1-april-2013"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "ferid-allani-2019",
+   "data": {
+    "name": "Ferid Allani v Union of India",
+    "court": "Delhi High Court",
+    "date": "12 Dec 2019",
+    "year": 2019,
+    "citation": "W.P.(C) 7/2014",
+    "module": "ip",
+    "status": "Good law",
+    "tags": [
+     "section 3(k)",
+     "software patents",
+     "technical effect"
+    ],
+    "facts": "Allani's 2002 application for a method and device for accessing information sources and services on the web was refused under section 3(k); the IPAB dismissed his appeal for lack of technical effect or advancement.",
+    "held": "The bar is on computer programs 'per se', not on all inventions based on computer programs. The court directed the Patent Office to re-examine the application in light of later guidelines and the technical-effect and technical-contribution test.",
+    "why": "Software-led startups can patent inventions that deliver a technical result; describe the technical contribution, not the business idea.",
+    "src": {
+     "t": "Ferid Allani judgment (IP India)",
+     "u": "https://ipindia.gov.in/storage/uploads/media/2.%20Ferid%20Allani%20v.%20Union%20of%20India%2C%202019%2C%20M%20Pratibha.pdf"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "ebc-modak-2007",
+   "data": {
+    "name": "Eastern Book Company v D.B. Modak",
+    "court": "Supreme Court",
+    "date": "12 Dec 2007",
+    "year": 2007,
+    "citation": "(2008) 1 SCC 1",
+    "module": "ip",
+    "status": "Good law",
+    "tags": [
+     "copyright",
+     "originality",
+     "databases"
+    ],
+    "facts": "The publisher of the SCC law reports sued makers of legal software who copied its copy-edited versions of Supreme Court judgments.",
+    "held": "Labour alone ('sweat of the brow') does not create copyright; a derivative work needs some skill and judgment with a minimal degree of creativity. The judgment text itself stayed free to copy, while certain original editorial inputs were protected.",
+    "why": "Compiling public data is not automatically protected. Protect datasets and content through original selection and presentation, contracts and technical access controls.",
+    "src": {
+     "t": "Indian Kanoon: EBC v D.B. Modak",
+     "u": "https://indiankanoon.org/doc/1062099/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "satyam-sify-2004",
+   "data": {
+    "name": "Satyam Infoway Ltd v Sifynet Solutions Pvt Ltd",
+    "court": "Supreme Court",
+    "date": "6 May 2004",
+    "year": 2004,
+    "citation": "(2004) 6 SCC 145",
+    "module": "ip",
+    "status": "Good law",
+    "tags": [
+     "domain names",
+     "passing off"
+    ],
+    "facts": "Satyam Infoway, which used 'Sify' as its trade name and in its domain names, objected to Sifynet Solutions using 'siffynet' domain names for its internet business.",
+    "held": "Domain names function as business identifiers and are protected like trademarks; passing off applies to them. The Supreme Court restored the injunction in favour of Satyam Infoway.",
+    "why": "Secure the domain and trademark together, and act quickly against look-alike domains.",
+    "src": {
+     "t": "iPleaders: Satyam Infoway v Sifynet",
+     "u": "https://blog.ipleaders.in/satyam-infoway-ltd-v-sifynet-solutions-p-ltd-2004-case-analysis/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "bookmyshow-2017",
+   "data": {
+    "name": "Bigtree Entertainment Pvt Ltd v Brain Seed Sportainment Pvt Ltd",
+    "court": "Delhi High Court",
+    "date": "13 Dec 2017",
+    "year": 2017,
+    "citation": "CS(COMM) 327/2016",
+    "module": "ip",
+    "status": "Good law",
+    "tags": [
+     "descriptive marks",
+     "trademarks",
+     "domain names"
+    ],
+    "facts": "BookMyShow's owner sought to stop a sports-facility booking platform using 'bookmysports' and the 'BOOKMY' prefix.",
+    "held": "No interim injunction: 'BOOKMY' is descriptive of online booking, other websites used it, and there was no evidence that it had acquired distinctiveness linked only to BookMyShow.",
+    "why": "Descriptive names are cheap to adopt and expensive to defend. Pick a distinctive brand you can actually stop others from using.",
+    "src": {
+     "t": "SpicyIP: BookMyShow v bookmysports",
+     "u": "https://spicyip.com/2018/01/bookmy-row-delhi-high-court-denies-bookmyshow-an-injunction-against-bookmysports.html"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "burger-king-pune",
+   "data": {
+    "name": "Burger King Corporation v Anahita Irani",
+    "court": "Pune District Court; Bombay High Court; Supreme Court",
+    "date": "16 Jul 2024",
+    "year": 2024,
+    "citation": "",
+    "module": "ip",
+    "status": "Ongoing",
+    "tags": [
+     "prior use",
+     "trademarks",
+     "passing off"
+    ],
+    "facts": "In 2011 Burger King Corporation sued the Iranis, whose Pune restaurant has traded as Burger King since 1992, for trademark infringement and passing off.",
+    "held": "The Pune court dismissed the suit in July 2024, relying on the restaurant's prior use. The Bombay High Court restrained the restaurant on 2 December 2024 pending appeal; the Supreme Court stayed that order on 7 March 2025 and asked the High Court to decide the appeal quickly. The final outcome is awaited.",
+    "why": "A registration does not automatically beat a local business's earlier continuous use (section 34). Big brands should register and enforce early; small brands should keep proof of first use.",
+    "src": {
+     "t": "Business Standard: SC stays Bombay HC order",
+     "u": "https://www.business-standard.com/india-news/sc-stays-bombay-hc-order-allows-pune-eatery-to-use-burger-king-125031000800_1.html"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "google-drs-2023",
+   "data": {
+    "name": "Google LLC v DRS Logistics (P) Ltd",
+    "court": "Delhi High Court (Division Bench)",
+    "date": "10 Aug 2023",
+    "year": 2023,
+    "citation": "2023:DHC:5615-DB",
+    "module": "ip",
+    "status": "Good law",
+    "tags": [
+     "keyword advertising",
+     "trademarks",
+     "safe harbour"
+    ],
+    "facts": "Agarwal Packers and Movers objected to rivals bidding on its trademark as keywords in Google Ads.",
+    "held": "Using a trademark as a keyword to trigger ads is 'use in advertising' under section 29(6), but is not infringement by itself; it infringes only with confusion, unfair advantage, dilution or harm to the mark. Google is not entitled to intermediary safe harbour for its Ads programme.",
+    "why": "You may bid on category words; bidding on a rival's brand is risky if the ad could confuse, and never put their mark in your ad text.",
+    "src": {
+     "t": "SCC Online: Google v DRS Logistics",
+     "u": "https://www.scconline.com/blog/post/2023/08/14/googles-use-of-trade-mark-as-keyword-for-display-of-advertisements-amounts-to-use-delhi-hc/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "pepsi-coke-2003",
+   "data": {
+    "name": "Pepsi Co Inc v Hindustan Coca Cola Ltd",
+    "court": "Delhi High Court (Division Bench)",
+    "date": "2003",
+    "year": 2003,
+    "citation": "2003 (27) PTC 305 (Del) (DB)",
+    "module": "marketing",
+    "status": "Good law",
+    "tags": [
+     "comparative advertising",
+     "disparagement"
+    ],
+    "facts": "Pepsi sued over Coca-Cola's commercials for its Thums Up drink, which it said ridiculed Pepsi.",
+    "held": "To decide disparagement a court looks at the intent of the commercial, its manner and storyline, and the overall message. Viewing the ad as a whole, the division bench held that it disparaged the rival's product.",
+    "why": "Comparisons are allowed; mocking the rival's product is not. Courts judge the whole ad, not just the words.",
+    "src": {
+     "t": "Indian Kanoon: Pepsi v Coca-Cola applied",
+     "u": "https://indiankanoon.org/doc/1357815/"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "dabur-colortek-2010",
+   "data": {
+    "name": "Dabur India Ltd v Colortek Meghalaya Pvt Ltd",
+    "court": "Delhi High Court (Division Bench)",
+    "date": "2 Feb 2010",
+    "year": 2010,
+    "citation": "",
+    "module": "marketing",
+    "status": "Good law",
+    "tags": [
+     "comparative advertising",
+     "commercial speech"
+    ],
+    "facts": "In a dispute between two makers of mosquito-repellent creams, Dabur said Colortek's TV commercial disparaged its product.",
+    "held": "Ads are commercial speech protected by Article 19(1)(a) but must not be false, misleading, unfair or deceptive. Hyper-sensitivity is unwarranted; only untruthful disparagement is actionable. The bench upheld the finding that this ad did not disparage Dabur.",
+    "why": "Know the line: exaggerated self-praise is fine, false or misleading statements about the rival are not.",
+    "src": {
+     "t": "Mondaq: Dabur v Colortek",
+     "u": "https://www.mondaq.com/india/patent/137354/colorteks-advertisement-found-not-disparaging-delhi-high-court"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "horlicks-zydus-2020",
+   "data": {
+    "name": "Horlicks Ltd v Zydus Wellness Products Ltd",
+    "court": "Delhi High Court",
+    "date": "14 May 2020",
+    "year": 2020,
+    "citation": "CS(COMM) 464/2019",
+    "module": "marketing",
+    "status": "Good law",
+    "tags": [
+     "comparative advertising",
+     "TV ads",
+     "serving size"
+    ],
+    "facts": "Zydus's TV commercial claimed one cup of Complan had as much protein as two cups of Horlicks, based on different recommended serving sizes.",
+    "held": "Interim injunction granted: the TV ad was prima facie misleading and disparaging because viewers could not take in the serving-size difference in a short commercial. A similar print comparison with the explanation had survived in 2018.",
+    "why": "A comparison that needs a footnote may work in print but fail on TV or in short video. Match the disclosure to the medium.",
+    "src": {
+     "t": "Khaitan: Horlicks v Zydus",
+     "u": "https://khaitanco.com/thought-leaderships/Advertisement-in-electronic-media-has-an-indelible-impression-in-the-minds-of-viewers"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "ima-patanjali-2024",
+   "data": {
+    "name": "Indian Medical Association v Union of India (Patanjali)",
+    "court": "Supreme Court",
+    "date": "7 May 2024",
+    "year": 2024,
+    "citation": "W.P.(C) 645/2022",
+    "module": "marketing",
+    "status": "Ongoing",
+    "tags": [
+     "misleading ads",
+     "endorsers",
+     "self-declaration"
+    ],
+    "facts": "The IMA petitioned against Patanjali's misleading advertisements about modern medicine and its products, and sought wider regulation of misleading ads.",
+    "held": "Advertisers and endorsers are responsible for misleading ads; celebrities and influencers must act responsibly. Before an ad is printed, aired or displayed, a self-declaration must be submitted on the lines of Rule 7 of the Cable Television Networks Rules, 1994.",
+    "why": "Build a pre-publication compliance step into every campaign and keep the self-declarations on file.",
+    "src": {
+     "t": "LiveLaw: SC directions on misleading ads",
+     "u": "https://www.livelaw.in/top-stories/supreme-court-influencer-ads-misleading-guideliens-self-declaration-257318"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "rapido-ccpa-2025",
+   "data": {
+    "name": "In re: Roppen Transportation Services (Rapido)",
+    "court": "Central Consumer Protection Authority",
+    "date": "Aug 2025",
+    "year": 2025,
+    "citation": "",
+    "module": "marketing",
+    "status": "Penalty imposed",
+    "tags": [
+     "misleading ads",
+     "guarantees",
+     "fine print"
+    ],
+    "facts": "Rapido advertised 'Guaranteed Auto' and 'Auto in 5 min or get ₹50'. The ₹50 was given as Rapido coins for bike rides only, valid for 7 days, the T&C text was unreadably small, and the terms said individual drivers gave the guarantee.",
+    "held": "Misleading advertisement and unfair trade practice: penalty of ₹10 lakh, the ads to be discontinued, and consumers who did not get the promised ₹50 to be compensated in full.",
+    "why": "A guarantee must be honoured on its plain meaning. If the conditions change the deal, they belong in the headline.",
+    "src": {
+     "t": "PIB: CCPA penalty on Rapido",
+     "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2158830"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "emaar-aftab-2018",
+   "data": {
+    "name": "Emaar MGF Land Ltd v Aftab Singh",
+    "court": "Supreme Court",
+    "date": "10 Dec 2018",
+    "year": 2018,
+    "citation": "Review Petition (C) 2629-2630/2018",
+    "module": "sales",
+    "status": "Good law",
+    "tags": [
+     "consumer disputes",
+     "arbitration"
+    ],
+    "facts": "A villa buyer filed a consumer complaint over delayed possession. The builder relied on the arbitration clause in the buyer's agreement and the amended section 8 of the Arbitration Act.",
+    "held": "Consumer disputes can be pursued before consumer forums despite an arbitration agreement; the amended section 8 does not take away the consumer's statutory remedy. The review petition was dismissed.",
+    "why": "An arbitration clause in consumer terms will not keep customers out of consumer commissions. Budget for consumer complaints and resolve them early.",
+    "src": {
+     "t": "Supreme Court: Emaar MGF v Aftab Singh",
+     "u": "https://api.sci.gov.in/supremecourt/2018/26696/26696_2018_Judgement_10-Dec-2018.pdf"
+    }
+   }
+  },
+  {
+   "c": "cases",
+   "id": "pioneer-2019",
+   "data": {
+    "name": "Pioneer Urban Land & Infrastructure Ltd v Govindan Raghavan",
+    "court": "Supreme Court",
+    "date": "2 Apr 2019",
+    "year": 2019,
+    "citation": "(2019) 5 SCC 725",
+    "module": "sales",
+    "status": "Good law",
+    "tags": [
+     "unfair contracts",
+     "standard form",
+     "refunds"
+    ],
+    "facts": "A flat buyer sought a refund after long delays. The builder's agreement gave it wide rights and heavy forfeiture while capping its own liability for delay.",
+    "held": "Buyers had no real choice but to sign on the dotted line; ex-facie one-sided, unfair and unreasonable terms are an unfair trade practice and do not bind the buyer. The builder had to refund with interest.",
+    "why": "Write customer terms that are balanced and defensible; one-sided clauses may simply be ignored by the court.",
+    "src": {
+     "t": "Supreme Court: Pioneer v Govindan Raghavan",
+     "u": "https://api.sci.gov.in/supremecourt/2018/46308/46308_2018_Judgement_02-Apr-2019.pdf"
+    }
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "marketplace-inventory",
+   "data": {
+    "order": 9,
+    "module": "gtm",
+    "title": "Controlling inventory through 'independent' sellers on a foreign-funded marketplace",
+    "status": "Closed",
+    "gap": "FDI was allowed in the marketplace model but not in inventory-based e-commerce, yet nothing stopped a marketplace's own group from owning stakes in its biggest sellers.",
+    "used": "Sellers linked to platform groups became top sellers, letting the marketplace influence stock and prices while claiming to be only a platform.",
+    "closed": "Press Note 2 (2018), in force from 1 February 2019: a marketplace cannot own or control inventory; a vendor in which the marketplace group holds equity cannot sell on it; and if more than 25% of a vendor's purchases come from the group, its inventory counts as controlled by the marketplace.",
+    "timeline": [
+     {
+      "y": "2016",
+      "e": "Press Note 3 allows 100% FDI in the marketplace model only"
+     },
+     {
+      "y": "Dec 2018",
+      "e": "Press Note 2 tightens the rules"
+     },
+     {
+      "y": "1 Feb 2019",
+      "e": "New rules in force"
+     }
+    ],
+    "today": "If you raise foreign money for a marketplace, keep sellers genuinely independent, on arm's-length terms, and document it.",
+    "src": []
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "evergreening",
+   "data": {
+    "order": 10,
+    "module": "ip",
+    "title": "Extending drug patents with minor tweaks ('evergreening')",
+    "status": "Closed",
+    "gap": "Companies filed new patents on new salts, crystal forms or combinations of known drugs, extending exclusivity beyond the original 20 years.",
+    "used": "A familiar strategy for blockbuster drugs in many countries.",
+    "closed": "Section 3(d), added by the Patents (Amendment) Act, 2005, refuses new forms of known substances unless efficacy is significantly enhanced. The Supreme Court applied it in Novartis on 1 April 2013.",
+    "timeline": [
+     {
+      "y": "2005",
+      "e": "Section 3(d) inserted"
+     },
+     {
+      "y": "2006",
+      "e": "Glivec application rejected"
+     },
+     {
+      "y": "1 Apr 2013",
+      "e": "Supreme Court upholds the rejection"
+     }
+    ],
+    "today": "For pharma and chemistry startups: patent genuine therapeutic improvements and keep the efficacy data.",
+    "src": [
+     {
+      "t": "UNCTAD: Novartis v Union of India",
+      "u": "https://unctad.org/ippcaselaw/novartis-ag-v-union-india-others-supreme-court-india-1-april-2013"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "software-technical-effect",
+   "data": {
+    "order": 11,
+    "module": "ip",
+    "title": "Patenting software by proving a technical effect",
+    "status": "Open (lawful route)",
+    "gap": "Section 3(k) bars computer programs 'per se', but the Act never defined 'per se'.",
+    "used": "Applicants frame claims around the technical problem and technical result (hardware efficiency, security, signal processing) rather than the business logic.",
+    "closed": "Not closed: the Delhi High Court endorsed the technical-effect test in Ferid Allani (2019), and the 2025 CRI Guidelines apply it. Pure business methods and algorithms remain excluded.",
+    "timeline": [
+     {
+      "y": "2002",
+      "e": "Allani files his application"
+     },
+     {
+      "y": "12 Dec 2019",
+      "e": "Delhi High Court orders re-examination"
+     },
+     {
+      "y": "29 Jul 2025",
+      "e": "CRI Guidelines 2025 released"
+     }
+    ],
+    "today": "Lawful planning: describe and evidence the technical contribution; do not claim the business method itself.",
+    "src": [
+     {
+      "t": "Ferid Allani judgment (IP India)",
+      "u": "https://ipindia.gov.in/storage/uploads/media/2.%20Ferid%20Allani%20v.%20Union%20of%20India%2C%202019%2C%20M%20Pratibha.pdf"
+     },
+     {
+      "t": "IP India: CRI Guidelines 2025",
+      "u": "https://www.ipindia.gov.in/Patents/guidelines_patents"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "keyword-bidding",
+   "data": {
+    "order": 12,
+    "module": "ip",
+    "title": "Bidding on a rival's brand name as a search-ad keyword",
+    "status": "Partly open",
+    "gap": "Search engines let any business show its ad when users search for a rival's brand name.",
+    "used": "Rivals bought each other's brand names as keywords; MakeMyTrip, for example, sued over Booking.com's ads on 'MakeMyTrip'.",
+    "closed": "Google v DRS Logistics (2023): keyword use is 'use in advertising' but not infringement by itself; it becomes infringement with confusion, unfair advantage or dilution. Google cannot rely on safe harbour for its Ads programme.",
+    "timeline": [
+     {
+      "y": "2011",
+      "e": "DRS (Agarwal Packers and Movers) sues"
+     },
+     {
+      "y": "Oct 2021",
+      "e": "Single judge rules against Google"
+     },
+     {
+      "y": "10 Aug 2023",
+      "e": "Division bench sets the test"
+     }
+    ],
+    "today": "Bidding on a rival's name is risky if your ad could confuse; never use their mark in your ad text.",
+    "src": [
+     {
+      "t": "SCC Online: Google v DRS Logistics",
+      "u": "https://www.scconline.com/blog/post/2023/08/14/googles-use-of-trade-mark-as-keyword-for-display-of-advertisements-amounts-to-use-delhi-hc/"
+     },
+     {
+      "t": "WIPO Lex: judgment text",
+      "u": "https://www.wipo.int/wipolex/en/judgments/details/3347"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "surrogate-ads",
+   "data": {
+    "order": 13,
+    "module": "marketing",
+    "title": "Surrogate ads for liquor and tobacco brands",
+    "status": "Closed",
+    "gap": "Ads for liquor and tobacco are banned on TV, but the same brand name could be advertised on a soda, water or music product.",
+    "used": "Brands kept their names on screen through 'brand extensions' that were rarely the real business.",
+    "closed": "The CCPA's misleading-ads guidelines of 9 June 2022 prohibit surrogate or indirect ads for goods whose advertising is banned or restricted.",
+    "timeline": [
+     {
+      "y": "9 Jun 2022",
+      "e": "Misleading-ads guidelines issued"
+     }
+    ],
+    "today": "Promote a restricted product's brand only where the law allows; a token brand extension will not protect the campaign.",
+    "src": [
+     {
+      "t": "The Leaflet: surrogate ads banned",
+      "u": "https://theleaflet.in/?p=45109"
+     },
+     {
+      "t": "PIB: Misleading ads guidelines 2022",
+      "u": "https://pib.gov.in/PressReleasePage.aspx?PRID=1832906"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "hidden-influencer-ads",
+   "data": {
+    "order": 14,
+    "module": "marketing",
+    "title": "Paid promotions passed off as personal opinion",
+    "status": "Closed",
+    "gap": "Influencer and celebrity posts did not have to say they were paid.",
+    "used": "Brands paid for 'honest reviews' and endorsements without disclosure, borrowing the endorser's credibility.",
+    "closed": "The 2022 CCPA guidelines require endorsements to be genuine and material connections disclosed; disguised advertisement became a specified dark pattern on 30 November 2023; and on 7 May 2024 the Supreme Court held endorsers equally responsible for misleading ads.",
+    "timeline": [
+     {
+      "y": "9 Jun 2022",
+      "e": "Endorsement rules in CCPA guidelines"
+     },
+     {
+      "y": "30 Nov 2023",
+      "e": "Disguised ads listed as a dark pattern"
+     },
+     {
+      "y": "7 May 2024",
+      "e": "Supreme Court: endorsers responsible"
+     }
+    ],
+    "today": "Label every paid post and brief endorsers with substantiated claims only.",
+    "src": [
+     {
+      "t": "LiveLaw: SC directions on misleading ads",
+      "u": "https://www.livelaw.in/top-stories/supreme-court-influencer-ads-misleading-guideliens-self-declaration-257318"
+     },
+     {
+      "t": "JSA: Dark Patterns Guidelines 2023",
+      "u": "https://jsalaw.com/wp-content/uploads/2023/12/JSA-Prism-Consumer-Protection-Guidelines-for-Prevention-and-Regulation-of-Dark-Patterns-20233-Final.pdf"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "fine-print-guarantees",
+   "data": {
+    "order": 15,
+    "module": "marketing",
+    "title": "Big guarantees with the real conditions in fine print",
+    "status": "Closed",
+    "gap": "A headline promise could be qualified by small-print terms that changed what the customer actually got.",
+    "used": "Delivery and ride-hailing apps advertised guarantees backed by restrictive credits or conditions.",
+    "closed": "The CCPA treats such ads as misleading. In August 2025 it fined Rapido ₹10 lakh for its 'Auto in 5 min or get ₹50' campaign and ordered compensation.",
+    "timeline": [
+     {
+      "y": "Aug 2025",
+      "e": "CCPA penalises Rapido"
+     }
+    ],
+    "today": "If a condition changes the deal, put it in the headline, in readable type.",
+    "src": [
+     {
+      "t": "PIB: CCPA penalty on Rapido",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2158830"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "arbitration-ouster",
+   "data": {
+    "order": 16,
+    "module": "sales",
+    "title": "Using arbitration clauses to keep customers out of consumer courts",
+    "status": "Closed",
+    "gap": "Sellers inserted arbitration clauses into consumer contracts, and the 2015 change to section 8 of the Arbitration Act seemed to require courts to refer disputes to arbitration.",
+    "used": "Builders and service providers relied on arbitration to make consumer complaints slower and costlier.",
+    "closed": "Emaar MGF Land v Aftab Singh (Supreme Court, February and December 2018): consumers can still go to consumer forums despite an arbitration clause.",
+    "timeline": [
+     {
+      "y": "2015",
+      "e": "Section 8 of the Arbitration Act amended"
+     },
+     {
+      "y": "2017",
+      "e": "NCDRC rules consumer disputes non-arbitrable"
+     },
+     {
+      "y": "10 Dec 2018",
+      "e": "Supreme Court dismisses review"
+     }
+    ],
+    "today": "Expect consumer complaints regardless of your dispute clause, and resolve them early.",
+    "src": [
+     {
+      "t": "Supreme Court: Emaar MGF v Aftab Singh",
+      "u": "https://api.sci.gov.in/supremecourt/2018/26696/26696_2018_Judgement_10-Dec-2018.pdf"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "one-sided-terms",
+   "data": {
+    "order": 17,
+    "module": "sales",
+    "title": "One-sided standard-form contracts",
+    "status": "Closed",
+    "gap": "Customers had to accept the seller's printed terms, which often had heavy forfeitures for the customer and tiny penalties for the seller.",
+    "used": "Common in real estate, subscriptions and financial products.",
+    "closed": "Pioneer Urban Land v Govindan Raghavan (Supreme Court, 2 April 2019) held such terms an unfair trade practice; the Consumer Protection Act, 2019 defines 'unfair contract' (section 2(46)) and lets State and National Commissions declare such terms void.",
+    "timeline": [
+     {
+      "y": "2 Apr 2019",
+      "e": "Supreme Court: one-sided terms don't bind"
+     },
+     {
+      "y": "20 Jul 2020",
+      "e": "Consumer Protection Act, 2019 in force"
+     }
+    ],
+    "today": "Draft balanced consumer terms; mirror any penalty you impose with one you accept.",
+    "src": [
+     {
+      "t": "Supreme Court: Pioneer v Govindan Raghavan",
+      "u": "https://api.sci.gov.in/supremecourt/2018/46308/46308_2018_Judgement_02-Apr-2019.pdf"
+     }
+    ]
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "drip-pricing",
+   "data": {
+    "order": 18,
+    "module": "sales",
+    "title": "Revealing fees only at checkout ('drip pricing')",
+    "status": "Closed",
+    "gap": "A low headline price drew customers in, and convenience, platform or handling fees appeared only on the final screen.",
+    "used": "Common in ticketing, travel, food delivery and quick commerce.",
+    "closed": "The E-Commerce Rules, 2020 require the total price with a breakup of charges; drip pricing became a specified dark pattern on 30 November 2023.",
+    "timeline": [
+     {
+      "y": "23 Jul 2020",
+      "e": "E-Commerce Rules notified"
+     },
+     {
+      "y": "30 Nov 2023",
+      "e": "Dark patterns guidelines notified"
+     }
+    ],
+    "today": "Show the full price on the first screen where a price appears.",
+    "src": [
+     {
+      "t": "JSA: Dark Patterns Guidelines 2023",
+      "u": "https://jsalaw.com/wp-content/uploads/2023/12/JSA-Prism-Consumer-Protection-Guidelines-for-Prevention-and-Regulation-of-Dark-Patterns-20233-Final.pdf"
+     },
+     {
+      "t": "ONDC handbook: E-Commerce Rules",
+      "u": "https://www.ondc.org/legal-compliance-handbook/ANNEXURE-%E2%80%93-E.1086291982.html"
+     }
+    ]
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qg1",
+   "data": {
+    "module": "gtm",
+    "q": "A brand bars its dealers from giving more than a 5% discount and fines those who do. What is the main legal risk?",
+    "opts": [
+     "None: brands may control their dealers",
+     "Resale price maintenance under section 3(4) of the Competition Act",
+     "A GST violation",
+     "A breach of the Companies Act"
+    ],
+    "a": 1,
+    "why": "Enforcing resale prices or discount caps is resale price maintenance. The CCI fined Maruti ₹200 crore for this in August 2021."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qg2",
+   "data": {
+    "module": "gtm",
+    "q": "Under the Competition Act, below-cost 'predatory' pricing is illegal only when…",
+    "opts": [
+     "any company offers discounts above 50%",
+     "a dominant enterprise uses it to reduce competition or eliminate competitors",
+     "the company is loss-making",
+     "prices are lower than a competitor's"
+    ],
+    "a": 1,
+    "why": "Predatory pricing is a form of abuse of a dominant position under section 4; a non-dominant startup's launch discounts are not caught."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qg3",
+   "data": {
+    "module": "gtm",
+    "q": "Under the Consumer Protection (E-Commerce) Rules, 2020, how quickly must a platform's grievance officer acknowledge a complaint?",
+    "opts": [
+     "24 hours",
+     "48 hours",
+     "7 days",
+     "30 days"
+    ],
+    "a": 1,
+    "why": "Acknowledge within 48 hours; redress within one month."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qi1",
+   "data": {
+    "module": "ip",
+    "q": "Which of these cannot be patented in India under section 3(k)?",
+    "opts": [
+     "A new engine design",
+     "A computer programme per se",
+     "A new medical device",
+     "A new chemical process"
+    ],
+    "a": 1,
+    "why": "Section 3(k) excludes mathematical or business methods, computer programmes per se and algorithms. Software with a technical effect can still qualify."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qi2",
+   "data": {
+    "module": "ip",
+    "q": "Why couldn't BookMyShow stop 'bookmysports' in 2017?",
+    "opts": [
+     "It had never registered BOOKMYSHOW",
+     "'BOOKMY' described online booking and had not acquired distinctiveness",
+     "It sued in the wrong court",
+     "bookmysports was a non-profit"
+    ],
+    "a": 1,
+    "why": "The Delhi High Court found the prefix descriptive and in use by others, so no single business could monopolise it."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qi3",
+   "data": {
+    "module": "ip",
+    "q": "How long does an Indian patent last?",
+    "opts": [
+     "10 years",
+     "20 years from filing",
+     "The inventor's life plus 60 years",
+     "Forever, if renewed"
+    ],
+    "a": 1,
+    "why": "Patents last 20 years. Trademarks last 10 years but can be renewed indefinitely; copyright in literary works lasts for life plus 60 years."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qm1",
+   "data": {
+    "module": "marketing",
+    "q": "Which ad line is safest under Indian comparative-advertising law?",
+    "opts": [
+     "'Brand X damages your skin' (no study)",
+     "'Our soap is the best you can buy'",
+     "'Brand X is a cheap copy'",
+     "'Doctors say Brand X is unsafe' (no survey)"
+    ],
+    "a": 1,
+    "why": "Puffery about your own product is allowed; unproven or denigrating statements about a rival are not."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qm2",
+   "data": {
+    "module": "marketing",
+    "q": "After the Supreme Court's order of 7 May 2024 in the Patanjali case, what must an advertiser do before an ad runs?",
+    "opts": [
+     "Get CCI approval",
+     "Submit a self-declaration that the ad complies with the rules",
+     "Pay a deposit to the CCPA",
+     "Nothing new"
+    ],
+    "a": 1,
+    "why": "A self-declaration, on the lines of Rule 7 of the Cable Television Networks Rules, 1994, must be submitted before the ad is printed, aired or displayed."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qm3",
+   "data": {
+    "module": "marketing",
+    "q": "A checkout adds a 'convenience fee' only on the last screen. Which specified dark pattern is this?",
+    "opts": [
+     "Nagging",
+     "Drip pricing",
+     "Confirm shaming",
+     "Trick question"
+    ],
+    "a": 1,
+    "why": "Drip pricing is revealing charges late in the purchase journey; it is one of the 13 patterns specified on 30 November 2023."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qs1",
+   "data": {
+    "module": "sales",
+    "q": "A customer paid ₹1.2 crore for a defective machine for personal use. Which consumer commission hears the complaint?",
+    "opts": [
+     "District Commission",
+     "State Commission",
+     "National Commission",
+     "Only a civil court"
+    ],
+    "a": 1,
+    "why": "Since the December 2021 rules: District up to ₹50 lakh, State above ₹50 lakh and up to ₹2 crore, National above ₹2 crore."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qs2",
+   "data": {
+    "module": "sales",
+    "q": "Your consumer terms send all disputes to arbitration. Can a customer still file a consumer complaint?",
+    "opts": [
+     "No",
+     "Yes, as held in Emaar MGF v Aftab Singh (2018)",
+     "Only if the arbitrator agrees",
+     "Only for claims under ₹1 lakh"
+    ],
+    "a": 1,
+    "why": "The Supreme Court held that an arbitration clause does not take away the consumer's statutory remedy."
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qs3",
+   "data": {
+    "module": "sales",
+    "q": "Under the MSMED Act, the longest payment period a buyer can agree with a micro or small supplier is…",
+    "opts": [
+     "15 days",
+     "30 days",
+     "45 days",
+     "90 days"
+    ],
+    "a": 2,
+    "why": "Section 15 caps the agreed period at 45 days from acceptance; with no agreement, payment is due in 15 days."
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "gtm",
+   "data": {
+    "term": "Go-to-market (GTM)",
+    "aliases": [
+     "go-to-market",
+     "GTM"
+    ],
+    "plain": "Your plan for reaching paying customers: who you sell to first, what you tell them, where you find them, who does the selling and what you charge.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "icp",
+   "data": {
+    "term": "Ideal customer profile (ICP)",
+    "aliases": [
+     "ideal customer profile",
+     "ICP"
+    ],
+    "plain": "A description of the customer who needs your product most and can pay for it, such as 'clinics with 5 to 20 doctors in tier-2 cities'.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "beachhead",
+   "data": {
+    "term": "Beachhead market",
+    "aliases": [
+     "beachhead"
+    ],
+    "plain": "The first small market you aim to win completely before expanding, like landing on one beach before moving inland.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "product-led",
+   "data": {
+    "term": "Product-led growth",
+    "aliases": [
+     "product-led",
+     "product-led growth"
+    ],
+    "plain": "A way of selling where people try the product themselves (free trial or free plan) and upgrade without talking to a salesperson.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "cac",
+   "data": {
+    "term": "Customer acquisition cost (CAC)",
+    "aliases": [
+     "CAC",
+     "customer acquisition cost"
+    ],
+    "plain": "What you spend on marketing and sales to win one new paying customer.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "ltv",
+   "data": {
+    "term": "Lifetime value (LTV)",
+    "aliases": [
+     "LTV",
+     "lifetime value"
+    ],
+    "plain": "The total profit you expect from one customer over the whole time they stay with you. It should be well above CAC.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "cci",
+   "data": {
+    "term": "Competition Commission of India (CCI)",
+    "aliases": [
+     "CCI",
+     "Competition Commission"
+    ],
+    "plain": "The regulator that stops cartels, abuse of market power and harmful mergers under the Competition Act, 2002. It can impose large fines.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "rpm",
+   "data": {
+    "term": "Resale price maintenance",
+    "aliases": [
+     "resale price maintenance",
+     "RPM"
+    ],
+    "plain": "When a supplier forces dealers or resellers to sell at a fixed or minimum price, or caps their discounts. Can be illegal under the Competition Act.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "predatory-pricing",
+   "data": {
+    "term": "Predatory pricing",
+    "aliases": [
+     "predatory pricing",
+     "predatory price"
+    ],
+    "plain": "Selling below cost to drive competitors out. Illegal in India only for a company that dominates the market.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "dominance",
+   "data": {
+    "term": "Dominant position",
+    "aliases": [
+     "dominant position",
+     "abuse of dominance",
+     "abusing its dominant position"
+    ],
+    "plain": "Enough market power to act without worrying much about competitors or customers. Being dominant is legal; abusing it is not.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "marketplace-model",
+   "data": {
+    "term": "Marketplace model",
+    "aliases": [
+     "marketplace model"
+    ],
+    "plain": "An online platform that connects independent buyers and sellers without owning the goods sold. The only e-commerce model open to foreign investment.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "inventory-model",
+   "data": {
+    "term": "Inventory model",
+    "aliases": [
+     "inventory model",
+     "inventory-based"
+    ],
+    "plain": "E-commerce where the platform owns the stock it sells. Foreign investment is not allowed in this model.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "trademark",
+   "data": {
+    "term": "Trademark",
+    "aliases": [
+     "trademark",
+     "trade mark",
+     "trademarks",
+     "trade marks"
+    ],
+    "plain": "A name, logo, slogan, shape or colour combination that tells customers a product comes from you. Registration lasts 10 years and is renewable.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "passing-off",
+   "data": {
+    "term": "Passing off",
+    "aliases": [
+     "passing off",
+     "passing-off"
+    ],
+    "plain": "A court claim to stop someone making their business look like yours and stealing your goodwill. Works even for unregistered names.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "prior-use",
+   "data": {
+    "term": "Prior use",
+    "aliases": [
+     "prior use",
+     "earlier continuous use"
+    ],
+    "plain": "Using a brand name before someone else used or registered it. Under section 34 of the Trade Marks Act it can protect your right to keep using it.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "descriptive-mark",
+   "data": {
+    "term": "Descriptive mark",
+    "aliases": [
+     "descriptive mark",
+     "descriptive of"
+    ],
+    "plain": "A brand name that just describes the product or service ('BookMy…', 'Fresh Juice'). Hard to protect unless the public links it only to you.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "secondary-meaning",
+   "data": {
+    "term": "Secondary meaning",
+    "aliases": [
+     "secondary meaning",
+     "acquired distinctiveness"
+    ],
+    "plain": "When a descriptive word has become so linked with one business that people think of it first. Then it can be protected.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "trade-dress",
+   "data": {
+    "term": "Trade dress",
+    "aliases": [
+     "trade dress",
+     "overall look"
+    ],
+    "plain": "The overall look of a product or store: colours, shapes, packaging and layout. Copying it can be passing off.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "colour-mark",
+   "data": {
+    "term": "Colour mark",
+    "aliases": [
+     "colour mark",
+     "combination of colours",
+     "color mark"
+    ],
+    "plain": "A trademark made of colours, like Louboutin's red sole. Indian law lets a combination of colours count as a mark.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "patent",
+   "data": {
+    "term": "Patent",
+    "aliases": [
+     "patent",
+     "patents",
+     "patentable",
+     "patented"
+    ],
+    "plain": "A government-granted right to stop others making or using your invention for 20 years, in exchange for publishing how it works.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "technical-effect",
+   "data": {
+    "term": "Technical effect",
+    "aliases": [
+     "technical effect",
+     "technical contribution"
+    ],
+    "plain": "A real technical improvement, such as faster processing, less memory or better security, that can make a software-based invention patentable in India.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "evergreening",
+   "data": {
+    "term": "Evergreening",
+    "aliases": [
+     "evergreening"
+    ],
+    "plain": "Extending a patent monopoly by patenting small changes to an existing product. Section 3(d) blocks this for drugs in India.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "provisional-spec",
+   "data": {
+    "term": "Provisional specification",
+    "aliases": [
+     "provisional specification",
+     "provisional application"
+    ],
+    "plain": "A first, simpler patent filing that secures your date. The complete specification must follow within 12 months.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "design-right",
+   "data": {
+    "term": "Registered design",
+    "aliases": [
+     "registered design",
+     "Designs Act",
+     "design registration"
+    ],
+    "plain": "Protection for how a product looks (shape, pattern, ornament) for 10 years, extendable by 5.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "trade-secret",
+   "data": {
+    "term": "Trade secret",
+    "aliases": [
+     "trade secret",
+     "trade secrets"
+    ],
+    "plain": "Valuable business information kept confidential, like a recipe or algorithm. Protected in India through contracts and breach-of-confidence claims.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "modicum",
+   "data": {
+    "term": "Modicum of creativity",
+    "aliases": [
+     "modicum of creativity",
+     "minimal degree of creativity",
+     "sweat of the brow"
+    ],
+    "plain": "India's test for copyright originality: effort alone isn't enough; there must be at least a little creative skill and judgment.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "misleading-ad",
+   "data": {
+    "term": "Misleading advertisement",
+    "aliases": [
+     "misleading advertisement",
+     "misleading advertisements",
+     "misleading ad",
+     "misleading ads"
+    ],
+    "plain": "An ad that falsely describes a product, gives a false guarantee, or hides important information. The CCPA can fine advertisers and endorsers.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "puffery",
+   "data": {
+    "term": "Puffery",
+    "aliases": [
+     "puffery"
+    ],
+    "plain": "Obvious exaggerated praise of your own product ('the best in the world') that nobody takes as a literal fact. Allowed in ads.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "disparagement",
+   "data": {
+    "term": "Disparagement",
+    "aliases": [
+     "disparagement",
+     "disparage",
+     "disparaging",
+     "denigrate",
+     "denigrating"
+    ],
+    "plain": "Running down a competitor's product in an ad. Courts can order such ads taken down.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "ccpa",
+   "data": {
+    "term": "Central Consumer Protection Authority (CCPA)",
+    "aliases": [
+     "CCPA",
+     "Central Consumer Protection Authority"
+    ],
+    "plain": "The national regulator under the Consumer Protection Act, 2019 that acts against misleading ads, unfair trade practices and dark patterns.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "endorser",
+   "data": {
+    "term": "Endorser",
+    "aliases": [
+     "endorser",
+     "endorsers",
+     "endorsement",
+     "endorsements"
+    ],
+    "plain": "A celebrity, influencer or expert who promotes a product. Endorsers can be fined or banned for misleading ads.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "surrogate-ad",
+   "data": {
+    "term": "Surrogate advertising",
+    "aliases": [
+     "surrogate advertising",
+     "surrogate ads",
+     "surrogate advertisement"
+    ],
+    "plain": "Advertising a banned product (like liquor) indirectly by promoting another product with the same brand name. Prohibited since 2022.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "dark-pattern",
+   "data": {
+    "term": "Dark pattern",
+    "aliases": [
+     "dark pattern",
+     "dark patterns"
+    ],
+    "plain": "A website or app design that tricks people into doing something they didn't intend, like fake timers or hidden fees. 13 types are banned in India.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "drip-pricing",
+   "data": {
+    "term": "Drip pricing",
+    "aliases": [
+     "drip pricing"
+    ],
+    "plain": "Showing a low price first and adding extra fees step by step, often only at checkout. A banned dark pattern.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "self-declaration",
+   "data": {
+    "term": "Advertiser self-declaration",
+    "aliases": [
+     "self-declaration",
+     "self-declaration certificate"
+    ],
+    "plain": "A statement an advertiser must submit before an ad runs, confirming it follows the rules. Required since the Supreme Court's May 2024 order.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "consumer-commission",
+   "data": {
+    "term": "Consumer commission",
+    "aliases": [
+     "consumer commission",
+     "consumer commissions",
+     "District Commission",
+     "State Commission",
+     "National Commission",
+     "consumer court"
+    ],
+    "plain": "Special consumer courts (district, state and national) where buyers can complain cheaply about defective goods, poor service or unfair terms.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "unfair-contract",
+   "data": {
+    "term": "Unfair contract",
+    "aliases": [
+     "unfair contract",
+     "unfair trade practice"
+    ],
+    "plain": "Contract terms that are heavily one-sided against a consumer. Consumer commissions can declare them void.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "product-liability",
+   "data": {
+    "term": "Product liability",
+    "aliases": [
+     "product liability"
+    ],
+    "plain": "The legal duty of makers, sellers and service providers to compensate people harmed by defective products or deficient services.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "mrp",
+   "data": {
+    "term": "Maximum retail price (MRP)",
+    "aliases": [
+     "MRP",
+     "maximum retail price"
+    ],
+    "plain": "The highest price a packaged product can be sold for in India, including all taxes. It must be printed on the pack.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "msmed",
+   "data": {
+    "term": "MSMED Act payment rule",
+    "aliases": [
+     "MSMED Act",
+     "MSME supplier",
+     "MSME"
+    ],
+    "plain": "Under the MSMED Act, 2006 buyers must pay micro and small suppliers within the agreed time, at most 45 days, or pay steep interest.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "liquidated-damages",
+   "data": {
+    "term": "Liquidated damages",
+    "aliases": [
+     "liquidated damages"
+    ],
+    "plain": "An amount fixed in a contract to be paid if someone breaches it. Courts treat it as a maximum and award reasonable compensation up to it.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "liability-cap",
+   "data": {
+    "term": "Limitation of liability",
+    "aliases": [
+     "limitation of liability",
+     "liability cap"
+    ],
+    "plain": "A contract clause that limits how much one side has to pay if things go wrong, often to the fees paid.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "mood-board",
+   "data": {
+    "term": "Mood board",
+    "aliases": [
+     "mood board",
+     "mood boards"
+    ],
+    "plain": "A collection of colours, images and type that sets the look and feeling of a brand or campaign before design work starts.",
+    "hl": true
+   }
+  },
+  {
+   "c": "palettes",
+   "id": "rolex",
+   "data": {
+    "order": 1,
+    "brand": "Rolex",
+    "title": "Crown green and gold",
+    "mood": "Heritage, permanence, quiet authority. Deep green carries the weight; gold is used sparingly, like a hallmark.",
+    "swatches": [
+     {
+      "name": "Rolex green",
+      "hex": "#006039",
+      "role": "Primary",
+      "basis": "Widely cited third-party value (≈ PMS 3425 C); Rolex does not publish hex codes"
+     },
+     {
+      "name": "Crown gold",
+      "hex": "#A37E2C",
+      "role": "Accent",
+      "basis": "Widely cited third-party value; not published by Rolex"
+     },
+     {
+      "name": "Deep forest",
+      "hex": "#0B241A",
+      "role": "Background",
+      "basis": "My approximation for dark surfaces, not a Rolex colour"
+     },
+     {
+      "name": "Dial ivory",
+      "hex": "#F4F1E8",
+      "role": "Text",
+      "basis": "My approximation, not a Rolex colour"
+     }
+    ],
+    "use": "Positioning that sells trust and longevity: wealth and finance products, premium professional services, anything priced as a long-term asset. Let green dominate and keep gold below about 10% of the layout.",
+    "guardrail": "The crown device and the ROLEX wordmark are registered trademarks. In watches and jewellery, green with gold is strongly associated with Rolex, so using it there risks a passing-off claim. In unrelated industries take the mood, never the crown, wordmark or typography.",
+    "basis": "Rolex publishes no colour codes. Green and gold are commonly cited third-party values; the dark and light tones are my own approximations.",
+    "src": [
+     {
+      "t": "Bob's Watches: Rolex logo colours",
+      "u": "https://bobswatches.com/rolex-blog/?p=3500"
+     }
+    ]
+   }
+  },
+  {
+   "c": "palettes",
+   "id": "rolls-royce",
+   "data": {
+    "order": 2,
+    "brand": "Rolls-Royce",
+    "title": "Purple Spirit",
+    "mood": "Nocturnal, majestic, bespoke. A night-like purple instead of black, with metallic rose gold kept for rare printed moments.",
+    "swatches": [
+     {
+      "name": "Purple Spirit",
+      "hex": "#2A1438",
+      "role": "Background",
+      "basis": "Name published by Rolls-Royce (2020 identity); hex is my approximation, no official value published"
+     },
+     {
+      "name": "Rose gold",
+      "hex": "#B76E79",
+      "role": "Accent",
+      "basis": "Name published (used only in print); hex is my approximation"
+     },
+     {
+      "name": "Noir",
+      "hex": "#0B0B0D",
+      "role": "Surface",
+      "basis": "My approximation of the Black Badge noir imagery"
+     },
+     {
+      "name": "Moonlight",
+      "hex": "#EFEAF2",
+      "role": "Text",
+      "basis": "My approximation, not a Rolls-Royce colour"
+     }
+    ],
+    "use": "Ultra-premium or made-to-order offers where scarcity and personalisation are the product. Use the purple as the environment, not as decoration, and keep the accent for invitations, certificates or a single call to action.",
+    "guardrail": "The Spirit of Ecstasy, the double-R monogram and the Rolls-Royce name are protected marks. Never use them or a look-alike figurine; a purple-and-rose-gold scheme alone in a different industry is inspiration, not imitation.",
+    "basis": "Pentagram and Rolls-Royce published the names 'Purple Spirit' and rose gold in August 2020 but no colour values; all hex codes here are approximations.",
+    "src": [
+     {
+      "t": "Pentagram: Rolls-Royce identity",
+      "u": "https://www.pentagram.com/work/rolls-royce-3"
+     },
+     {
+      "t": "Rolls-Royce press release, 25 Aug 2020",
+      "u": "https://www.press.rolls-roycemotorcars.com/rolls-royce-motor-cars-pressclub/article/detail/T0314766EN/rolls-royce-announces-new-brand-identity"
+     }
+    ]
+   }
+  },
+  {
+   "c": "palettes",
+   "id": "blank-street",
+   "data": {
+    "order": 3,
+    "brand": "Blank Street",
+    "title": "Greens from 6 AM to 6 PM",
+    "mood": "Everyday, friendly, quick. One signature green plus lighter and deeper greens that shift with the time of day, on a warm off-white.",
+    "swatches": [
+     {
+      "name": "Blank Street Green",
+      "hex": "#2F6E4B",
+      "role": "Primary",
+      "basis": "Name published by Blank Street; hex is my approximation"
+     },
+     {
+      "name": "6 AM Green",
+      "hex": "#CFE3C8",
+      "role": "Surface",
+      "basis": "Name published by Wolff Olins; hex is my approximation"
+     },
+     {
+      "name": "6 PM Green",
+      "hex": "#1E3F2D",
+      "role": "Accent",
+      "basis": "Name published by Wolff Olins; hex is my approximation"
+     },
+     {
+      "name": "Shop white",
+      "hex": "#FFFDFC",
+      "role": "Background",
+      "basis": "Exact value from the theme-color tag on blankstreet.com"
+     },
+     {
+      "name": "Ink",
+      "hex": "#18231C",
+      "role": "Text",
+      "basis": "My approximation"
+     }
+    ],
+    "use": "High-frequency consumer brands, cafés, D2C and apps used daily. Borrow the system idea: one hero colour plus a family of shades named after moments in the customer's day, so every seasonal campaign looks different yet stays on-brand.",
+    "guardrail": "Green is crowded in coffee. Don't copy Blank Street's logo symbol, cup design or store fronts; build your own mark and name your shades after your own customer moments.",
+    "basis": "Wolff Olins named the shades (6 AM Green to 6 PM Green) but published no values. Only the off-white is an exact value, taken from blankstreet.com.",
+    "src": [
+     {
+      "t": "Wolff Olins: Blank Street",
+      "u": "https://wolffolins.com/work/blank-street"
+     },
+     {
+      "t": "Blank Street: brand refresh",
+      "u": "https://www.blankstreet.com/brand-refresh"
+     }
+    ]
+   }
+  },
+  {
+   "c": "palettes",
+   "id": "erewhon",
+   "data": {
+    "order": 4,
+    "brand": "Erewhon",
+    "title": "Wellness market",
+    "mood": "Aspirational wellness: clean, natural and premium. Dark green and soft linen tones feel like produce, paper bags and good light.",
+    "swatches": [
+     {
+      "name": "Market green",
+      "hex": "#1F3A2B",
+      "role": "Primary",
+      "basis": "My approximation of the logo green; no official value published"
+     },
+     {
+      "name": "Linen",
+      "hex": "#EDE6D6",
+      "role": "Background",
+      "basis": "My approximation"
+     },
+     {
+      "name": "Sage",
+      "hex": "#A9B89A",
+      "role": "Surface",
+      "basis": "My approximation"
+     },
+     {
+      "name": "Charcoal",
+      "hex": "#1A1A18",
+      "role": "Text",
+      "basis": "My approximation"
+     },
+     {
+      "name": "Citrus",
+      "hex": "#E8B23A",
+      "role": "Accent",
+      "basis": "My own accent suggestion, not an Erewhon colour"
+     }
+    ],
+    "use": "Premium food, wellness and organic products, and merch or collaboration drops that turn customers into walking ads. Pair the palette with natural textures and generous white space.",
+    "guardrail": "The Erewhon name and logo are its own. Health claims on food and wellness products are heavily regulated in India; the palette can signal 'clean', but every health claim still needs proof (see Volume X).",
+    "basis": "Erewhon publishes no palette. All values are approximations of the look.",
+    "src": [
+     {
+      "t": "Highsnobiety: luxury grocers case study",
+      "u": "https://highsnobiety.com/p/luxury-grocers-a-case-study"
+     }
+    ]
+   }
+  },
+  {
+   "c": "palettes",
+   "id": "igloo",
+   "data": {
+    "order": 5,
+    "brand": "igloo",
+    "title": "Night ice",
+    "mood": "Futuristic, immersive, calm tech. Deep night, frosted glass and a cold cyan glow; the look this app is built on.",
+    "swatches": [
+     {
+      "name": "Night",
+      "hex": "#05080D",
+      "role": "Background",
+      "basis": "Exact value used in this app's igloo-inspired theme"
+     },
+     {
+      "name": "Frost",
+      "hex": "#EAF4FA",
+      "role": "Text",
+      "basis": "Exact value used in this app"
+     },
+     {
+      "name": "Ice cyan",
+      "hex": "#8FE8FF",
+      "role": "Primary",
+      "basis": "Exact value used in this app"
+     },
+     {
+      "name": "Deep cyan",
+      "hex": "#2BB8E0",
+      "role": "Surface",
+      "basis": "Exact value used in this app"
+     },
+     {
+      "name": "Aurora",
+      "hex": "#B59CFF",
+      "role": "Accent",
+      "basis": "Exact value used in this app"
+     }
+    ],
+    "use": "Deep-tech, AI, crypto and developer products, launch pages and dashboards. Dark backgrounds with one luminous accent make data and 3D visuals stand out; monospace labels add a HUD feel.",
+    "guardrail": "igloo.inc's site (Awwwards Site of the Year 2024) belongs to Igloo Inc, the parent of Pudgy Penguins. Its 3D scenes, characters and penguin IP are protected; borrow the mood, not the assets.",
+    "basis": "igloo.inc publishes no palette. These are the exact colours this app uses for its igloo-inspired look.",
+    "src": [
+     {
+      "t": "Awwwards: Site of the Year 2024",
+      "u": "https://www.awwwards.com/annual-awards-2024/site-of-the-year"
+     }
+    ]
+   }
+  }
+ ],
+ "meta": {
+  "lastChecked": "2026-11-25"
+ }
+}

@@ -3,6 +3,9 @@
 order), validated strictly, stamped with a rising revision. Exits non-zero on any problem, so a
 bad edit is never signed or published.
 
+Collections: modules, lessons, cases, gaps, stories, traps, quiz, updates, glossary, palettes
+(palettes = brand mood boards; each swatch must say whether its value is published or approximated).
+
 Patch format (written by the daily update task). Upserts are shallow-merged into the existing
 document with that id, so app-only fields such as a lesson's "plain" summary survive.
 {
@@ -13,15 +16,17 @@ document with that id, so app-only fields such as a lesson's "plain" summary sur
 """
 import glob, json, os, re, sys, time
 
-COLLS = ["modules", "lessons", "cases", "gaps", "stories", "traps", "quiz", "updates", "glossary"]
+COLLS = ["modules", "lessons", "cases", "gaps", "stories", "traps", "quiz", "updates", "glossary", "palettes"]
 REQ = {
     "modules": ["title", "vol", "order"], "lessons": ["module", "title", "summary", "body"],
     "cases": ["name", "court", "module", "held"], "gaps": ["title", "module", "status", "gap", "closed"],
     "stories": ["name", "kind", "outcome", "what", "lesson"], "traps": ["clause", "risk", "ask"],
     "quiz": ["module", "q", "opts", "a", "why"], "updates": ["date", "kind", "module", "title", "summary"],
     "glossary": ["term", "plain", "aliases"],
+    "palettes": ["brand", "title", "swatches", "basis"],
 }
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 errors = []
 
 def err(msg): errors.append(msg)
@@ -67,6 +72,11 @@ def main(base_path, patch_dir, out_path):
             for d in lib[c]:
                 if not isinstance(d.get("opts"), list) or not isinstance(d.get("a"), int) or not 0 <= d["a"] < len(d["opts"]):
                     err(f"quiz/{d.get('id')}: answer index out of range")
+        if c == "palettes":
+            for d in lib[c]:
+                for sw in d.get("swatches") or []:
+                    if not isinstance(sw, dict) or not HEX.match(str(sw.get("hex", ""))) or not sw.get("name") or not sw.get("basis"):
+                        err(f"palettes/{d.get('id')}: every swatch needs a name, a #RRGGBB hex and a basis: {sw}")
         if c == "updates":
             for d in lib[c]:
                 if not DATE.match(str(d.get("date", ""))): err(f"updates/{d.get('id')}: date must be YYYY-MM-DD")
