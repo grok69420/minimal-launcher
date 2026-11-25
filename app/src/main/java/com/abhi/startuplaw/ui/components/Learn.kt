@@ -144,8 +144,9 @@ fun BoxScope.LookupCard(visible: Boolean, word: String, term: Term?, context: St
     val reduced = LocalReducedMotion.current
     BackHandler(enabled = visible, onBack = onClose)
     // Starts hidden so the very first open also slides in (the card is first composed already visible).
+    val dim = remember { MutableTransitionState(false) }.apply { targetState = visible }
     val shown = remember { MutableTransitionState(false) }.apply { targetState = visible }
-    AnimatedVisibility(shown, Modifier.matchParentSize(), enter = fadeIn(tween(Motion.SHORT)), exit = fadeOut(tween(180))) {
+    AnimatedVisibility(dim, Modifier.matchParentSize(), enter = fadeIn(tween(Motion.SHORT)), exit = fadeOut(tween(180))) {
         Box(
             Modifier.fillMaxSize().background(Color(0x99000000))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
