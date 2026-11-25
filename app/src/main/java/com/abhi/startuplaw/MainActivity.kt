@@ -1,443 +1,252 @@
 package com.abhi.startuplaw
 
-import android.annotation.SuppressLint
-import android.content.Intent
-import android.graphics.Color
-import android.graphics.Typeface
-import android.net.Uri
+import android.content.ActivityNotFoundException
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.webkit.CookieManager
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.Button
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.activity.ComponentActivity
-import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.browser.customtabs.CustomTabColorSchemeParams
-import androidx.browser.customtabs.CustomTabsIntent
-import android.widget.Toast
-import android.util.Log
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.concurrent.Executors
+import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.abhi.startuplaw.data.Kind
+import com.abhi.startuplaw.data.Library
+import com.abhi.startuplaw.ui.components.Glyph
+import com.abhi.startuplaw.ui.components.Icon
+import com.abhi.startuplaw.ui.components.IceBackground
+import com.abhi.startuplaw.ui.components.IceButton
+import com.abhi.startuplaw.ui.components.Hud
+import com.abhi.startuplaw.ui.screens.AboutScreen
+import com.abhi.startuplaw.ui.screens.CaseScreen
+import com.abhi.startuplaw.ui.screens.CasesScreen
+import com.abhi.startuplaw.ui.screens.HomeScreen
+import com.abhi.startuplaw.ui.screens.LessonScreen
+import com.abhi.startuplaw.ui.screens.LoopholesScreen
+import com.abhi.startuplaw.ui.screens.MapScreen
+import com.abhi.startuplaw.ui.screens.PlaybookScreen
+import com.abhi.startuplaw.ui.screens.PracticeScreen
+import com.abhi.startuplaw.ui.screens.SearchScreen
+import com.abhi.startuplaw.ui.screens.StoryScreen
+import com.abhi.startuplaw.ui.screens.TutorScreen
+import com.abhi.startuplaw.ui.screens.UpdatesScreen
+import com.abhi.startuplaw.ui.screens.VolumeScreen
+import com.abhi.startuplaw.ui.theme.Ice
+import com.abhi.startuplaw.ui.theme.IceTheme
 
-/**
- * Thin native shell around the Startup Law Library artifact.
- * All UI/UX lives in the hosted page, so any change published there
- * shows up in this app on the next load — no app update needed.
- */
 class MainActivity : ComponentActivity() {
+    private val vm: AppViewModel by viewModels()
 
-    companion object {
-        const val TAG = "StartupLaw"
-        const val DEFAULT_HOME_URL = "https://claude.ai/artifact/DKsSn81Jr9f7GRAm4Rt1rq"
-        // Remote settings: change these on GitHub and the installed app follows, no rebuild.
-        const val CONFIG_URL =
-            "https://raw.githubusercontent.com/grok69420/minimal-launcher/startup-law-android/config.json"
-        const val RELEASE_API =
-            "https://api.github.com/repos/grok69420/minimal-launcher/releases/tags/startup-law-latest"
-        const val APK_URL =
-            "https://github.com/grok69420/minimal-launcher/releases/download/startup-law-latest/StartupLawLibrary.apk"
-        private const val INK = 0xFF111112.toInt()
-        private const val BONE = 0xFFF5F5F0.toInt()
-        private const val LIME = 0xFFAEF02E.toInt()
-    }
-
-    private val io = Executors.newSingleThreadExecutor()
-    private val main = Handler(Looper.getMainLooper())
-    private val prefs by lazy { getSharedPreferences("shell", MODE_PRIVATE) }
-    private var homeUrl = DEFAULT_HOME_URL
-    private var internalHosts = listOf("claude.ai", "anthropic.com", "claudeusercontent.com")
-    private var refreshAfterMs = 30 * 60 * 1000L
-    private lateinit var updateBar: View
-
-    private lateinit var web: WebView
-    private lateinit var errorView: View
-    private lateinit var progress: ProgressBar
-    private var pausedAt = 0L
-
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(INK),
-            navigationBarStyle = SystemBarStyle.dark(INK)
-        )
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
-        applyConfig(prefs.getString("config", null)) // last known remote settings
-        applyModeExtra(intent)
+        splash.setKeepOnScreenCondition { vm.library.value == null }
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.Transparent.toArgb()),
+            navigationBarStyle = SystemBarStyle.dark(Color.Transparent.toArgb()),
+        )
+        setContent { IceTheme { AppRoot(vm) } }
+    }
+}
 
-        // Chrome mode: the library opens in a Chrome tab that shares your Chrome sign-in,
-        // which is the only way Google sign-in works (Google blocks it inside app web views).
-        if (isChromeMode()) {
-            setupChromeHub()
-            if (savedInstanceState == null) openFromIntent(intent)
-            refreshRemote()
-            return
+/** Top-level destinations shown in the bottom bar. */
+enum class Tab(val route: String, val label: String, val glyph: Glyph) {
+    Library("home", "Library", Glyph.Library),
+    Cases("cases", "Cases", Glyph.Cases),
+    Playbook("playbook", "Playbook", Glyph.Playbook),
+    Practice("practice", "Practice", Glyph.Practice),
+    Progress("map", "Progress", Glyph.Map),
+}
+
+/** Where a search hit, mindmap leaf or link should take you. */
+fun routeFor(kind: Kind, id: String): String = when (kind) {
+    Kind.Lesson -> "lesson/$id"
+    Kind.Case -> "case/$id"
+    Kind.Loophole -> "loopholes?focus=$id"
+    Kind.Story -> "story/$id"
+    Kind.Trap -> "playbook?tab=1&focus=$id"
+    Kind.Update -> "updates"
+    Kind.Quiz -> "practice"
+}
+
+@Composable
+fun AppRoot(vm: AppViewModel) {
+    val lib by vm.library.collectAsStateWithLifecycle()
+    val nav = rememberNavController()
+    val entry by nav.currentBackStackEntryAsState()
+    val route = entry?.destination?.route.orEmpty()
+    val tab = Tab.entries.firstOrNull { route.substringBefore('?') == it.route }
+    val ctx = LocalContext.current
+    val install by vm.installIntent.collectAsStateWithLifecycle()
+
+    LaunchedEffect(install) {
+        val i = install ?: return@LaunchedEffect
+        vm.consumeInstall()
+        try { ctx.startActivity(i) } catch (_: ActivityNotFoundException) {}
+    }
+
+    val library = lib
+    if (library == null) { IceBackground { }; return }
+
+    Box(Modifier.fillMaxSize().background(Ice.Night)) {
+        AppNav(nav, vm, library)
+        Column(Modifier.align(Alignment.BottomCenter)) {
+            UpdateBanner(vm)
+            AnimatedVisibility(visible = tab != null, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+                BottomBar(tab) { t -> nav.navigateTab(t.route) }
+            }
         }
+    }
+}
 
-        val root = FrameLayout(this).apply { setBackgroundColor(INK) }
-        web = WebView(this).apply { setBackgroundColor(INK) }
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = false
-            max = 100
-            progressTintList = android.content.res.ColorStateList.valueOf(LIME)
-            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(INK)
+fun NavHostController.navigateTab(route: String) = navigate(route) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}
+
+@Composable
+private fun AppNav(nav: NavHostController, vm: AppViewModel, lib: Library) {
+    val back: () -> Unit = { if (!nav.popBackStack()) nav.navigateTab("home") }
+    val go: (String) -> Unit = { r -> nav.navigate(r) { launchSingleTop = true } }
+    NavHost(
+        nav, startDestination = "home",
+        enterTransition = { fadeIn(androidx.compose.animation.core.tween(220)) + scaleIn(androidx.compose.animation.core.tween(220), initialScale = 0.985f) },
+        exitTransition = { fadeOut(androidx.compose.animation.core.tween(160)) },
+        popEnterTransition = { fadeIn(androidx.compose.animation.core.tween(220)) },
+        popExitTransition = { fadeOut(androidx.compose.animation.core.tween(160)) + scaleOut(androidx.compose.animation.core.tween(160), targetScale = 0.985f) },
+    ) {
+        composable("home") { HomeScreen(vm, lib, go) }
+        composable("cases?module={module}", arguments = listOf(navArgument("module") { type = NavType.StringType; nullable = true; defaultValue = null })) {
+            CasesScreen(vm, lib, it.arguments?.getString("module"), go)
         }
-        errorView = buildErrorView()
-        updateBar = buildUpdateBar()
-
-        root.addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        root.addView(progress, FrameLayout.LayoutParams(MATCH_PARENT, dp(3), Gravity.TOP))
-        root.addView(errorView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        root.addView(updateBar, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM))
-        setContentView(root)
-
-        // Keep content clear of the status bar, navigation bar and keyboard.
-        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            WindowInsetsCompat.CONSUMED
+        composable("playbook?tab={tab}&focus={focus}", arguments = listOf(
+            navArgument("tab") { type = NavType.IntType; defaultValue = 0 },
+            navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null },
+        )) { PlaybookScreen(vm, lib, it.arguments?.getInt("tab") ?: 0, it.arguments?.getString("focus"), go) }
+        composable("practice") { PracticeScreen(vm, lib) }
+        composable("map") { MapScreen(vm, lib, go) }
+        composable("volume/{id}") { VolumeScreen(vm, lib, it.arguments?.getString("id").orEmpty(), go, back) }
+        composable("lesson/{id}") { e ->
+            LessonScreen(vm, lib, e.arguments?.getString("id").orEmpty(), go, back) { next -> nav.navigate("lesson/$next") { popUpTo("lesson/{id}") { inclusive = true } } }
         }
-
-        CookieManager.getInstance().apply {
-            setAcceptCookie(true)
-            setAcceptThirdPartyCookies(web, true) // the artifact runs in a sandboxed frame
+        composable("case/{id}") { CaseScreen(lib, it.arguments?.getString("id").orEmpty(), back) }
+        composable("story/{id}") { StoryScreen(vm, lib, it.arguments?.getString("id").orEmpty(), back) }
+        composable("loopholes?focus={focus}", arguments = listOf(navArgument("focus") { type = NavType.StringType; nullable = true; defaultValue = null })) {
+            LoopholesScreen(lib, it.arguments?.getString("focus"), back)
         }
+        composable("updates") { UpdatesScreen(vm, lib, go, back) }
+        composable("tutor") { TutorScreen(vm, lib, go, back) }
+        composable("search") { SearchScreen(vm, lib, go, back) }
+        composable("about") { AboutScreen(vm, lib, back) }
+    }
+}
 
-        web.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            mediaPlaybackRequiresUserGesture = false
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            setSupportMultipleWindows(false)
-            // Present as normal Chrome so claude.ai serves the standard site.
-            userAgentString = userAgentString.replace("; wv", "")
-        }
-
-        web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                val uri = request.url
-                if (isGoogleSignIn(uri)) {
-                    switchToChromeMode()
-                    return true
+@Composable
+private fun BottomBar(current: Tab?, onSelect: (Tab) -> Unit) {
+    Box(
+        Modifier.fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Ice.Night.copy(alpha = 0.92f), Ice.Night)))
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
+                .background(Color(0xE60B141F))
+                .border(1.dp, Ice.Edge, RoundedCornerShape(26.dp))
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Tab.entries.forEach { t ->
+                val on = t == current
+                Column(
+                    Modifier.weight(1f).clip(RoundedCornerShape(22.dp))
+                        .background(if (on) Ice.Cyan.copy(alpha = 0.14f) else Color.Transparent)
+                        .clickable(role = Role.Tab) { onSelect(t) }
+                        .semantics { selected = on; contentDescription = t.label }
+                        .testTag("tab_${t.route}")
+                        .padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(t.glyph, if (on) Ice.Cyan else Ice.Mist, 22.dp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(t.label, style = MaterialTheme.typography.labelSmall, color = if (on) Ice.Cyan else Ice.Mist, maxLines = 1)
                 }
-                if (isInternal(uri)) return false
-                openExternally(uri)
-                return true
-            }
-
-            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) {
-                    Log.i(TAG, "offline screen: ${error.description}")
-                    errorView.visibility = View.VISIBLE
-                }
-            }
-
-            override fun onPageFinished(view: WebView, url: String) {
-                Log.i(TAG, "page $url")
-                CookieManager.getInstance().flush()
-            }
-        }
-
-        web.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView, newProgress: Int) {
-                progress.progress = newProgress
-                progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
-            }
-        }
-
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (web.canGoBack()) web.goBack()
-                else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                }
-            }
-        })
-
-        // Restore the previous page if there is one (e.g. after rotation); otherwise load the library.
-        // Coming back from Chrome mode there is no saved page, so load fresh instead of showing a blank view.
-        if (savedInstanceState == null || web.restoreState(savedInstanceState) == null) openFromIntent(intent)
-        refreshRemote()
-    }
-
-    /** Pull remote settings and check for a newer app build, off the main thread. */
-    private fun refreshRemote() {
-        io.execute {
-            fetch(CONFIG_URL)?.let { json ->
-                main.post {
-                    val oldHome = homeUrl
-                    if (applyConfig(json)) {
-                        prefs.edit().putString("config", json).apply()
-                        Log.i(TAG, "config ok")
-                        if (::web.isInitialized && homeUrl != oldHome && web.url?.startsWith(oldHome) == true) web.loadUrl(homeUrl)
-                    }
-                }
-            }
-            fetch(RELEASE_API)?.let { json ->
-                val latest = runCatching {
-                    Regex("versionCode:\\s*(\\d+)").find(JSONObject(json).optString("body"))?.groupValues?.get(1)?.toInt()
-                }.getOrNull() ?: return@let
-                Log.i(TAG, "latest build $latest (this ${BuildConfig.VERSION_CODE})")
-                if (latest > BuildConfig.VERSION_CODE) main.post { updateBar.visibility = View.VISIBLE }
             }
         }
     }
+}
 
-    private fun applyConfig(json: String?): Boolean {
-        if (json == null) return false
-        return runCatching {
-            val o = JSONObject(json)
-            val url = o.optString("homeUrl")
-            if (url.startsWith("https://")) homeUrl = url
-            o.optJSONArray("internalHosts")?.let { arr ->
-                val list = (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }
-                if (list.isNotEmpty()) internalHosts = list
+@Composable
+private fun UpdateBanner(vm: AppViewModel) {
+    val up by vm.update.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    AnimatedVisibility(visible = up.available > 0, enter = fadeIn() + slideInVertically { it / 2 }, exit = fadeOut()) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 4.dp).fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp)).background(Color(0xF0102231)).border(1.dp, Ice.Cyan.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp).testTag("update_banner"),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Hud(if (up.downloading) "Downloading ${(up.progress * 100).toInt()}%" else "App update ready", color = Ice.Cyan)
+                Text(
+                    if (up.error.isNotBlank()) up.error else "Installs over this app. Your progress stays.",
+                    style = MaterialTheme.typography.bodyMedium, color = if (up.error.isNotBlank()) Ice.Coral else Ice.Mist,
+                )
             }
-            val mins = o.optInt("refreshMinutes", 0)
-            if (mins > 0) refreshAfterMs = mins * 60_000L
-            true
-        }.getOrDefault(false)
-    }
-
-    private fun fetch(url: String): String? = runCatching {
-        (URL(url).openConnection() as HttpURLConnection).run {
-            connectTimeout = 8000; readTimeout = 8000
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Cache-Control", "no-cache")
-            try { if (responseCode == 200) inputStream.bufferedReader().readText() else null }
-            finally { disconnect() }
-        }
-    }.getOrNull()
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        val before = isChromeMode()
-        applyModeExtra(intent)
-        if (isChromeMode() != before) {
-            setIntent(intent)
-            if (isChromeMode()) openInChrome(homeUrl)
-            recreate()
-            return
-        }
-        openFromIntent(intent)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        pausedAt = SystemClock.elapsedRealtime()
-        CookieManager.getInstance().flush()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Pick up any newly published design or content after a long break.
-        if (pausedAt > 0 && SystemClock.elapsedRealtime() - pausedAt > refreshAfterMs) {
-            if (::web.isInitialized) web.reload()
-            refreshRemote()
-        }
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        if (::web.isInitialized) web.saveState(outState)
-    }
-
-    /** Sign-in links from email (claude.ai) open here; everything else starts at the library. */
-    private fun openFromIntent(intent: Intent?) {
-        val data = intent?.data
-        val target = if (data != null && isInternal(data)) data.toString() else homeUrl
-        if (isChromeMode()) { openInChrome(target); return }
-        errorView.visibility = View.GONE
-        web.loadUrl(target)
-    }
-
-    /** Optional "mode" extra ("app" or "chrome"), used by shortcuts and the automated phone tests. */
-    private fun applyModeExtra(intent: Intent?) {
-        val m = intent?.getStringExtra("mode") ?: return
-        if (m == "app" || m == "chrome") {
-            prefs.edit().putString("mode", m).apply()
-            Log.i(TAG, "mode $m")
-        }
-    }
-
-    private fun isChromeMode() = prefs.getString("mode", "app") == "chrome"
-
-    private fun isGoogleSignIn(uri: Uri): Boolean {
-        val host = uri.host ?: return false
-        return host == "accounts.google.com" || host.endsWith(".accounts.google.com")
-    }
-
-    /** Called when Google sign-in starts inside the app: move to Chrome mode for good. */
-    private fun switchToChromeMode() {
-        prefs.edit().putString("mode", "chrome").apply()
-        Toast.makeText(this, "Google sign-in opens in Chrome. The library will open there from now on.", Toast.LENGTH_LONG).show()
-        openInChrome(homeUrl)
-        recreate()
-    }
-
-    private fun switchToAppMode() {
-        prefs.edit().putString("mode", "app").apply()
-        recreate()
-    }
-
-    private fun openInChrome(url: String) {
-        val colors = CustomTabColorSchemeParams.Builder()
-            .setToolbarColor(INK).setNavigationBarColor(INK).build()
-        val tab = CustomTabsIntent.Builder()
-            .setDefaultColorSchemeParams(colors)
-            .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
-            .setShowTitle(false)
-            .setUrlBarHidingEnabled(true)
-            .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
-            .build()
-        try { tab.launchUrl(this, Uri.parse(url)) } catch (_: Exception) { openExternally(Uri.parse(url)) }
-    }
-
-    /** Small home screen shown behind the Chrome tab: open the library, update, or switch mode. */
-    private fun setupChromeHub() {
-        val root = FrameLayout(this).apply { setBackgroundColor(INK) }
-        updateBar = buildUpdateBar()
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(32), dp(32), dp(32), dp(32))
-            addView(TextView(context).apply {
-                text = "STARTUP\nLAW LIBRARY"
-                setTextColor(BONE); textSize = 34f; gravity = Gravity.CENTER
-                typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
+            IceButton(if (up.downloading) "…" else "Install", enabled = !up.downloading, onClick = {
+                if (!vm.canInstall()) runCatching { ctx.startActivity(vm.allowInstallsIntent()) } else vm.downloadUpdate()
             })
-            addView(TextView(context).apply {
-                text = "Opens in Chrome so your Google sign-in works."
-                setTextColor(Color.parseColor("#A7A39A")); textSize = 15f; gravity = Gravity.CENTER
-                setPadding(0, dp(12), 0, dp(28))
-            })
-            addView(pillButton("OPEN LIBRARY  →", LIME, INK) { openInChrome(homeUrl) },
-                LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-            addView(Button(context).apply {
-                text = "Use in-app mode instead (email sign-in)"
-                isAllCaps = false
-                setTextColor(Color.parseColor("#A7A39A"))
-                setBackgroundColor(Color.TRANSPARENT)
-                setOnClickListener { switchToAppMode() }
-            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(18) })
-        }
-        root.addView(col, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        root.addView(updateBar, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM))
-        setContentView(root)
-        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            WindowInsetsCompat.CONSUMED
         }
     }
-
-    private fun pillButton(label: String, bg: Int, fg: Int, onClick: () -> Unit) = Button(this).apply {
-        text = label
-        setTextColor(fg)
-        typeface = Typeface.DEFAULT_BOLD
-        background = android.graphics.drawable.GradientDrawable().apply { setColor(bg); cornerRadius = dp(999).toFloat() }
-        setPadding(dp(28), dp(14), dp(28), dp(14))
-        setOnClickListener { onClick() }
-    }
-
-    private fun isInternal(uri: Uri): Boolean {
-        val host = uri.host ?: return false
-        if (uri.scheme != "https") return false
-        return internalHosts.any { host == it || host.endsWith(".$it") }
-    }
-
-    private fun openExternally(uri: Uri) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (_: Exception) { /* no app can open it */ }
-    }
-
-    private fun buildErrorView(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER
-        setBackgroundColor(INK)
-        setPadding(dp(32), dp(32), dp(32), dp(32))
-        visibility = View.GONE
-        addView(TextView(context).apply {
-            text = "CAN’T REACH\nTHE LIBRARY"
-            setTextColor(BONE)
-            textSize = 30f
-            typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
-            gravity = Gravity.CENTER
-        })
-        addView(TextView(context).apply {
-            text = "Check your internet connection and try again."
-            setTextColor(Color.parseColor("#A7A39A"))
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, dp(24))
-        })
-        addView(Button(context).apply {
-            text = "RETRY  →"
-            setTextColor(INK)
-            typeface = Typeface.DEFAULT_BOLD
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(LIME); cornerRadius = dp(999).toFloat()
-            }
-            setPadding(dp(28), dp(14), dp(28), dp(14))
-            setOnClickListener {
-                errorView.visibility = View.GONE
-                web.reload()
-            }
-        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-    }
-
-    /** Lime bar shown when GitHub has a newer build; installs over this one, keeping your sign-in. */
-    private fun buildUpdateBar(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setBackgroundColor(LIME)
-        setPadding(dp(20), dp(12), dp(12), dp(12))
-        visibility = View.GONE
-        addView(TextView(context).apply {
-            text = "APP UPDATE READY"
-            setTextColor(INK)
-            typeface = Typeface.DEFAULT_BOLD
-            textSize = 14f
-        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        addView(Button(context).apply {
-            text = "INSTALL  →"
-            setTextColor(LIME)
-            typeface = Typeface.DEFAULT_BOLD
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(INK); cornerRadius = dp(999).toFloat()
-            }
-            setPadding(dp(18), dp(8), dp(18), dp(8))
-            setOnClickListener { openExternally(Uri.parse(APK_URL)) }
-        })
-        addView(Button(context).apply {
-            text = "LATER"
-            setTextColor(INK)
-            setBackgroundColor(Color.TRANSPARENT)
-            setOnClickListener { updateBar.visibility = View.GONE }
-        })
-    }
-
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 }

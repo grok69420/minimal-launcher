@@ -4,4 +4,3 @@ local.properties
 *.jks
 *.keystore
 .idea/
-tests/web/index.html

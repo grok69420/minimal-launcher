@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: startup-law-android
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,7 +25,6 @@ jobs:
       - name: Did the app itself change?
         id: changes
         run: |
-          # Compare with the build phones currently have (the startup-law-latest release).
           git fetch -q --depth=200 origin "+refs/tags/startup-law-latest:refs/tags/startup-law-latest" || true
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
              ! git rev-parse -q --verify startup-law-latest >/dev/null || \
@@ -41,7 +44,7 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
-      - name: Keep the same signing key between builds
+      - name: Keep the same fallback signing key between builds
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
@@ -58,26 +61,68 @@ jobs:
             echo "::warning::No signing key secret set; signing with the cached build key."
           fi
 
-      - name: Build APK
+      - name: Bundle the newest signed library into the app
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          gradle assembleRelease --no-daemon --stacktrace
+          mkdir -p "$RUNNER_TEMP/lib"
+          if gh release download startup-law-content -R "$GITHUB_REPOSITORY" -p content.json -p content.json.sig -D "$RUNNER_TEMP/lib" 2>/dev/null && [ -n "${KEYSTORE_PATH:-}" ]; then
+            keytool -exportcert -rfc -alias startuplaw -keystore "$KEYSTORE_PATH" -storepass startuplaw > "$RUNNER_TEMP/cert.pem"
+            openssl x509 -in "$RUNNER_TEMP/cert.pem" -pubkey -noout > "$RUNNER_TEMP/pub.pem"
+            base64 -d "$RUNNER_TEMP/lib/content.json.sig" > "$RUNNER_TEMP/sig.bin"
+            if openssl dgst -sha256 -verify "$RUNNER_TEMP/pub.pem" -signature "$RUNNER_TEMP/sig.bin" "$RUNNER_TEMP/lib/content.json"; then
+              new=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('rev',0))" "$RUNNER_TEMP/lib/content.json")
+              old=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('rev',0))" app/src/main/assets/content.json)
+              echo "published library rev $new, bundled rev $old"
+              if [ "$new" -gt "$old" ]; then cp "$RUNNER_TEMP/lib/content.json" app/src/main/assets/content.json; echo "Bundled published library."; fi
+            else
+              echo "::warning::Published library signature did not verify; keeping the copy in the repo."
+            fi
+          else
+            echo "No published library yet; bundling the copy in the repo."
+          fi
+
+      - name: Unit tests
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build APKs
+        run: |
+          gradle assembleRelease assembleDebug assembleDebugAndroidTest --no-daemon --stacktrace
           cp app/build/outputs/apk/release/app-release.apk StartupLawLibrary.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app-debug.apk
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk app-debug-androidTest.apk
+          ls -la *.apk
+
+      - name: Unit test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests
 
       - uses: actions/upload-artifact@v4
         with:
           name: StartupLawLibrary-apk
-          path: StartupLawLibrary.apk
+          path: |
+            StartupLawLibrary.apk
+            app-debug.apk
+            app-debug-androidTest.apk
 
   phone-test:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:
           name: StartupLawLibrary-apk
+
+      - name: Get the build phones have now (to test updating over it)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download startup-law-latest -R "$GITHUB_REPOSITORY" -p StartupLawLibrary.apk -O previous.apk || echo "no previous build"
 
       - name: Enable hardware acceleration for the virtual phone
         run: |
@@ -104,6 +149,12 @@ jobs:
         run: |
           mkdir -p test-shots
           zip -qr phone-test-results.zip test-shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-test-results
+          path: phone-test-results.zip
 
       - name: Publish test results
         if: always()
@@ -136,7 +187,7 @@ jobs:
           make_latest: false
           files: StartupLawLibrary.apk
           body: |
-            Android app for the Startup Law Library. Install StartupLawLibrary.apk below.
-            Passed the virtual-phone test before publishing.
+            Native offline-first Android app for the Startup Law Library. Install StartupLawLibrary.apk below.
+            Passed the unit tests and the virtual-phone test before publishing.
             Build ${{ github.run_number }} from ${{ github.sha }}.
             versionCode: ${{ github.run_number }}

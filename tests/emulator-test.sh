@@ -1,134 +1,131 @@
 #!/usr/bin/env bash
-# Runs on a virtual Android phone in GitHub Actions before any build is published.
+# Virtual-phone test run in GitHub Actions before any build reaches a real phone.
 set -uo pipefail
-APK=StartupLawLibrary.apk
 PKG=com.abhi.startuplaw
+DBG=com.abhi.startuplaw.debug
 OUT=test-shots
 mkdir -p "$OUT"
 : > "$OUT/report.txt"
 pip install -q pillow >/dev/null 2>&1
 
 log()     { echo "$*" | tee -a "$OUT/report.txt"; }
-fail()    { log "FAILED: $1"; adb logcat -d > "$OUT/logcat.txt"; cleanup; exit 1; }
-quiet()   { adb shell cmd statusbar collapse >/dev/null 2>&1
-            adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1; }
+fail()    { log "FAILED: $1"; adb logcat -d > "$OUT/logcat.txt"; exit 1; }
+quiet()   { adb shell cmd statusbar collapse >/dev/null 2>&1; }
 shot()    { quiet; sleep 1; adb exec-out screencap -p > "$OUT/$1.png"; log "  screenshot $1"; }
 alive()   { adb shell pidof "$PKG" >/dev/null || fail "app not running after $1"; }
-nocrash() { if adb logcat -d -b crash | grep -q "$PKG"; then fail "app crashed during $1"; fi; }
-applog()  { adb logcat -d -s StartupLaw:I > "$OUT/applog.txt"; }
-front()   { adb shell dumpsys activity activities | grep -m1 -E "topResumedActivity|mResumedActivity"; }
-# Image checks: "content" = screen is not blank; "lime" = the library's lime accent is on screen.
+nocrash() { if adb logcat -d -b crash | grep -qE "$PKG"; then adb logcat -d -b crash > "$OUT/crash.txt"; fail "app crashed during $1"; fi; }
+ui()      { python3 tests/ui.py "$@"; }
+tap()     { for i in 1 2 3 4 5; do ui tap "$1" && { sleep 2; return 0; }; sleep 2; done; ui dump > "$OUT/ui-missing.txt"; fail "could not find '$1' on screen"; }
+has()     { for i in 1 2 3 4 5 6; do ui has "$1" && return 0; sleep 2; done; return 1; }
+launch()  { adb shell am start -W -n "$PKG/.MainActivity" | tee -a "$OUT/report.txt" | grep -E "TotalTime" || true; }
+# "content" = the screenshot is not blank; "ice" = the app's cyan accent is visible.
 img()     { python3 - "$OUT/$2.png" "$1" <<'PY'
 import sys
 from PIL import Image
 im = Image.open(sys.argv[1]).convert('RGB')
 w, h = im.size
-im = im.crop((0, int(h * 0.06), w, int(h * 0.93))).resize((180, 400))  # ignore status and nav bars
+im = im.crop((0, int(h * 0.06), w, int(h * 0.93))).resize((180, 400))
 px = list(im.getdata())
 if sys.argv[2] == 'content':
     sys.exit(0 if len(set(px)) > 40 else 1)
-lime = sum(1 for r, g, b in px if abs(r-174) < 30 and abs(g-240) < 30 and abs(b-46) < 45)
-sys.exit(0 if lime > 20 else 1)
+ice = sum(1 for r, g, b in px if abs(r-143) < 40 and abs(g-232) < 35 and abs(b-255) < 30)
+sys.exit(0 if ice > 8 else 1)
 PY
 }
-# Take a screenshot, retrying for up to ~30 s until it shows content.
-shot_content() { for i in 1 2 3 4 5 6; do shot "$1"; img content "$1" && return 0; sleep 5; done; fail "$2 stayed blank"; }
+check_shot() { shot "$1"; img content "$1" || fail "$1 is blank"; img ice "$1" || fail "$1 does not show the app"; }
 
-SERVER_PID=""
-cleanup() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; adb shell am force-stop com.android.chrome >/dev/null 2>&1; true; }
-trap cleanup EXIT
-
-# Settle the freshly booted phone: hide "app isn't responding" pop-ups from the cold start.
+# Let the freshly booted phone settle.
 adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
-# Google Play services restarts itself shortly after a cold boot and takes apps that use
-# its font provider with it, so let the phone settle before testing.
-for i in $(seq 1 18); do
-  [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && break; sleep 5
-done
-sleep 90; quiet; adb shell input keyevent KEYCODE_HOME
-# Chrome: skip its welcome screens and notification prompt so they don't cover the pages under test.
-adb root >/dev/null 2>&1; sleep 3; adb wait-for-device
-adb shell 'echo "_ --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line'
-adb shell am set-debug-app --persistent com.android.chrome >/dev/null 2>&1
-adb shell pm grant com.android.chrome android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
-adb shell am force-stop com.android.chrome
+for i in $(seq 1 24); do [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && break; sleep 5; done
+sleep 45; quiet; adb shell input keyevent KEYCODE_HOME
 adb logcat -c
 log "Device: $(adb shell getprop ro.product.model) / Android $(adb shell getprop ro.build.version.release)"
 
-log "1. Install"
-adb install -r "$APK" >/dev/null || fail "install"
-log "  installed $(adb shell dumpsys package $PKG | grep -m1 versionName | tr -d ' ')"
+log "1. Walk every screen (instrumented UI test, debug build)"
+adb install -r app-debug.apk >/dev/null || fail "install debug build"
+adb install -r app-debug-androidTest.apk >/dev/null || fail "install UI test"
+adb shell am instrument -w -r -e class com.abhi.startuplaw.AppFlowTest "$DBG.test/androidx.test.runner.AndroidJUnitRunner" > "$OUT/ui-test.txt" 2>&1
+mkdir -p "$OUT/ui"
+adb exec-out run-as "$DBG" tar -cf - files/shots 2>/dev/null | tar -xf - -C "$OUT/ui" 2>/dev/null
+log "  $(ls "$OUT/ui/files/shots" 2>/dev/null | wc -l) step screenshots"
+if ! grep -q "OK (1 test)" "$OUT/ui-test.txt"; then
+  grep -E "Error|Exception|at com.abhi" "$OUT/ui-test.txt" | head -30 | tee -a "$OUT/report.txt"
+  adb logcat -d > "$OUT/logcat.txt"
+  fail "UI test failed (see ui-test.txt)"
+fi
+log "  UI test passed"
+adb uninstall "$DBG.test" >/dev/null 2>&1; adb uninstall "$DBG" >/dev/null 2>&1
+adb logcat -c
 
-log "2. First launch loads the library"
-adb shell am start -W -n "$PKG/.MainActivity" --es mode app >/dev/null
-sleep 20; alive launch; nocrash launch
-shot_content 01-launch "first launch"
-applog
-grep -q "page https://claude.ai" "$OUT/applog.txt" || fail "library page did not load"
-grep -q "config ok" "$OUT/applog.txt" || fail "remote settings (config.json) not loaded"
-grep -q "latest build" "$OUT/applog.txt" || fail "update check did not run"
-log "  page loaded, remote settings loaded, update check ran"
+log "2. Install over the build phones have now"
+if [ -f previous.apk ]; then
+  adb install previous.apk >/dev/null || fail "install previous build"
+  log "  previous: $(adb shell dumpsys package $PKG | grep -m1 versionName | tr -d ' ')"
+  adb shell am start -n "$PKG/.MainActivity" >/dev/null 2>&1; sleep 8
+  adb shell am force-stop "$PKG"
+  adb install -r StartupLawLibrary.apk > "$OUT/upgrade.txt" 2>&1 || { cat "$OUT/upgrade.txt" | tee -a "$OUT/report.txt"; fail "new build will not install over the current one"; }
+  log "  upgraded in place"
+else
+  adb install -r StartupLawLibrary.apk >/dev/null || fail "install"
+fi
+log "  now: $(adb shell dumpsys package $PKG | grep -m1 versionName | tr -d ' ')"
 
-log "3. Rotate to landscape and back"
+log "3. Release build opens"
+launch; sleep 6
+alive "launch"; nocrash "launch"
+check_shot release-home
+adb logcat -d -s StartupLaw:* > "$OUT/applog.txt"
+grep -q "loaded" "$OUT/applog.txt" || fail "library did not load"
+log "  $(grep -m1 loaded "$OUT/applog.txt" | sed 's/.*StartupLaw: //')"
+
+log "4. Online sync"
+for i in $(seq 1 15); do adb logcat -d -s StartupLaw:* | grep -qE "sync: |sync failed|sync rejected" && break; sleep 2; done
+adb logcat -d -s StartupLaw:* > "$OUT/applog.txt"
+grep -E "sync" "$OUT/applog.txt" | sed 's/.*StartupLaw: /  /' | tee -a "$OUT/report.txt"
+grep -q "signature does not match" "$OUT/applog.txt" && fail "published library is not signed with the app key"
+grep -q "did not validate" "$OUT/applog.txt" && fail "published library did not validate"
+
+log "5. Every tab on the release build"
+for t in Cases Playbook Practice Progress Library; do tap "$t"; alive "$t"; nocrash "$t"; check_shot "release-$t"; done
+tap "Loopholes"; check_shot release-loopholes; adb shell input keyevent KEYCODE_BACK; sleep 2
+tap "Ask the tutor"; check_shot release-tutor; adb shell input keyevent KEYCODE_BACK; sleep 2
+
+log "6. Offline"
+adb shell svc wifi disable; adb shell svc data disable; sleep 5
+adb shell am force-stop "$PKG"; launch; sleep 5
+alive "offline launch"; nocrash "offline launch"
+check_shot offline-home
+has "Offline. Open sync settings" || fail "offline state not shown"
+tap "Cases"; check_shot offline-cases
+tap "Practice"; check_shot offline-practice
+tap "Library"
+log "  works offline"
+adb logcat -c
+adb shell svc wifi enable; adb shell svc data enable
+for i in $(seq 1 20); do ui has "Online. Open sync settings" && break; sleep 3; done
+has "Online. Open sync settings" || fail "did not notice the connection coming back"
+shot back-online
+log "  noticed the connection returning"
+
+log "7. Rotate, background, resume"
 adb shell settings put system accelerometer_rotation 0
-adb shell settings put system user_rotation 1; sleep 6; alive rotation; nocrash rotation
-shot_content 02-landscape "landscape view"
-adb shell settings put system user_rotation 0; sleep 4
-
-log "4. Leave and come back"
+adb shell settings put system user_rotation 1; sleep 3; alive "rotate"; check_shot landscape
+adb shell settings put system user_rotation 0; sleep 3
 adb shell input keyevent KEYCODE_HOME; sleep 3
-adb shell am start -n "$PKG/.MainActivity" >/dev/null; sleep 6; alive resume; nocrash resume
-front | grep -q "$PKG" || fail "app not in front after resume"
-shot_content 03-resume "resumed app"
+launch; sleep 3; alive "resume"; nocrash "resume"; check_shot resumed
 
-log "5. claude.ai sign-in link opens in the app"
-adb shell am start -W -a android.intent.action.VIEW -d "https://claude.ai/login" -n "$PKG/.MainActivity" >/dev/null
-sleep 10; alive "sign-in link"; nocrash "sign-in link"
-shot_content 04-signin-link "sign-in page"
+log "8. Scroll smoothness (informational on a software-rendered emulator)"
+adb shell dumpsys gfxinfo "$PKG" reset >/dev/null
+for i in 1 2 3 4 5 6; do adb shell input swipe 540 1800 540 500 250; sleep 0.5; done
+for i in 1 2 3; do adb shell input swipe 540 600 540 1900 250; sleep 0.5; done
+adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile" | sed 's/^/  /' | tee -a "$OUT/report.txt"
 
-log "6. Chrome mode (Google sign-in path)"
-adb shell am start -W -n "$PKG/.MainActivity" --es mode chrome >/dev/null
-sleep 12; nocrash "chrome mode"; shot_content 05-chrome-tab "Chrome tab"
-front | grep -q "com.android.chrome" || fail "library did not open in a Chrome tab"
-adb shell input keyevent KEYCODE_BACK; sleep 4; alive "chrome home"; nocrash "chrome home"
-front | grep -q "$PKG" || fail "Chrome-mode home screen not shown after Back"
-shot 06-chrome-home; img lime 06-chrome-home || fail "Chrome-mode home screen missing its lime button"
-
-log "7. Switch back to in-app mode"
-adb shell am start -W -n "$PKG/.MainActivity" --es mode app >/dev/null
-sleep 10; alive "app mode"; nocrash "app mode"
-shot_content 07-app-mode "in-app mode"
-
-log "8. Offline screen"
-adb shell svc wifi disable; adb shell svc data disable
-adb shell am force-stop "$PKG"
-adb shell am start -W -n "$PKG/.MainActivity" --es mode app >/dev/null
-sleep 8; alive offline; nocrash offline
-shot 08-offline; img lime 08-offline || fail "offline screen not shown"
-applog; grep -q "offline screen" "$OUT/applog.txt" || fail "offline screen not logged"
-adb shell svc wifi enable; adb shell svc data enable; sleep 5
-
-log "9. Every library screen in the phone's Chrome (test data)"
-python3 - <<'PY'
-src = open('tests/web/library.html').read(); mock = open('tests/web/mock.js').read()
-open('tests/web/index.html', 'w').write(src.replace('<script>\n{', '<script>' + mock + '</script><script>\n{', 1))
-PY
-python3 -m http.server 8000 --directory tests/web >/dev/null 2>&1 &
-SERVER_PID=$!
-sleep 2
-for v in home map founders cases gaps quiz cards updates tutor; do
-  adb shell am start -a android.intent.action.VIEW -d "http://10.0.2.2:8000/index.html?v=$v#$v" com.android.chrome >/dev/null
-  sleep 7
-  front | grep -q "com.android.chrome" || fail "Chrome not showing the '$v' screen"
-  shot "web-$v"
-  img lime "web-$v" || fail "library screen '$v' did not render (no lime accent visible)"
-done
-cleanup; SERVER_PID=""
-
-log "10. Stress test: 400 random taps and swipes in the app"
-adb shell monkey -p "$PKG" --throttle 250 --pct-syskeys 0 -v 400 > "$OUT/monkey.txt" 2>&1 || fail "random-input test found a crash"
-nocrash "random input"; quiet
-adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+log "9. Monkey test (2000 random taps and swipes)"
+adb shell monkey -p "$PKG" --pct-syskeys 0 --pct-appswitch 2 --throttle 50 -s 4242 -v 2000 > "$OUT/monkey.txt" 2>&1
+grep -qE "CRASH|ANR in" "$OUT/monkey.txt" && { grep -A20 -E "CRASH|ANR" "$OUT/monkey.txt" | head -40 | tee -a "$OUT/report.txt"; fail "monkey found a crash"; }
+nocrash "monkey"
+grep -q "Monkey finished" "$OUT/monkey.txt" || fail "monkey did not finish"
+launch; sleep 2; alive "after monkey"; check_shot after-monkey
 
 adb logcat -d > "$OUT/logcat.txt"
-log "ALL TESTS PASSED"
+log "ALL PHONE TESTS PASSED"

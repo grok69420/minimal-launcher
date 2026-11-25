@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Back up only your progress; downloaded content and update files are re-fetched. -->
+<full-backup-content>
+    <include domain="file" path="progress.json" />
+</full-backup-content>

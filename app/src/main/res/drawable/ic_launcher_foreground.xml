@@ -1,10 +1,11 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- three book spines on a lime ledge -->
-    <path android:fillColor="#FFF5F5F0" android:pathData="M33,34h10v38h-10z"/>
-    <path android:fillColor="#FFAEF02E" android:pathData="M46,28h12v44h-12z"/>
-    <path android:fillColor="#FFF5F5F0" android:pathData="M61,38h10v34h-10z"/>
-    <path android:fillColor="#FFAEF02E" android:pathData="M30,74h48v5h-48z"/>
-    <path android:fillColor="#FF111112" android:pathData="M49,34h6v2h-6zM49,64h6v2h-6z"/>
+    <!-- An ice crystal: hexagon facets with a bright core -->
+    <path android:strokeColor="#FF8FE8FF" android:strokeWidth="2.2" android:fillColor="#1A8FE8FF"
+        android:pathData="M54,30 L74.8,42 L74.8,66 L54,78 L33.2,66 L33.2,42 Z"/>
+    <path android:strokeColor="#99CFEFFF" android:strokeWidth="1.4"
+        android:pathData="M54,30 L54,78 M33.2,42 L74.8,66 M74.8,42 L33.2,66"/>
+    <path android:fillColor="#FFE8F7FF"
+        android:pathData="M54,46 L61,50 L61,58 L54,62 L47,58 L47,50 Z"/>
 </vector>
