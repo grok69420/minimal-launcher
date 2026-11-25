@@ -84,6 +84,23 @@ def main(base_path, patch_dir, out_path):
     for c, n in {"modules": 8, "lessons": 30, "cases": 15, "quiz": 20, "glossary": 100}.items():
         if len(lib[c]) < n: err(f"{c}: only {len(lib[c])} items; refusing to publish a shrunken library")
 
+    # Source-quality checks (audit 25 Nov 2026). Warnings by default; set STRICT=1 to block publishing on them.
+    warns = []
+    for c in ("cases", "gaps", "lessons"):
+        for d in lib[c]:
+            ls = links(d.get("src")) + links(d.get("sources"))
+            if not ls: warns.append(f"{c}/{d.get('id')}: no source link")
+            for l in ls:
+                if isinstance(l, dict) and "indiankanoon.org/search" in str(l.get("u", "")):
+                    warns.append(f"{c}/{d.get('id')}: links to an Indian Kanoon search page, not the judgment")
+            if c == "cases" and not str(d.get("citation", "")).strip():
+                warns.append(f"cases/{d.get('id')}: no citation")
+            if "verified" in d and not DATE.match(str(d["verified"])):
+                err(f"{c}/{d.get('id')}: verified must be YYYY-MM-DD")
+    if warns:
+        print(f"Source warnings ({len(warns)}):"); [print("  ~", w) for w in warns]
+        if os.environ.get("STRICT") == "1": errors.extend(warns)
+
     if errors:
         print("Library did not validate:"); [print("  -", e) for e in errors]; sys.exit(1)
 

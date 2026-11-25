@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-25",
+  "upserts": [
+    {"c": "gaps", "id": "loss-shells", "data": {
+      "timeline": [
+        {"e": "Section 79 in the original Act", "y": "1961"},
+        {"e": "Startup relief window extended from 7 to 10 years from incorporation (Finance Act 2023)", "y": "2023"},
+        {"e": "Carried into s.119 of the 2025 Act", "y": "2026"}
+      ],
+      "src": [
+        {"t": "Taxguru: loss carry-forward for startups", "u": "https://taxguru.in/?p=1091620"},
+        {"t": "Invest India: Budget 2023 extends startup loss window to 10 years", "u": "https://www.investindia.gov.in/team-india-blogs/union-budget-2023-empowers-startups-extended-set-and-carry-forward-period"}
+      ]
+    }},
+    {"c": "updates", "id": "u-2026-03-10-pn3", "data": {
+      "summary": "Cabinet approved the change on 10 March 2026; DPIIT issued it as Press Note 2 (2026 Series) dated 15 March 2026. Investors outside land-border countries with up to 10% non-controlling LBC beneficial ownership can use the automatic route; direct LBC investors still need approval."
+    }},
+    {"c": "cases", "id": "burger-king-pune", "data": {
+      "held": "The Pune court dismissed the suit on 16 July 2024, relying on the restaurant's prior use. On Burger King's appeal, the Bombay High Court first stayed that ruling on 26 August 2024 and, on 2 December 2024, restrained the restaurant from using the name until the appeal is decided. The Supreme Court stayed the restraint on 7 March 2025 and asked the High Court to decide the appeal quickly. The final outcome is awaited."
+    }},
+    {"c": "cases", "id": "messer-2010", "data": {
+      "citation": "Appeal No. 855 of 2003, Bombay High Court (Division Bench), 1 Sep 2010",
+      "date": "1 Sep 2010",
+      "facts": "Shareholders of Bombay Oxygen Corporation, a public company, had agreed between themselves on pre-emption and other rights over their shares that were not reflected in the articles. The question was whether such an agreement breached the rule that public company shares are freely transferable (section 111A of the Companies Act, 1956).",
+      "tags": ["shareholders’ agreement", "transfer restrictions", "public company"],
+      "src": {"t": "Nishith Desai: Right of first refusal – is it valid in law?", "u": "https://nishithdesai.com/research-and-articles/hotline/corpsec-hotline/right-of-first-refusal-is-it-valid-in-law-6153"}
+    }}
+  ]
+}
