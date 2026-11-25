@@ -3,7 +3,8 @@
 order), validated strictly, stamped with a rising revision. Exits non-zero on any problem, so a
 bad edit is never signed or published.
 
-Patch format (written by the daily update task):
+Patch format (written by the daily update task). Upserts are shallow-merged into the existing
+document with that id, so app-only fields such as a lesson's "plain" summary survive.
 {
   "date": "2026-11-26",
   "upserts": [ {"c": "updates", "id": "u-2026-11-26-x", "data": { ...full document... }} ],
@@ -12,12 +13,13 @@ Patch format (written by the daily update task):
 """
 import glob, json, os, re, sys, time
 
-COLLS = ["modules", "lessons", "cases", "gaps", "stories", "traps", "quiz", "updates"]
+COLLS = ["modules", "lessons", "cases", "gaps", "stories", "traps", "quiz", "updates", "glossary"]
 REQ = {
     "modules": ["title", "vol", "order"], "lessons": ["module", "title", "summary", "body"],
     "cases": ["name", "court", "module", "held"], "gaps": ["title", "module", "status", "gap", "closed"],
     "stories": ["name", "kind", "outcome", "what", "lesson"], "traps": ["clause", "risk", "ask"],
     "quiz": ["module", "q", "opts", "a", "why"], "updates": ["date", "kind", "module", "title", "summary"],
+    "glossary": ["term", "plain", "aliases"],
 }
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 errors = []
@@ -43,7 +45,8 @@ def main(base_path, patch_dir, out_path):
             d = dict(d); d["id"] = i
             items = lib[c]
             for k, old in enumerate(items):
-                if old.get("id") == i: items[k] = d; break
+                # Shallow merge: fields the patch leaves out (e.g. the app-only "plain" summary) are kept.
+                if old.get("id") == i: items[k] = {**old, **d}; break
             else: items.append(d)
         if isinstance(patch.get("meta"), dict):
             lib.setdefault("meta", {}).update(patch["meta"])
@@ -68,7 +71,7 @@ def main(base_path, patch_dir, out_path):
             for d in lib[c]:
                 if not DATE.match(str(d.get("date", ""))): err(f"updates/{d.get('id')}: date must be YYYY-MM-DD")
     if not DATE.match(str(lib.get("meta", {}).get("lastChecked", ""))): err("meta.lastChecked must be YYYY-MM-DD")
-    for c, n in {"modules": 7, "lessons": 20, "cases": 15, "quiz": 20}.items():
+    for c, n in {"modules": 8, "lessons": 30, "cases": 15, "quiz": 20, "glossary": 100}.items():
         if len(lib[c]) < n: err(f"{c}: only {len(lib[c])} items; refusing to publish a shrunken library")
 
     if errors:
