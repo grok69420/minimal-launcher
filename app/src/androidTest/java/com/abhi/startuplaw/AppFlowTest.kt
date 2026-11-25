@@ -125,7 +125,7 @@ class AppFlowTest {
         // Mood boards: open one, see the preview, copy a colour
         scrollTo(hasText("Mood boards ·", substring = true)); rule.onNodeWithText("Mood boards ·", substring = true).tap(); rule.waitForIdle()
         waitTag("palette_rolls-royce"); shot("10b-mood-boards")
-        tapTag("palette_rolex"); waitTag("preview_rolex"); shot("10c-mood-board-open")
+        tapTag("palette_rolex"); waitText("A headline in this mood"); shot("10c-mood-board-open")
         tapTag("swatch_006039"); waitText("COPIED"); shot("10d-colour-copied")
         scrollTo(hasText("LEGAL GUARDRAIL")); shot("10e-mood-board-guardrail")
 

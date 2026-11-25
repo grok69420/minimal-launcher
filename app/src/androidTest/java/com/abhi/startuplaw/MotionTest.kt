@@ -144,7 +144,7 @@ class MotionTest {
         clock.advanceTimeBy(140)
         frame("m14-mood-board-opening")
         clock.advanceTimeBy(1500)
-        assertEquals(1, count("preview_blank-street"))
+        assertTrue(rule.onAllNodes(hasText("A headline in this mood")).fetchSemanticsNodes().isNotEmpty())
         frame("m15-mood-board-open")
         settle()
         rule.onNodeWithTag("list").performScrollToNode(hasTestTag("swatch_fffdfc"))
