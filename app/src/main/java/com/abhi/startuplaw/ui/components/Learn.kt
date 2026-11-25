@@ -2,6 +2,7 @@ package com.abhi.startuplaw.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -142,7 +143,9 @@ fun BoxScope.LookupCard(visible: Boolean, word: String, term: Term?, context: St
     val ctx = LocalContext.current
     val reduced = LocalReducedMotion.current
     BackHandler(enabled = visible, onBack = onClose)
-    AnimatedVisibility(visible, Modifier.matchParentSize(), enter = fadeIn(tween(Motion.SHORT)), exit = fadeOut(tween(180))) {
+    // Starts hidden so the very first open also slides in (the card is first composed already visible).
+    val shown = remember { MutableTransitionState(false) }.apply { targetState = visible }
+    AnimatedVisibility(shown, Modifier.matchParentSize(), enter = fadeIn(tween(Motion.SHORT)), exit = fadeOut(tween(180))) {
         Box(
             Modifier.fillMaxSize().background(Color(0x99000000))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
@@ -150,7 +153,7 @@ fun BoxScope.LookupCard(visible: Boolean, word: String, term: Term?, context: St
         )
     }
     AnimatedVisibility(
-        visible, Modifier.align(Alignment.BottomCenter),
+        shown, Modifier.align(Alignment.BottomCenter),
         enter = if (reduced) fadeIn(tween(0)) else slideInVertically(Motion.settle()) { it } + fadeIn(tween(Motion.SHORT)),
         exit = if (reduced) fadeOut(tween(0)) else slideOutVertically(tween(220, easing = Motion.Accelerate)) { it } + fadeOut(tween(180)),
     ) {
