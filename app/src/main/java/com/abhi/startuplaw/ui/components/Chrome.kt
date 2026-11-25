@@ -91,7 +91,7 @@ private fun Motes() {
     }
     var t by remember { mutableLongStateOf(0L) }
     // Infinite-animation frames: paused automatically by UI tests and when animations are off.
-    LaunchedEffect(Unit) { while (true) androidx.compose.ui.platform.withInfiniteAnimationFrameMillis { t = it } }
+    LaunchedEffect(Unit) { while (true) androidx.compose.animation.core.withInfiniteAnimationFrameMillis { t = it } }
     Canvas(Modifier.fillMaxSize().graphicsLayer()) {
         val sec = t / 1000f
         motes.forEach { m ->
