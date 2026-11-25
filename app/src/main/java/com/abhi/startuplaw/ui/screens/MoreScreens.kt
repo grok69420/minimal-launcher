@@ -176,14 +176,14 @@ fun TutorScreen(vm: AppViewModel, lib: Library, go: (String) -> Unit, back: () -
     var q by rememberSaveable { mutableStateOf("") }
     var asked by rememberSaveable { mutableStateOf("") }
     val answer = remember(asked, lib) { if (asked.isBlank()) null else Study.tutor(lib, vm.index(lib), asked) }
-    Screen(title = "Ask the tutor", hud = "Library notes first · Claude for the explanation", onBack = back) {
+    Screen(title = "Ask the tutor", hud = "Notes first · then Claude", onBack = back) {
         item(key = "how") {
             Text(
                 "Type a question. The app finds the notes in your library that answer it (works offline). Online, tap Ask Claude to open Claude with those notes attached, so the answer stays grounded in the library. Educational only.",
                 style = MaterialTheme.typography.bodyMedium, color = Ice.Mist,
             )
         }
-        item(key = "field") { QueryField(q, { q = it }, "Your question", { if (q.isNotBlank()) asked = q.trim() }, "tutor_field", autoFocus = false) }
+        item(key = "field") { QueryField(q, { q = it }, "Your question", { if (q.isNotBlank()) asked = q.trim() }, "tutor_field", autoFocus = false, singleLine = false) }
         item(key = "ask") {
             IceButton("Find in library", onClick = { if (q.isNotBlank()) asked = q.trim() }, enabled = q.isNotBlank(), modifier = Modifier.fillMaxWidth().testTag("tutor_find"))
         }

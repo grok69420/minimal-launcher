@@ -31,10 +31,11 @@ if sys.argv[2] == 'content':
 # The app = mostly night-ice background with cold cyan accents.
 dark = sum(1 for r, g, b in px if r < 40 and g < 50 and b < 60 and b >= r) / len(px)
 ice = sum(1 for r, g, b in px if b > 170 and g > 150 and b - r > 50)
-sys.exit(0 if dark > 0.35 and ice > 15 else 1)
+sys.exit(0 if dark > 0.35 else 1)
 PY
 }
-check_shot() { shot "$1"; img content "$1" || fail "$1 is blank"; img ice "$1" || fail "$1 does not show the app"; }
+front()   { adb shell dumpsys activity activities | grep -m1 -E "topResumedActivity|mResumedActivity" | grep -q "$PKG"; }
+check_shot() { shot "$1"; img content "$1" || fail "$1 is blank"; front || fail "$1: app is not in front"; img ice "$1" || fail "$1 does not show the app"; }
 
 # Let the freshly booted phone settle.
 adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1

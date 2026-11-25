@@ -67,6 +67,7 @@ class ContentStore(private val context: Context) {
             val result = runCatching { fetchVerified() }
             val installed = result.getOrNull()
             val msg = when {
+                result.exceptionOrNull() is SecurityException -> "Rejected a download that failed the security check"
                 result.isFailure -> "Could not reach the update server"
                 installed != null -> "Updated to the latest library"
                 else -> "Library is up to date"
@@ -96,10 +97,10 @@ class ContentStore(private val context: Context) {
         val keys = Signing.appKeys(context)
         if (!Signing.verify(body, sig, keys)) {
             Log.w(TAG, "sync rejected: signature does not match this app's key")
-            return null
+            throw SecurityException("signature")
         }
         val lib = Library.parse(body.decodeToString())
-        if (lib == null) { Log.w(TAG, "sync rejected: content did not validate"); return null }
+        if (lib == null) { Log.w(TAG, "sync rejected: content did not validate"); throw SecurityException("invalid") }
         if (current != null && lib.rev <= current.rev) { Log.i(TAG, "sync: up to date rev=${current.rev}"); return null }
         val out = file.startWrite()
         try { out.write(body); file.finishWrite(out) } catch (e: Exception) { file.failWrite(out); throw e }

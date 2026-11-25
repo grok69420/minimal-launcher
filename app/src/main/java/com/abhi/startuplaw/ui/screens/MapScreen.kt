@@ -174,13 +174,13 @@ private fun Constellation(bs: List<Branch>, pct: Int, onBranch: (Branch) -> Unit
             val rMax = size.minDimension * 0.47f
             val rMin = size.minDimension * 0.15f
             val glow = pulse?.value ?: 0.5f
-            for (k in 1..3) drawCircle(Ice.Edge.copy(alpha = 0.25f), rMin + (rMax - rMin) * k / 3f, c, style = Stroke(1f))
+            for (k in 1..3) drawCircle(Ice.Edge.copy(alpha = 0.55f), rMin + (rMax - rMin) * k / 3f, c, style = Stroke(1f))
             val step = 2f * PI.toFloat() / bs.size.coerceAtLeast(1)
             bs.forEachIndexed { i, b ->
                 val ang = -PI.toFloat() / 2f + step * i
                 val dir = Offset(cos(ang), sin(ang))
                 val n = b.leaves.size.coerceAtLeast(1)
-                drawLine(b.color.copy(alpha = 0.22f), c + dir * rMin, c + dir * rMax, 1.5f)
+                drawLine(b.color.copy(alpha = 0.38f), c + dir * rMin, c + dir * rMax, 1.5f)
                 b.leaves.forEachIndexed { j, l ->
                     val t = (j + 1f) / (n + 1f)
                     val wobble = if (b.small) ((j % 3) - 1) * 0.06f else 0f
@@ -191,7 +191,8 @@ private fun Constellation(bs: List<Branch>, pct: Int, onBranch: (Branch) -> Unit
                         drawCircle(Brush.radialGradient(listOf(b.color.copy(alpha = 0.55f + 0.25f * glow), Color.Transparent), p, r * 2.6f), r * 2.6f, p)
                         drawCircle(Ice.Frost, r * 0.6f, p)
                     } else {
-                        drawCircle(Ice.Dim.copy(alpha = 0.7f), r * 0.42f, p)
+                        drawCircle(b.color.copy(alpha = 0.35f), r * 0.6f, p)
+                        drawCircle(Ice.Mist.copy(alpha = 0.55f), r * 0.6f, p, style = Stroke(1f))
                     }
                 }
             }

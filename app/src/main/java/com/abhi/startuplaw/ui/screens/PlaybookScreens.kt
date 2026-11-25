@@ -199,12 +199,12 @@ private fun GapCard(lib: Library, g: Gap, expanded: Boolean, toggle: () -> Unit)
     val c = statusColor(g.status)
     FrostCard(Modifier.fillMaxWidth().testTag("gap_${g.id}"), onClick = toggle, accent = if (expanded) c else null) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Pill(g.status, c)
-            Spacer(Modifier.width(8.dp))
-            Hud(lib.moduleTitle(g.module), color = Ice.Dim, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+            Box(Modifier.weight(1f)) { Pill(g.status, c) }
             Text(if (expanded) "–" else "+", style = MaterialTheme.typography.titleLarge, color = Ice.Mist)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
+        Hud(lib.moduleTitle(g.module), color = Ice.Dim, style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.height(6.dp))
         Text(g.title, style = MaterialTheme.typography.titleMedium, color = Ice.Frost)
         AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column(Modifier.padding(top = 6.dp)) {

@@ -86,6 +86,8 @@ class CoreTest {
         assertTrue(idx.search("   ").isEmpty())
         assertTrue(idx.search("zzzzqqq").isEmpty())
         assertTrue(idx.search("Byju’s").isNotEmpty())
+        val other = idx.search("Can investors stop me starting another company?").take(3).map { it.id }
+        assertTrue(other.toString(), "fp5" in other || "founder-exclusivity" in other)
     }
 
     @Test fun progressRoundTripAndToggles() {
