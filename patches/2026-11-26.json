@@ -1,0 +1,66 @@
+{
+ "date": "2026-11-26",
+ "upserts": [
+  {
+   "c": "updates",
+   "id": "u-2026-11-20-majority-suit",
+   "data": {
+    "date": "2026-11-20",
+    "kind": "Judgment",
+    "module": "founders",
+    "src": {
+     "t": "Madras High Court order, Maxyfi Tech Pvt Ltd v Maxyfi LLC, C.S. (Comm.Div) No. 130 of 2026 (20 Nov 2026)",
+     "u": "https://www.livelawbiz.com/pdf_upload/2026/11/25/document-c54fd385-4620-4214-8a81-6b255961e5c3-714254.pdf"
+    },
+    "summary": "In an interim order, the Madras High Court let a director said to hold 88% of a company file a suit in the company's name over its software without first passing a board resolution, because the other director was the one said to be acting against the company. Write clear rules in your founders' agreement on who can act for the company if the directors fall out.",
+    "title": "Madras HC lets majority owner sue in the company's name without a board resolution"
+   }
+  },
+  {
+   "c": "updates",
+   "id": "u-2026-11-23-ccd-equity",
+   "data": {
+    "date": "2026-11-23",
+    "kind": "Judgment",
+    "module": "tax",
+    "src": {
+     "t": "ITAT Delhi order, Cella Warehousing Pvt Ltd v ITO, IT(TP)A No. 165/Del/2026 (23 Nov 2026)",
+     "u": "https://www.livelawbiz.com/pdf_upload/2026/11/25/cella-warehousing-714286.pdf"
+    },
+    "summary": "A Singapore parent put only ₹990 into its Indian subsidiary as shares but about ₹41.65 crore as 11%-interest compulsorily convertible debentures; the Delhi tax tribunal said these were really equity, so the interest could not be deducted (AY 2022-23). If a foreign parent funds your Indian company, keep a sensible mix of shares and loans, because tax officers look at the substance, not the label.",
+    "title": "ITAT treats a foreign parent's interest-paying CCDs as equity, so no interest deduction"
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "board-resolution",
+   "data": {
+    "term": "Board resolution",
+    "aliases": [
+     "board resolution",
+     "board resolutions"
+    ],
+    "plain": "A formal decision taken by a company's board of directors at a meeting or in writing, and recorded. Many company actions need one before they can be done.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "tax-deduction",
+   "data": {
+    "term": "Deduction (tax)",
+    "aliases": [
+     "deducted",
+     "deduction",
+     "deductions",
+     "deductible"
+    ],
+    "plain": "An expense the tax law lets a business subtract from its income before tax is worked out, so it pays less tax. If an expense is not allowed as a deduction, the business pays tax on that money too.",
+    "hl": true
+   }
+  }
+ ],
+ "meta": {
+  "lastChecked": "2026-11-26"
+ }
+}
