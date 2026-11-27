@@ -1,0 +1,416 @@
+{
+ "date": "2026-11-27",
+ "upserts": [
+  {
+   "c": "gaps",
+   "id": "allowance-heavy-pay",
+   "data": {
+    "src": [
+     {
+      "t": "Ministry of Labour FAQs on the Labour Codes (wages definition from 21 Nov 2025)",
+      "u": "https://www.labour.gov.in/static/uploads/2026/01/de4758d5bfeffc456d7de97a801891b0.pdf"
+     },
+     {
+      "t": "Littler snapshot",
+      "u": "https://www.littler.com/news-analysis/asap/indias-labor-law-overhaul-snapshot-key-changes"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "angel-tax",
+   "data": {
+    "closed": "Finance Act 2012 taxed share premium above fair value as the company’s income (s.56(2)(viib)). DPIIT-recognised startups were exempted in 2019, and Finance Act 2023 extended the tax to money from non-resident investors. The Finance (No. 2) Act, 2024 switched the rule off from assessment year 2025-26 (on or after 1 April 2025).",
+    "src": [
+     {
+      "t": "Income Tax Department note on s.56(2)(viib)",
+      "u": "https://www.incometaxindia.gov.in/w/exemption-from-angel-tax-section-56-2-viib-"
+     },
+     {
+      "t": "Memorandum to the Finance (No. 2) Bill, 2024",
+      "u": "https://www.indiabudget.gov.in/budget2024-25/doc/memo.pdf"
+     },
+     {
+      "t": "PIB: 2023 extension to non-residents and 2019 startup exemption",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=1925651"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "buyback-arbitrage",
+   "data": {
+    "timeline": [
+     {
+      "e": "Section 115QA: 20% tax on unlisted-company buybacks (from 1 Jun 2013)",
+      "y": "2013"
+     },
+     {
+      "e": "Extended to listed companies (5 Jul 2019)",
+      "y": "2019"
+     },
+     {
+      "e": "Taxed as dividend in shareholders’ hands",
+      "y": "1 Oct 2024"
+     },
+     {
+      "e": "Capital gains plus promoter add-on",
+      "y": "Apr 2026"
+     }
+    ],
+    "src": [
+     {
+      "t": "Income-tax Act s.115QA (Income Tax Department)",
+      "u": "https://www.incometaxindia.gov.in/w/section-115qa-15"
+     },
+     {
+      "t": "Finance Bill 2013 inserting s.115QA",
+      "u": "https://www.indiabudget.gov.in/budget2013-2014/ub2013-14/fb/bill31.pdf"
+     },
+     {
+      "t": "Business Today on the 2026 change",
+      "u": "https://www.businesstoday.in/markets/story/buyback-tax-how-india-changed-the-rules-three-times-in-18-months-and-what-investors-need-to-know-553004-2026-09-03"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "indirect-transfer",
+   "data": {
+    "closed": "Finance Act 2012 retrospectively taxed indirect transfers of Indian assets through foreign companies. The Taxation Laws (Amendment) Act, 2021 (assented 13 Aug 2021) bars new demands for such transfers made before 28 May 2012 and cancels existing ones once conditions such as withdrawing litigation are met; tax collected is refunded without interest.",
+    "timeline": [
+     {
+      "e": "Vodafone buys Hutchison’s Indian business via a Cayman company",
+      "y": "2007"
+     },
+     {
+      "e": "Supreme Court rules for Vodafone; Parliament amends the law retrospectively",
+      "y": "2012"
+     },
+     {
+      "e": "Retrospective demands for pre-28 May 2012 deals withdrawn",
+      "y": "2021"
+     }
+    ],
+    "src": [
+     {
+      "t": "Full judgment on Indian Kanoon (Vodafone, 2012)",
+      "u": "https://indiankanoon.org/doc/115852355/"
+     },
+     {
+      "t": "PIB: rules under the Taxation Laws (Amendment) Act, 2021",
+      "u": "https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=1760291"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "mauritius-route",
+   "data": {
+    "closed": "The India–Mauritius protocol (10 May 2016) gave India the right to tax gains on shares acquired from 1 April 2017 and grandfathered earlier holdings; the India–Singapore protocol (signed 30 Dec 2016) did the same. In Tiger Global (Jan 2026) the Supreme Court held that grandfathering and a residency certificate do not protect an arrangement lacking commercial substance.",
+    "timeline": [
+     {
+      "e": "CBDT Circular 789: a Mauritius TRC is enough",
+      "y": "2000"
+     },
+     {
+      "e": "Azadi Bachao Andolan upholds the circular",
+      "y": "2003"
+     },
+     {
+      "e": "Mauritius and Singapore protocols signed",
+      "y": "2016"
+     },
+     {
+      "e": "Source taxation for shares bought from 1 Apr 2017",
+      "y": "2017"
+     },
+     {
+      "e": "Tiger Global: GAAR applied to a grandfathered investment’s exit",
+      "y": "2026"
+     }
+    ],
+    "src": [
+     {
+      "t": "PIB: India–Mauritius protocol, 10 May 2016",
+      "u": "https://www.pib.gov.in/newsite/PrintRelease.aspx?relid=145185&reg=3&lang=2"
+     },
+     {
+      "t": "PIB: India–Singapore third protocol in force",
+      "u": "https://www.pib.gov.in/newsite/PrintRelease.aspx?relid=159828&reg=3&lang=2"
+     },
+     {
+      "t": "Business Today on Tiger Global",
+      "u": "https://www.businesstoday.in/latest/corporate/story/tiger-global-flipkart-exit-what-the-supreme-court-ruling-means-for-cross-border-tax-rules-511344-2026-01-17"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "mfn-clause",
+   "data": {
+    "timeline": [
+     {
+      "e": "Delhi High Court gives Nestle the lower treaty rate (following its Concentrix ruling)",
+      "y": "2021"
+     },
+     {
+      "e": "Supreme Court reverses",
+      "y": "2023"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "round-tripping",
+   "data": {
+    "closed": "The Overseas Investment Rules, 2022 (22 Aug 2022) let an Indian investor’s foreign entity invest back into India, but not where this creates a structure with more than two layers of subsidiaries (rule 19(3)).",
+    "timeline": [
+     {
+      "e": "OI Rules allow it within two layers",
+      "y": "Aug 2022"
+     }
+    ],
+    "src": [
+     {
+      "t": "RBI: Overseas Investment Directions, 2022 (para 20(2), rule 19(3))",
+      "u": "https://www.rbi.org.in/scripts/FS_Notification.aspx?Id=12381"
+     },
+     {
+      "t": "EY on the ODI framework",
+      "u": "https://www.ey.com/en_in/insights/tax/how-the-revised-odi-regulatory-framework-will-help-indian-companies-invest-overseas"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "marketplace-inventory",
+   "data": {
+    "closed": "Press Note 2 (2018), issued 26 Dec 2018 and in force from 1 February 2019: a marketplace cannot own or control inventory; a vendor in which the marketplace group holds equity cannot sell on it; and if more than 25% of a vendor’s purchases come from the group, its inventory counts as controlled by the marketplace.",
+    "timeline": [
+     {
+      "y": "26 Dec 2018",
+      "e": "Press Note 2 tightens the rules"
+     },
+     {
+      "y": "1 Feb 2019",
+      "e": "New rules in force"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "evergreening",
+   "data": {
+    "closed": "Section 3(d), as amended by the Patents (Amendment) Act, 2005, refuses new forms of known substances unless they show enhanced efficacy. The Supreme Court applied it in Novartis on 1 April 2013.",
+    "timeline": [
+     {
+      "y": "2005",
+      "e": "Section 3(d) tightened"
+     },
+     {
+      "y": "25 Jan 2006",
+      "e": "Glivec application rejected"
+     },
+     {
+      "y": "1 Apr 2013",
+      "e": "Supreme Court upholds the rejection"
+     }
+    ],
+    "src": [
+     {
+      "t": "Full judgment on Indian Kanoon (Novartis, 2013)",
+      "u": "https://indiankanoon.org/doc/165776436/"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "software-technical-effect",
+   "data": {
+    "timeline": [
+     {
+      "y": "17 Jul 2002",
+      "e": "Allani files his application"
+     },
+     {
+      "y": "12 Dec 2019",
+      "e": "Delhi High Court orders re-examination"
+     },
+     {
+      "y": "29 Jul 2025",
+      "e": "CRI Guidelines 2025 released"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "keyword-bidding",
+   "data": {
+    "closed": "Google v DRS Logistics (2023): using a brand as a keyword is ‘use in advertising’ but not infringement by itself; it becomes infringement where it causes confusion, takes unfair advantage or harms the mark’s distinctiveness or repute. The court’s view that Google may not get safe harbour for its Ads programme was only prima facie.",
+    "timeline": [
+     {
+      "y": "30 Oct 2021",
+      "e": "Single judge rules against Google"
+     },
+     {
+      "y": "10 Aug 2023",
+      "e": "Division bench sets the test"
+     }
+    ],
+    "src": [
+     {
+      "t": "Full judgment on Indian Kanoon (Google v DRS, 2023)",
+      "u": "https://indiankanoon.org/doc/25982943/"
+     },
+     {
+      "t": "WIPO Lex summary",
+      "u": "https://www.wipo.int/wipolex/en/judgments/details/3347"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "surrogate-ads",
+   "data": {
+    "src": [
+     {
+      "t": "PIB: misleading-ads guidelines notified 9 Jun 2022",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=1945167&reg=3&lang=2"
+     },
+     {
+      "t": "PIB: guidelines issued, 10 Jun 2022",
+      "u": "https://pib.gov.in/PressReleasePage.aspx?PRID=1832906"
+     },
+     {
+      "t": "PIB year-end review 2022 (prohibition of surrogate ads)",
+      "u": "https://www.pib.gov.in/PressReleseDetailm.aspx?PRID=1885059&reg=48&lang=2"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "hidden-influencer-ads",
+   "data": {
+    "src": [
+     {
+      "t": "PIB: misleading-ads guidelines notified 9 Jun 2022",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=1945167&reg=3&lang=2"
+     },
+     {
+      "t": "PIB: dark patterns guidelines (13 patterns), 30 Nov 2023",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2191948&reg=3&lang=2"
+     },
+     {
+      "t": "Supreme Court order, 7 May 2024 (2024 INSC 406)",
+      "u": "https://webapi.sci.gov.in/supremecourt/2022/24832/24832_2022_11_1_52927_FinalOrder_07-May-2024.pdf"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "fine-print-guarantees",
+   "data": {
+    "closed": "The CCPA treats such ads as misleading. On 21 August 2025 it fined Rapido ₹10 lakh for its ‘Auto in 5 min or get ₹50’ campaign and ordered it to pay the ₹50 to every customer who had not received it.",
+    "timeline": [
+     {
+      "y": "21 Aug 2025",
+      "e": "CCPA penalises Rapido"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "arbitration-ouster",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "one-sided-terms",
+   "data": {
+    "closed": "Pioneer Urban Land v Govindan Raghavan (Supreme Court, 2 April 2019) held such terms an unfair trade practice. The Consumer Protection Act, 2019, in force from 20 July 2020, also defines an ‘unfair contract’ that consumers can complain about.",
+    "src": [
+     {
+      "t": "Supreme Court judgment, 2 Apr 2019",
+      "u": "https://api.sci.gov.in/supremecourt/2018/46308/46308_2018_Judgement_02-Apr-2019.pdf"
+     },
+     {
+      "t": "PIB: protection against unfair contracts",
+      "u": "https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=1657006&reg=48&lang=2"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "drip-pricing",
+   "data": {
+    "closed": "The Consumer Protection (E-Commerce) Rules, 2020 (in force 23 July 2020) police unfair trade practices online, and drip pricing became one of 13 specified dark patterns on 30 November 2023.",
+    "src": [
+     {
+      "t": "PIB: dark patterns guidelines (13 patterns), 30 Nov 2023",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2191948&reg=3&lang=2"
+     },
+     {
+      "t": "PIB: E-Commerce Rules effective 23 Jul 2020",
+      "u": "https://www.pib.gov.in/PressReleseDetailm.aspx?PRID=1642422&reg=3&lang=2"
+     },
+     {
+      "t": "JSA note on the dark patterns guidelines",
+      "u": "https://jsalaw.com/wp-content/uploads/2023/12/JSA-Prism-Consumer-Protection-Guidelines-for-Prevention-and-Regulation-of-Dark-Patterns-20233-Final.pdf"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "ima-patanjali-2024",
+   "data": {
+    "citation": "W.P.(C) 645/2022; order of 7 May 2024, 2024 INSC 406",
+    "verified": "2026-11-27",
+    "src": [
+     {
+      "t": "Supreme Court order, 7 May 2024",
+      "u": "https://webapi.sci.gov.in/supremecourt/2022/24832/24832_2022_11_1_52927_FinalOrder_07-May-2024.pdf"
+     },
+     {
+      "t": "LiveLaw: Supreme Court closes the case, 11 Aug 2025",
+      "u": "https://www.livelaw.in/amp/top-stories/supreme-court-vacates-stay-on-ayush-ministrys-notification-that-permitted-advertisements-of-ayurvedic-unani-siddha-drugs-300536"
+     }
+    ]
+   }
+  }
+ ]
+}
