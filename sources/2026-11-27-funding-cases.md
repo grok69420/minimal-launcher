@@ -66,7 +66,7 @@ ima-patanjali-2024 | 7 May 2024 order confirmed from SC PDF; citation 2024 INSC 
 ## Lessons re-verification (27 Nov 2026)
 f1 | G.S.R. 108(E) 4 Feb 2026 replaced G.S.R. 127(E); ≤10 yrs / ≤₹200 cr; Deep Tech 20 yrs / ₹300 cr; cooperatives; splits excluded; 80-IAC cap ₹100 cr + IMB | PIB 2224069; startupindia recognition page; incometaxindia 80-IAC | confirmed
 f2 | Small co ≤₹10 cr / ≤₹100 cr from 1 Dec 2025 (G.S.R. 880(E)); Bill 2026 intro 23 Mar, JPC 3 Aug, pending; LLP FDI only 100% automatic sectors w/o conditions; OPC conversion any time + NRIs from 1 Apr 2021; s.173(5)/2(40) | egazette 268124; PRS; DPIIT FDI FAQ; PIB 1694828; MCA ebook s.173 | confirmed
-f3 | s.42 + r.14 200 persons excl QIB/ESOP; s.62(1)(c) SR + valuer; r.12 1-yr vesting, promoter/>10% director bar lifted 10 yrs for startups; r.8(4) sweat 50% for 10 yrs; CN ≥₹25 lakh single tranche 10 yrs | MCA ebook r.14; IK r.12, r.8, s.62(1)(c); PIB startup provisions PDF | confirmed
+f3 | s.42 + r.14 200 persons excl QIB/ESOP; s.62(1)(c) SR + valuer; r.12 1-yr vesting, promoter/>10% director bar lifted 10 yrs for startups; r.8(4) sweat 50% for 10 yrs; CN ≥₹25 lakh single tranche 10 yrs | SAT Canning 28 Jan 2020 (IK 95247918) for r.14(2)(b); IK r.12, r.8, s.62(1)(c); PIB startup provisions PDF | confirmed
 b1 | company separate person, limited liability | IK 1873699 (Bacha Guzdar, logged above) | confirmed (concept)
 b2,b3 | concepts/arithmetic only (cap table, dilution, pre/post-money) | n/a | confirmed (no legal claim)
 b4 | transfer restrictions bind only if in AoA | IK 140212 (Rangaraj, logged above) | confirmed
