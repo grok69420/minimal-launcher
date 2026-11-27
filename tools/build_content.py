@@ -97,6 +97,23 @@ def main(base_path, patch_dir, out_path):
                 warns.append(f"cases/{d.get('id')}: no citation")
             if "verified" in d and not DATE.match(str(d["verified"])):
                 err(f"{c}/{d.get('id')}: verified must be YYYY-MM-DD")
+    # Freshness report (informational, never blocks): when each case/loophole/lesson was last checked.
+    today = time.strftime("%Y-%m-%d")
+    def age(v):
+        y, m, dd = map(int, v.split("-")); ty, tm, td = map(int, today.split("-"))
+        return (ty - y) * 365 + (tm - m) * 30 + (td - dd)
+    unchecked, stale, pend = 0, [], []
+    for c in ("cases", "gaps", "lessons"):
+        for d in lib[c]:
+            v = d.get("verified")
+            if not v or not DATE.match(str(v)): unchecked += 1; continue
+            if age(v) > 183: stale.append(f"{c}/{d.get('id')} ({v})")
+            st = str(d.get("status", "")).lower()
+            if any(k in st for k in ("pending", "ongoing", "under appeal")) and age(v) > 92: pend.append(f"{c}/{d.get('id')} ({v})")
+    total = sum(len(lib[c]) for c in ("cases", "gaps", "lessons"))
+    print(f"Freshness: {total - unchecked}/{total} cases+loopholes+lessons have a verified date; {len(stale)} older than 6 months; {len(pend)} pending items not re-checked in 3 months")
+    for s in stale + pend: print("  ! re-check", s)
+
     if warns:
         print(f"Source warnings ({len(warns)}):"); [print("  ~", w) for w in warns]
         if os.environ.get("STRICT") == "1": errors.extend(warns)

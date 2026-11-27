@@ -1,0 +1,810 @@
+{
+ "date": "2026-11-27",
+ "upserts": [
+  {
+   "c": "cases",
+   "id": "ntt-docomo-2017",
+   "data": {
+    "module": "funding",
+    "name": "NTT Docomo Inc v Tata Sons Ltd",
+    "court": "Delhi High Court",
+    "date": "28 Apr 2017",
+    "year": 2017,
+    "citation": "O.M.P.(EFA)(COMM.) 7/2016, Delhi HC (S. Muralidhar J), 28 Apr 2017",
+    "facts": "Docomo, a Japanese company, invested in Tata Teleservices. The 2009 shareholders agreement said that if performance targets were missed, Tata had to find buyers for Docomo’s shares at the higher of fair value or 50% of Docomo’s purchase price. Tata did not, and a London-seated tribunal awarded Docomo damages. RBI tried to block enforcement, saying the payment broke FEMA pricing rules. Tata later withdrew its objections, but RBI pressed on.",
+    "held": "The foreign award was enforceable in India. RBI could not intervene because only a party to the arbitration can object to enforcement under s.48, and the award was for damages, not a share price, so it did not offend Indian public policy.",
+    "status": "Good law (High Court)",
+    "tags": [
+     "FEMA",
+     "put option",
+     "foreign award",
+     "RBI"
+    ],
+    "why": "An exit promise you sign with a foreign investor can be enforced against you even if a regulator objects later. Price exit clauses only in ways FEMA allows, and assume you will be held to them.",
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/124111275/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "cruz-city-2017",
+   "data": {
+    "module": "funding",
+    "name": "Cruz City 1 Mauritius Holdings v Unitech Ltd",
+    "court": "Delhi High Court",
+    "date": "11 Apr 2017",
+    "year": 2017,
+    "citation": "EX.P. 132/2014, Delhi HC (Vibhu Bakhru J), 11 Apr 2017; (2017) 239 DLT 649",
+    "facts": "Cruz City, a Mauritius investor, put about US$171 million into a Unitech real-estate joint venture with a put option priced to give a 15% post-tax return if construction was delayed. It exercised the option in 2010; Unitech did not pay, and an LCIA tribunal awarded about US$298 million. In India, Unitech argued for the first time that the deal broke FEMA because it promised an assured return.",
+    "held": "A breach of a FEMA provision alone is not a breach of the fundamental policy of Indian law, so it is not a ground to refuse a foreign award. Unitech’s objections were rejected; any money sent abroad must still follow RBI rules at the remittance stage.",
+    "status": "Good law (High Court)",
+    "tags": [
+     "FEMA",
+     "assured return",
+     "put option",
+     "public policy"
+    ],
+    "why": "“The deal was illegal under FEMA” is a weak escape route after you lose an arbitration, and courts treat a late U-turn as dishonest. Fix FEMA problems before signing, not after a dispute.",
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/58509699/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "idbi-hubtown-2016",
+   "data": {
+    "module": "funding",
+    "name": "IDBI Trusteeship Services Ltd v Hubtown Ltd",
+    "court": "Supreme Court",
+    "date": "15 Nov 2016",
+    "year": 2016,
+    "citation": "Civil Appeal No. 10860 of 2016; (2017) 1 SCC 568",
+    "facts": "Dutch investor FMO put about ₹418 crore into an Indian company through equity and compulsorily convertible debentures. That money went into debentures of group companies carrying a target return, and Hubtown guaranteed repayment. When the group companies defaulted and the guarantee was called, Hubtown said the whole structure was an illegal trick to give a foreign investor a fixed return.",
+    "held": "Prima facie there was no FEMA breach in paying under the guarantee to Indian companies; any FEMA issue would arise only when money was sent abroad. Hubtown could defend the recovery suit only if it deposited the ₹418 crore principal or gave security for it.",
+    "status": "Good law",
+    "tags": [
+     "FEMA",
+     "guarantee",
+     "fixed return",
+     "summary suit"
+    ],
+    "why": "Calling your own funding structure illegal does not get you out of a guarantee you gave. Courts can make you deposit the money before they even hear your defence.",
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/194456776/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "dale-carrington-2004",
+   "data": {
+    "module": "founders",
+    "name": "Dale & Carrington Investment Pvt Ltd v P.K. Prathapan",
+    "court": "Supreme Court",
+    "date": "13 Sep 2004",
+    "year": 2004,
+    "citation": "Civil Appeal Nos. 5915-5916 of 2002; (2005) 1 SCC 212; AIR 2005 SC 1624",
+    "facts": "Two relatives held equal shares in a small private company that owned a hotel. The managing director quietly allotted himself thousands of extra shares in 1994 and 1997 without telling the other shareholder, turning himself into the majority owner. The company did not need the money, and the board meeting was found to be likely sham.",
+    "held": "Directors act in a fiduciary capacity and must issue shares for a proper purpose; issuing shares mainly to gain control is improper. This was oppression and fraud on the minority, and all the extra allotments were cancelled. Stricter scrutiny applies in closely held private companies.",
+    "status": "Good law",
+    "tags": [
+     "oppression",
+     "share allotment",
+     "directors duties",
+     "minority"
+    ],
+    "why": "A co-founder who controls the board cannot dilute you by issuing shares to themselves. Insist on shareholder approval for new issues in your agreements, and keep records of every board meeting.",
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/876454/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "bacha-guzdar-1954",
+   "data": {
+    "module": "foundations",
+    "name": "Bacha F. Guzdar v Commissioner of Income-Tax, Bombay",
+    "court": "Supreme Court",
+    "date": "28 Oct 1954",
+    "year": 1954,
+    "citation": "AIR 1955 SC 74; 1955 SCR (1) 876",
+    "facts": "A shareholder in two tea companies received dividends. Most of the companies’ own income was tax-free agricultural income, so she argued the same share of her dividend should also be tax-free.",
+    "held": "A company is a legal person separate from its shareholders, and the company, not the shareholders, owns its property. A shareholder only has a right to dividends when declared and to a share of assets on winding up, so her dividend was fully taxable.",
+    "status": "Good law",
+    "tags": [
+     "separate legal entity",
+     "shareholders",
+     "dividend"
+    ],
+    "why": "Owning shares does not mean owning the company’s assets. Money and property in your company belong to the company, not to you, which is why you cannot treat company funds as personal funds.",
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/1873699/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "balco-2012",
+   "data": {
+    "module": "foreign",
+    "name": "Bharat Aluminium Co v Kaiser Aluminium Technical Services Inc",
+    "court": "Supreme Court (Constitution Bench)",
+    "date": "6 Sep 2012",
+    "year": 2012,
+    "citation": "Civil Appeal No. 7019 of 2005; (2012) 9 SCC 552",
+    "facts": "Indian courts had been allowing parties to use Part I of the Arbitration Act (interim relief, setting awards aside) even when the arbitration was seated abroad, following Bhatia International (2002). BALCO had a London-seated arbitration and tried to challenge the foreign awards in India.",
+    "held": "Part I applies only to arbitrations seated in India; a foreign-seated award can only be enforced or resisted under Part II. Bhatia International was not followed. The ruling applies only to arbitration agreements signed after 6 Sep 2012.",
+    "status": "Narrowed",
+    "tags": [
+     "seat of arbitration",
+     "foreign award",
+     "interim relief"
+    ],
+    "why": "The “seat” you choose decides which country’s courts supervise your arbitration. Since the 2015 amendment (in force 23 Oct 2015), Indian courts can again give interim relief under s.9 in foreign-seated arbitrations unless the contract excludes it, so check that wording before you sign.",
+    "src": [
+     {
+      "t": "Full judgment on Indian Kanoon",
+      "u": "https://indiankanoon.org/doc/173015163/"
+     },
+     {
+      "t": "Trammo DMCC v Nagarjuna Fertilizers, Bombay HC, 9 Oct 2017 (on the 2015 proviso to s.2(2))",
+      "u": "https://indiankanoon.org/doc/176718413/"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "assured-exit-put",
+   "data": {
+    "module": "funding",
+    "order": 19,
+    "status": "Closed",
+    "verified": "2026-11-27",
+    "title": "Foreign “equity” with a guaranteed exit price",
+    "gap": "Foreign investors bought shares with a put option that forced the Indian side to buy them back at a fixed price or fixed return, which made equity work like a loan.",
+    "used": "Common in real-estate and joint-venture deals to give foreign investors a debt-like assured return while counting the money as FDI.",
+    "closed": "From 30 Dec 2013 RBI allowed optionality clauses only without an assured exit price and after a lock-in of at least one year. The Non-debt Instruments Rules 2019 keep this: rule 2(k) Explanation (i) and rule 9(5), with exit priced under the pricing guidelines.",
+    "today": "You may give a foreign investor a put option, but only at fair value at the time of exit and after the lock-in. Courts may still enforce a foreign award built on an older assured-return clause (Cruz City, NTT Docomo), so do not rely on FEMA to escape a promise.",
+    "timeline": [
+     {
+      "y": "Dec 2013",
+      "e": "Optionality allowed, no assured exit price"
+     },
+     {
+      "y": "Oct 2019",
+      "e": "Rule carried into NDI Rules 2019"
+     }
+    ],
+    "src": [
+     {
+      "t": "FEMA (Non-debt Instruments) Rules 2019, RBI (updated to 2 Sep 2026)",
+      "u": "https://www.rbi.org.in/scripts/bs_viewcontent.aspx?Id=5083"
+     },
+     {
+      "t": "RBI Master Circular on Foreign Investment, 1 Jul 2014",
+      "u": "https://www.rbi.org.in/commonman/Upload/English/Notification/PDFs/06FIC010714FL.pdf"
+     }
+    ]
+   }
+  },
+  {
+   "c": "cases",
+   "id": "tiger-global-2026",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "nagaraj-mylandla-2026",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "interplay-2023",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "google-drs-2023",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "bookmyshow-2017",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "rapido-ccpa-2025",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "maruti-dcp-2021",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "messer-2010",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "burger-king-pune",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "gaps",
+   "id": "loss-shells",
+   "data": {
+    "verified": "2026-11-25"
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q03",
+   "data": {
+    "opts": [
+     "5 years",
+     "Never",
+     "10 years",
+     "Until IPO"
+    ],
+    "a": 2
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q05",
+   "data": {
+    "opts": [
+     "It was oral",
+     "It was a restraint of trade",
+     "It breached FEMA",
+     "It was not in the articles of association"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q06",
+   "data": {
+    "opts": [
+     "Valid if the founder is paid garden leave for two years",
+     "Enforceable only by arbitration",
+     "Enforceable if reasonable",
+     "Void under section 27 of the Contract Act"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q07",
+   "data": {
+    "opts": [
+     "They are void",
+     "Stamping is irrelevant to arbitration",
+     "Only foreign-seated clauses survive",
+     "They are inadmissible until stamped but not void"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q08",
+   "data": {
+    "opts": [
+     "Enforced a Singapore award on an investor-exit dispute and recognised transnational issue estoppel",
+     "Held SHAs governed by Indian law cannot be arbitrated abroad",
+     "Refused to enforce a SIAC award as against public policy",
+     "Sent the dispute to the NCLT"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q09",
+   "data": {
+    "opts": [
+     "A US-style SAFE",
+     "Compulsorily convertible preference shares",
+     "Optionally convertible debentures",
+     "Redeemable preference shares"
+    ],
+    "a": 1
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q10",
+   "data": {
+    "opts": [
+     "Investors outside land-border countries with up to 10% non-controlling LBC beneficial ownership to use the automatic route",
+     "Automatic route for Pakistan-based investors up to 26%",
+     "All Chinese investment via the automatic route",
+     "Removal of Press Note 3 altogether"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q12",
+   "data": {
+    "opts": [
+     "10% of paid-up capital",
+     "50% of net worth",
+     "No limit with special resolution",
+     "25% of paid-up capital and free reserves"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q13",
+   "data": {
+    "opts": [
+     "It cannot merge; only a share swap is allowed",
+     "Through a SEBI order",
+     "Through the fast-track route under section 233 with Regional Director approval",
+     "Only through a full NCLT scheme"
+    ],
+    "a": 2
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q14",
+   "data": {
+    "opts": [
+     "Unlimited layers with RBI approval only",
+     "One layer of subsidiaries",
+     "Two layers of subsidiaries",
+     "Three layers"
+    ],
+    "a": 2
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q15",
+   "data": {
+    "opts": [
+     "It loses its US tax status",
+     "None if it is incorporated in Delaware",
+     "Only GST applies",
+     "It may be Indian-resident because its place of effective management is in India"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q16",
+   "data": {
+    "opts": [
+     "₹8,000 crore",
+     "₹80 crore",
+     "₹800 crore",
+     "Nothing"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q20",
+   "data": {
+    "opts": [
+     "Grandfathered pre-2017 investments are always exempt",
+     "GAAR can apply to a post-2017 exit from a pre-2017 investment lacking substance",
+     "Indirect transfers are never taxable",
+     "A Mauritius TRC conclusively secures treaty exemption"
+    ],
+    "a": 1
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q23",
+   "data": {
+    "opts": [
+     "After 3 years",
+     "After 1 year",
+     "Immediately",
+     "After 5 years"
+    ],
+    "a": 1
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q24",
+   "data": {
+    "opts": [
+     "An email from a rights holder",
+     "Any user complaint",
+     "A court order or government notification",
+     "A media report"
+    ],
+    "a": 2
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q26",
+   "data": {
+    "opts": [
+     "The seven co-founders",
+     "The Long-Term Benefit Trust via Class T stock",
+     "Its largest investor",
+     "Class A public shareholders"
+    ],
+    "a": 1
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q27",
+   "data": {
+    "opts": [
+     "SEC rejected it",
+     "Nasdaq banned it",
+     "Zuckerberg lost his voting majority",
+     "Minority shareholders sued in Delaware and trial was days away"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q28",
+   "data": {
+    "opts": [
+     "Get little or nothing",
+     "Get paid first",
+     "Can block the sale",
+     "Get their full pro-rata share"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q29",
+   "data": {
+    "opts": [
+     "Automatic insolvency",
+     "A fine only",
+     "Disqualification as a director of other companies for five years",
+     "Nothing outside that company"
+    ],
+    "a": 2
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q30",
+   "data": {
+    "opts": [
+     "Not needing outside capital",
+     "A golden share held by a trust",
+     "A foreign holding company",
+     "Supervoting shares"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q00d",
+   "data": {
+    "opts": [
+     "Term sheet",
+     "Shareholders' agreement",
+     "Cap table",
+     "Articles of association"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q00e",
+   "data": {
+    "opts": [
+     "A consumer court",
+     "SEBI",
+     "RBI",
+     "NCLT"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "q00f",
+   "data": {
+    "opts": [
+     "Capital gains",
+     "Dividend",
+     "GST",
+     "Turnover"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qg1",
+   "data": {
+    "opts": [
+     "Resale price maintenance under section 3(4) of the Competition Act",
+     "A GST violation",
+     "A breach of the Companies Act",
+     "None: brands may control their dealers"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qg2",
+   "data": {
+    "opts": [
+     "prices are lower than a competitor's",
+     "a dominant enterprise uses it to reduce competition or eliminate competitors",
+     "any company offers discounts above 50%",
+     "the company is loss-making"
+    ],
+    "a": 1
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qi1",
+   "data": {
+    "opts": [
+     "A computer programme per se",
+     "A new engine design",
+     "A new medical device",
+     "A new chemical process"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qi2",
+   "data": {
+    "opts": [
+     "'BOOKMY' described online booking and had not acquired distinctiveness",
+     "It sued in the wrong court",
+     "bookmysports was a non-profit",
+     "It had never registered BOOKMYSHOW"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qi3",
+   "data": {
+    "opts": [
+     "20 years from filing",
+     "The inventor's life plus 60 years",
+     "Forever, if renewed",
+     "10 years"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qm1",
+   "data": {
+    "opts": [
+     "'Brand X is a cheap copy'",
+     "'Brand X damages your skin' (no study)",
+     "'Doctors say Brand X is unsafe' (no survey)",
+     "'Our soap is the best you can buy'"
+    ],
+    "a": 3
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qm2",
+   "data": {
+    "opts": [
+     "Pay a deposit to the CCPA",
+     "Submit a self-declaration that the ad complies with the rules",
+     "Get CCI approval",
+     "Nothing new"
+    ],
+    "a": 1
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qm3",
+   "data": {
+    "opts": [
+     "Nagging",
+     "Trick question",
+     "Drip pricing",
+     "Confirm shaming"
+    ],
+    "a": 2
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qs1",
+   "data": {
+    "opts": [
+     "Only a civil court",
+     "State Commission",
+     "District Commission",
+     "National Commission"
+    ],
+    "a": 1
+   }
+  },
+  {
+   "c": "quiz",
+   "id": "qs2",
+   "data": {
+    "opts": [
+     "Yes, as held in Emaar MGF v Aftab Singh (2018)",
+     "Only for claims under ₹1 lakh",
+     "No",
+     "Only if the arbitrator agrees"
+    ],
+    "a": 0
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "assured-return",
+   "data": {
+    "term": "Assured return",
+    "aliases": [
+     "assured return",
+     "assured returns",
+     "guaranteed return",
+     "fixed return",
+     "assured exit price"
+    ],
+    "plain": "A promise that an investor will get back a set amount or a set percentage, whatever happens to the business. Indian rules do not allow this for foreign equity investment.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "optionality-clause",
+   "data": {
+    "term": "Optionality clause",
+    "aliases": [
+     "optionality clause",
+     "optionality clauses",
+     "optionality"
+    ],
+    "plain": "A clause that gives an investor the right to sell their shares back, usually to the company or founders, after some time. For foreign investors it is allowed only at a fair price at the time of exit.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "separate-legal-entity",
+   "data": {
+    "term": "Separate legal entity",
+    "aliases": [
+     "separate legal entity",
+     "legal person",
+     "juristic person",
+     "separate legal person"
+    ],
+    "plain": "The idea that a company is its own “person” in law, separate from its owners. It can own property, sign contracts, sue and be sued in its own name.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "allotment",
+   "data": {
+    "term": "Allotment",
+    "aliases": [
+     "allotment",
+     "allotments",
+     "allot",
+     "allotted",
+     "allotting"
+    ],
+    "plain": "When a company formally gives new shares to a person. Allotting new shares to some people reduces everyone else’s percentage.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "minority-shareholder",
+   "data": {
+    "term": "Minority shareholder",
+    "aliases": [
+     "minority shareholder",
+     "minority shareholders",
+     "the minority",
+     "minority"
+    ],
+    "plain": "A shareholder who owns too little to control decisions on their own. The law protects them from unfair treatment by the majority.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "summary-suit",
+   "data": {
+    "term": "Summary suit",
+    "aliases": [
+     "summary suit",
+     "Order XXXVII",
+     "leave to defend"
+    ],
+    "plain": "A fast-track court case for recovering money owed under a written document like a loan or guarantee. The defendant must get the court’s permission to fight it, and may have to deposit money first.",
+    "hl": true
+   }
+  },
+  {
+   "c": "glossary",
+   "id": "new-york-convention",
+   "data": {
+    "term": "New York Convention",
+    "aliases": [
+     "New York Convention"
+    ],
+    "plain": "A 1958 international treaty under which member countries agree to enforce each other’s arbitration awards. India is a member, which is why foreign awards can be enforced here.",
+    "hl": true
+   }
+  }
+ ],
+ "meta": {
+  "lastChecked": "2026-11-27"
+ }
+}
