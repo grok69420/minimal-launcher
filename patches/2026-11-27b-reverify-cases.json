@@ -1,0 +1,95 @@
+{
+ "date": "2026-11-27",
+ "upserts": [
+  {
+   "c": "cases",
+   "id": "amazon-future-2021",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "cox-kings-2023",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "engineering-analysis-2021",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "formula-one-2017",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "louboutin-2018",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "pasl-2021",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "nestle-2023",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "azadi-2003",
+   "data": {
+    "held": "The circular was valid. Treaty shopping did not make the India–Mauritius treaty invalid, and a Mauritius tax residency certificate was enough evidence of residence to claim treaty benefits.",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "vijay-karia-2020",
+   "data": {
+    "held": "Grounds to resist a foreign award under section 48 are narrow, and the enforcement court does not review the merits of the dispute.",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "mcdowell-1985",
+   "data": {
+    "court": "Supreme Court (5 judges)",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "percept-2006",
+   "data": {
+    "date": "22 Mar 2006",
+    "held": "A right of first refusal that would bind the player after the contract ended was, prima facie, a restraint of trade and void under section 27 of the Indian Contract Act (an interim-stage ruling; the clause was valid during the term).",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "golikari-1967",
+   "data": {
+    "date": "17 Jan 1967",
+    "verified": "2026-11-27"
+   }
+  }
+ ]
+}
