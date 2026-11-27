@@ -25,3 +25,9 @@ vijay-karia-2020 | FIXED: removed unsupported Art.136 "exceptional cases" claim 
 mcdowell-1985 | FIXED: 5-judge bench, not Constitution Bench | https://indiankanoon.org/doc/1022888/ | corrected
 nestle-2023 | MFN needs s.90(1) notification; relevant date = third state's treaty signing | https://indiankanoon.org/doc/111682906/ | confirmed
 percept-2006 | FIXED date 22 Mar 2006; prima facie (interim) ruling on post-term ROFR | https://indiankanoon.org/doc/571375/ | corrected
+shreya-singhal-2015 | 66A struck down; s.79(3)(b) read down | https://indiankanoon.org/doc/110813550/ | confirmed
+tata-mistry-2021 | removal not by itself oppression; no power to reinstate; Art.75 upheld | https://indiankanoon.org/doc/5416696/ | confirmed
+dabur-colortek-2010 | DB 2 Feb 2010; ad not disparaging; appeal dismissed | https://indiankanoon.org/doc/82383482/ | confirmed
+pepsi-coke-2003 | FIXED: src pointed to Dabur v Wipro (doc/1357815); now doc/924003; date 1 Sep 2003; prima facie view | https://indiankanoon.org/doc/924003/ | corrected
+ebc-modak-2007 | FIXED: protected inputs = para segregation, internal numbering, concurring/dissent marking | https://indiankanoon.org/doc/1062099/ | corrected
+puttaswamy-2017 | FIXED wording: Art.21/Part III; limits test from the opinions | https://indiankanoon.org/doc/91938676/ | corrected

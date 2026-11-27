@@ -90,6 +90,56 @@
     "date": "17 Jan 1967",
     "verified": "2026-11-27"
    }
+  },
+  {
+   "c": "cases",
+   "id": "shreya-singhal-2015",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "tata-mistry-2021",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "dabur-colortek-2010",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "pepsi-coke-2003",
+   "data": {
+    "date": "1 Sep 2003",
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/924003/"
+    },
+    "held": "To decide disparagement, a court looks at the intent of the ad, how it is made, and its storyline and message. Viewing the ad as a whole, the division bench took the prima facie view that it disparaged Pepsi.",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "ebc-modak-2007",
+   "data": {
+    "held": "Labour alone (“sweat of the brow”) does not create copyright; a derivative work needs skill and judgment with a minimal degree of creativity. The raw text of judgments stays free to copy, but the publisher’s paragraph splitting, internal paragraph numbering and marking of concurring or dissenting opinions were protected.",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "puttaswamy-2017",
+   "data": {
+    "held": "Privacy is a fundamental right, protected as part of life and liberty under Article 21 and the freedoms in Part III. The opinions explain that any limit on it must be backed by law, pursue a legitimate aim and be proportionate.",
+    "verified": "2026-11-27"
+   }
   }
  ]
 }
