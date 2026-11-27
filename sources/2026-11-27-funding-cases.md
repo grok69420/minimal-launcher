@@ -82,3 +82,4 @@ fp3 | FEMA optionality: min 1-yr lock-in, no assured price; Nagaraj | RBI notif 
 fp4 | FIXED: GoMechanic round not SoftBank-led, FIR claim removed; Zilingo forensic probe (commissioner disputed); Byju's default 20 Nov 2025, damages decided 19 Mar 2026; BharatPe settled 30 Sep 2024 | TechCrunch; Inc42; BS; deb.uscourts | corrected
 fp5 | s.164(2)(a) 3 yrs→5-yr bar; s.165 20/10; Budget 2026 promoter buyback tax 22%/30% | IK 172276913; PIB 2221416 | confirmed
 fp6 | signals list (concepts); BharatPe Feb 2022–Sep 2024 | BS | confirmed
+c2/fp2 | s.17(c) via Bombay HC Exegesis 15 Jul 2015; s.19(1) via Delhi HC Pine Labs 8 Dec 2009; fp2 plain: removed 'extra-vote shares' | IK 161251907, 1662896 | corrected

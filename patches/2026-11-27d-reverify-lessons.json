@@ -240,8 +240,12 @@
       "u": "https://indiankanoon.org/doc/571375/"
      },
      {
-      "t": "India Code: Copyright Act, 1957 (ss. 17, 19)",
-      "u": "https://www.indiacode.nic.in/bitstream/123456789/15356/1/the_copyright_act,_1957.pdf"
+      "t": "Bombay HC, Exegesis Infotech v Medimanage (15 Jul 2015): s.17(c)",
+      "u": "https://indiankanoon.org/doc/161251907/"
+     },
+     {
+      "t": "Delhi HC, Pine Labs v Gemalto (8 Dec 2009): s.19(1) written assignment",
+      "u": "https://indiankanoon.org/doc/1662896/"
      }
     ],
     "verified": "2026-11-27"
@@ -321,7 +325,8 @@
       "u": "https://techcrunch.com/2023/11/06/wework-once-worth-47-billion-files-for-bankruptcy/"
      }
     ],
-    "verified": "2026-11-27"
+    "verified": "2026-11-27",
+    "plain": "Three companies show different ways to handle founder control. Anthropic set up an independent trust that controls the board. Facebook tried to change its share rules later to keep Zuckerberg in control, and dropped the plan after a lawsuit. WeWork's founder held control but was still pushed out. Lesson: set control rules early, explain why, and give them limits."
    }
   },
   {
