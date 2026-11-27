@@ -1,0 +1,196 @@
+{
+ "date": "2026-11-27",
+ "upserts": [
+  {
+   "c": "lessons",
+   "id": "f1",
+   "data": {
+    "sources": [
+     {
+      "t": "PIB, 5 Feb 2026: revised startup recognition framework",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2224069"
+     },
+     {
+      "t": "Startup India: recognition criteria under G.S.R. 108(E)",
+      "u": "https://www.startupindia.gov.in/content/sih/en/startupgov/startup_recognition_page.html"
+     },
+     {
+      "t": "Income Tax Dept: section 80-IAC (₹100 crore turnover cap)",
+      "u": "https://www.incometaxindia.gov.in/w/section-80-iac-11"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "f2",
+   "data": {
+    "sources": [
+     {
+      "t": "Gazette: G.S.R. 880(E), 1 Dec 2025 (small company limits)",
+      "u": "https://egazette.gov.in/WriteReadData/2025/268124.pdf"
+     },
+     {
+      "t": "PRS: Corporate Laws (Amendment) Bill, 2026",
+      "u": "https://prsindia.org/billtrack/the-corporate-laws-amendment-bill-2026"
+     },
+     {
+      "t": "DPIIT FDI FAQ: foreign investment in LLPs",
+      "u": "https://www.dpiit.gov.in/static/uploads/2025/07/bdcb2c6eda1dbc1f7c29981e4c3fd428.pdf"
+     },
+     {
+      "t": "PIB: OPC rules amended (conversion any time, NRIs), from 1 Apr 2021",
+      "u": "https://www.pib.gov.in/Pressreleaseshare.aspx?PRID=1694828"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "f3",
+   "data": {
+    "sources": [
+     {
+      "t": "PIB: Companies Act provisions supporting startups (2026)",
+      "u": "https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/feb/doc2026214789601.pdf"
+     },
+     {
+      "t": "MCA: Rule 14, Prospectus and Allotment Rules (200 persons)",
+      "u": "http://ebook.mca.gov.in/Actpagedisplay.aspx?PAGENAME=28411"
+     },
+     {
+      "t": "Indian Kanoon: Rule 12, Share Capital and Debentures Rules (ESOPs)",
+      "u": "https://indiankanoon.org/doc/13427323/"
+     },
+     {
+      "t": "Indian Kanoon: Section 62(1)(c), Companies Act",
+      "u": "https://indiankanoon.org/doc/148684722/"
+     },
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b1",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     },
+     {
+      "t": "Bacha F. Guzdar v CIT (SC, 28 Oct 1954): company is a separate person",
+      "u": "https://indiankanoon.org/doc/1873699/"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b2",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b3",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b4",
+   "data": {
+    "sources": [
+     {
+      "t": "India Code: Companies Act, 2013",
+      "u": "https://www.indiacode.nic.in/handle/123456789/2114"
+     },
+     {
+      "t": "V.B. Rangaraj v V.B. Gopalakrishnan (SC, 1991)",
+      "u": "https://indiankanoon.org/doc/140212/"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b5",
+   "data": {
+    "sources": [
+     {
+      "t": "Indian Kanoon: Article 141, Constitution",
+      "u": "https://indiankanoon.org/doc/882644/"
+     },
+     {
+      "t": "Indian Kanoon: Companies Act, 2013 (ss. 421, 423)",
+      "u": "https://indiankanoon.org/doc/172276913/"
+     },
+     {
+      "t": "India Code: Arbitration and Conciliation Act, 1996",
+      "u": "https://www.indiacode.nic.in/bitstream/123456789/1978/1/a199626.pdf"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b6",
+   "data": {
+    "sources": [
+     {
+      "t": "Income Tax Dept: Income-tax Act, 2025 (as amended by Finance Act 2026)",
+      "u": "https://www.incometaxindia.gov.in/documents/d/guest/income_tax_act_2025_as_amended_by_fa_act_2026-pdf"
+     },
+     {
+      "t": "Income Tax Dept: section 178 (GAAR), Income-tax Act, 2025",
+      "u": "https://www.incometaxindia.gov.in/w/section-178-77"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "b7",
+   "data": {
+    "body": [
+     "FEMA (the Foreign Exchange Management Act, 1999) controls cross-border money. The Reserve Bank of India (RBI) administers it, and the government sets the foreign direct investment (FDI) policy, including which sectors are open.",
+     "Most sectors allow foreign investment under the 'automatic route' (no prior approval, just reporting afterwards). Some sectors, and investors linked to countries bordering India, need government approval first. Since a March 2026 change, an investor whose beneficial ownership from such a country is up to 10% and non-controlling can use the automatic route.",
+     "Foreign money must come in as instruments the rules treat as ownership (like shares or compulsorily convertible preference shares) at no less than a fair value, and must be reported to the RBI within deadlines. Going the other way, Indians investing abroad follow separate overseas-investment rules."
+    ],
+    "sources": [
+     {
+      "t": "India Code: FEMA, 1999",
+      "u": "https://www.indiacode.nic.in/handle/123456789/1988"
+     },
+     {
+      "t": "RBI Master Direction: Foreign Investment in India",
+      "u": "https://www.rbi.org.in/scripts/bs_viewmasdirections.aspx?id=11200"
+     },
+     {
+      "t": "RBI: FEMA 20(R) regulations (pricing, 30-day FC-GPR reporting)",
+      "u": "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=11161&Mode=0"
+     },
+     {
+      "t": "PIB, 10 Mar 2026: land-border investment changes",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2237806"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  }
+ ]
+}
