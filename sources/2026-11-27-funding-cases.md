@@ -31,3 +31,14 @@ dabur-colortek-2010 | DB 2 Feb 2010; ad not disparaging; appeal dismissed | http
 pepsi-coke-2003 | FIXED: src pointed to Dabur v Wipro (doc/1357815); now doc/924003; date 1 Sep 2003; prima facie view | https://indiankanoon.org/doc/924003/ | corrected
 ebc-modak-2007 | FIXED: protected inputs = para segregation, internal numbering, concurring/dissent marking | https://indiankanoon.org/doc/1062099/ | corrected
 puttaswamy-2017 | FIXED wording: Art.21/Part III; limits test from the opinions | https://indiankanoon.org/doc/91938676/ | corrected
+rangaraj-1992 | FIXED date 28 Nov 1991; restriction outside AoA not binding | https://indiankanoon.org/doc/140212/ | corrected
+novartis-2013 | src upgraded (was UNCTAD) ; s.3(d) therapeutic efficacy; appeals dismissed | https://indiankanoon.org/doc/165776436/ | confirmed
+satyam-sify-2004 | src upgraded (was iPleaders blog); domain names, passing off | https://indiankanoon.org/doc/1630167/ | confirmed
+horlicks-zydus-2020 | src upgraded (was Khaitan note); TV ad enjoined prima facie | https://indiankanoon.org/doc/169448954/ | confirmed
+vodafone-2012 | FIXED: removed unsupported "look at" quote; s.9 no look-through; no s.195 duty | https://indiankanoon.org/doc/115852355/ | corrected
+ferid-allani-2019 | per se bar; re-examination directed | https://indiankanoon.org/doc/90686424/ (src kept: ipindia PDF) | confirmed
+emaar-aftab-2018 | review dismissed; consumer forum despite arbitration clause | https://api.sci.gov.in/supremecourt/2018/26696/26696_2018_Judgement_10-Dec-2018.pdf | confirmed
+pioneer-2019 | FIXED: "no real choice" stated as principle, not finding | https://api.sci.gov.in/supremecourt/2018/46308/46308_2018_Judgement_02-Apr-2019.pdf | corrected
+ima-patanjali-2024 | STATUS FIXED: case disposed 11 Aug 2025 (was "Ongoing"); held not re-checked → no verified date | LiveLaw 300536 | status only
+google-android-2023 | still pending in SC (Businessworld, undated) — not dated as verified | — | open
+amazon-flipkart-cci-2021 | SC transferred all petitions to Karnataka HC single judge, 6 Jan 2025 (Outlook Business) — not dated as verified | — | open

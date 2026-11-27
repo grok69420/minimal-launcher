@@ -140,6 +140,94 @@
     "held": "Privacy is a fundamental right, protected as part of life and liberty under Article 21 and the freedoms in Part III. The opinions explain that any limit on it must be backed by law, pursue a legitimate aim and be proportionate.",
     "verified": "2026-11-27"
    }
+  },
+  {
+   "c": "cases",
+   "id": "rangaraj-1992",
+   "data": {
+    "date": "28 Nov 1991",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "novartis-2013",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/165776436/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "satyam-sify-2004",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/1630167/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "horlicks-zydus-2020",
+   "data": {
+    "src": {
+     "t": "Full judgment on Indian Kanoon",
+     "u": "https://indiankanoon.org/doc/169448954/"
+    },
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "ferid-allani-2019",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "emaar-aftab-2018",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "vodafone-2012",
+   "data": {
+    "held": "The sale of shares of a foreign company between two non-residents was not taxable in India under section 9 as it then stood, because that section had no “look through” rule. So Vodafone had no duty to withhold tax.",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "pioneer-2019",
+   "data": {
+    "held": "A buyer who has no real choice but to sign a builder’s standard form is not bound by terms that are plainly one-sided, unfair and unreasonable; using such terms is an unfair trade practice. The builder had to refund the buyer with interest.",
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "cases",
+   "id": "ima-patanjali-2024",
+   "data": {
+    "status": "Disposed (11 Aug 2025)",
+    "src": [
+     {
+      "t": "LiveLaw report of the 7 May 2024 order",
+      "u": "https://www.livelaw.in/top-stories/supreme-court-influencer-ads-misleading-guideliens-self-declaration-257318"
+     },
+     {
+      "t": "LiveLaw: Supreme Court closes the case, 11 Aug 2025",
+      "u": "https://www.livelaw.in/amp/top-stories/supreme-court-vacates-stay-on-ayush-ministrys-notification-that-permitted-advertisements-of-ayurvedic-unani-siddha-drugs-300536"
+     }
+    ]
+   }
   }
  ]
 }
