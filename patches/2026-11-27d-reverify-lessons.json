@@ -191,6 +191,199 @@
     ],
     "verified": "2026-11-27"
    }
+  },
+  {
+   "c": "lessons",
+   "id": "c1",
+   "data": {
+    "sources": [
+     {
+      "t": "Indian Kanoon: V.B. Rangaraj v V.B. Gopalakrishnan (SC)",
+      "u": "https://indiankanoon.org/doc/140212/"
+     },
+     {
+      "t": "Indian Kanoon: Tata Consultancy Services v Cyrus Investments (SC, 2021)",
+      "u": "https://indiankanoon.org/doc/5416696/"
+     },
+     {
+      "t": "LiveLaw Biz: NCLT Chandigarh, Utsav Soi v USAR Commerce (CA 201/2025 in CP 59/CHD/HRY/2025)",
+      "u": "https://www.livelawbiz.com/company-law/nclt/national-company-law-tribunal-non-arbitrable-corporate-governance-shareholding-disputes-535928"
+     },
+     {
+      "t": "Bar & Bench commentary",
+      "u": "https://www.barandbench.com/view-point/when-arbitration-clauses-meet-oppression-petitions-lessons-from-usar-commerce-technologies-v-utsav-soi"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "c2",
+   "data": {
+    "body": [
+     "Section 27 makes any agreement in restraint of a lawful trade void, with a narrow exception for the sale of goodwill. Courts read it strictly. A restraint during employment is valid (Niranjan Shankar Golikari v Century Spinning, 1967), but a restraint after the contract ends is void (A.P. Sen J. in Superintendence Co. v Krishan Murgai, 1980; Percept D’Mark v Zaheer Khan, 2006, an interim ruling).",
+     "Founders and employees can therefore be bound by exclusivity while they work for the company, by confidentiality forever, and by garden-leave arrangements, but a clause stopping them from working for a competitor after they leave will generally fail. Courts have been more willing to enforce narrow non-solicitation of clients and staff, but the law is not settled.",
+     "IP: under the Copyright Act, work made by an employee in the course of employment belongs to the employer, but work by consultants, freelancers and founders before incorporation does not. Get signed written assignments (section 19) from everyone else, including founders for pre-incorporation code."
+    ],
+    "sources": [
+     {
+      "t": "Indian Kanoon: Superintendence Co. v Krishan Murgai (SC, 9 May 1980)",
+      "u": "https://indiankanoon.org/doc/1186410/"
+     },
+     {
+      "t": "Indian Kanoon: Golikari (SC, 1967)",
+      "u": "https://indiankanoon.org/doc/452434/"
+     },
+     {
+      "t": "Indian Kanoon: Percept D’Mark v Zaheer Khan (SC, 2006)",
+      "u": "https://indiankanoon.org/doc/571375/"
+     },
+     {
+      "t": "India Code: Copyright Act, 1957 (ss. 17, 19)",
+      "u": "https://www.indiacode.nic.in/bitstream/123456789/15356/1/the_copyright_act,_1957.pdf"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "c3",
+   "data": {
+    "sources": [
+     {
+      "t": "Indian Kanoon: PASL Wind v GE Power (SC, 2021)",
+      "u": "https://indiankanoon.org/doc/79928496/"
+     },
+     {
+      "t": "Indian Kanoon: Amazon v Future Retail (SC, 2021)",
+      "u": "https://indiankanoon.org/doc/104517457/"
+     },
+     {
+      "t": "Indian Kanoon: Vijay Karia (SC, 2020)",
+      "u": "https://indiankanoon.org/doc/52650140/"
+     },
+     {
+      "t": "Khaitan & Co on Nagaraj Mylandla (SC, 25 Mar 2026)",
+      "u": "https://www.khaitanco.com/sites/default/files/2026-04/ERGO_Nagaraj%20Mylandla_6%20April%202026.pdf"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp1",
+   "data": {
+    "body": [
+     "Control has four layers: economic ownership (who gets the money), voting power (who wins shareholder votes), the board (who appoints and removes the CEO), and reserved matters (lists of decisions that need a particular investor’s consent). Investors negotiate hardest for the last two.",
+     "Tools available to a private Indian company: founder nominee board seats written into the articles and tied to a holding threshold; founder reserved matters (you can ask for your own veto list, not just investors’); a voting agreement or common holding company so co-founders vote as a block; and shares with differential voting rights under section 43 and Rule 4 of the Share Capital Rules, which may not exceed 74% of total voting power and must be permitted by the articles and approved by shareholders.",
+     "At IPO, SEBI’s superior voting rights framework (2019, reviewed in 2021) lets founders of technology-intensive companies list while holding shares with extra votes, but only for up to 5 years after listing, extendable once by 5 years with shareholder approval, and on some matters those shares vote like ordinary shares. In 2021 SEBI noted no company had used it."
+    ],
+    "sources": [
+     {
+      "t": "SEBI board memo: review of SR shares framework (2021)",
+      "u": "https://www.sebi.gov.in/sebi_data/meetingfiles/oct-2021/1633606559128_1.pdf"
+     },
+     {
+      "t": "Indian Kanoon: Rule 4, Share Capital and Debentures Rules (DVR, 74% cap)",
+      "u": "https://indiankanoon.org/doc/13427323/"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp2",
+   "data": {
+    "body": [
+     "Anthropic is a public benefit corporation. Its Long-Term Benefit Trust holds Class T stock, which has no economic rights but elects directors who together form a majority of the board. According to the IPO filing of 26 October 2026 as reported, the seven co-founders hold Class F supervoting stock that carries a majority of the general shareholder vote and elects the remaining directors;. So the founders do hold a majority of shareholder votes, but the board majority belongs to the independent Trust, not to them.",
+     "Facebook went public with Mark Zuckerberg controlling about 60% of the vote through Class B shares. In 2016 it tried to add non-voting Class C shares so he could sell stock for charity without losing control. Minority shareholders sued in the Delaware Court of Chancery and Facebook dropped the plan in September 2017, days before Zuckerberg was due to testify.",
+     "At WeWork, the 2019 IPO filing exposed governance problems; co-founder Adam Neumann stepped down as CEO, the IPO was withdrawn, and WeWork filed for Chapter 11 bankruptcy in November 2023. Founder control did not protect him from investors who controlled the money."
+    ],
+    "sources": [
+     {
+      "t": "Anthropic: the Long-Term Benefit Trust",
+      "u": "https://www.anthropic.com/news/the-long-term-benefit-trust"
+     },
+     {
+      "t": "Fortune, 26 Oct 2026: Anthropic S-1 share classes",
+      "u": "https://fortune.com/2026/10/26/anthropic-ipo-dual-class-share-structure-zuckerberg-musk-new-york-times/"
+     },
+     {
+      "t": "Law.com: Facebook drops stock plan (25 Sep 2017)",
+      "u": "https://law.com/delbizcourt/2017/09/25/facebook-drops-stock-plan-obviating-zuckerberg-testimony"
+     },
+     {
+      "t": "TechCrunch: WeWork files for bankruptcy (6 Nov 2023)",
+      "u": "https://techcrunch.com/2023/11/06/wework-once-worth-47-billion-files-for-bankruptcy/"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp3",
+   "data": {
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp4",
+   "data": {
+    "body": [
+     "GoMechanic’s founders admitted misreporting in January 2023, during due diligence for a new funding round; investors said revenue had been inflated, and about 70% of staff were laid off. Zilingo terminated its CEO in May 2022 after a forensic investigation into complaints of financial irregularities (she disputes the grounds). BharatPe removed its managing director in 2022 and sued him and his family, alleging misappropriation, before settling in 2024. In Byju’s US case, a Delaware bankruptcy court entered a default against the founder in November 2025 for failing to comply with discovery orders; damages were then decided separately in 2026.",
+     "The rules: never inflate revenue or users; route every transaction with founders, relatives or your other companies through section 188 approvals at arm’s length; keep personal and company money separate; minute every board decision; hire an independent finance head and a credible auditor; set up a whistleblower channel; buy D&O insurance; and always comply with court orders, even ones you plan to appeal.",
+     "Due diligence for the next round is where most problems surface. Assume every number you send an investor will be audited later."
+    ],
+    "sources": [
+     {
+      "t": "TechCrunch: GoMechanic (18 Jan 2023)",
+      "u": "https://techcrunch.com/2023/01/18/sequoia-india-backed-gomechanic-faces-severe-trouble/amp/"
+     },
+     {
+      "t": "Inc42: Zilingo terminates CEO (20 May 2022)",
+      "u": "https://inc42.com/buzz/breaking-zilingo-terminates-ceo-ankiti-boses-employment-for-financial-irregularities"
+     },
+     {
+      "t": "Business Standard: BharatPe settles with Grover (30 Sep 2024)",
+      "u": "https://business-standard.com/amp/companies/news/bharatpe-settles-with-ex-co-founder-ashneer-grover-abandons-legal-action-124093000094_1.html"
+     },
+     {
+      "t": "US Bankruptcy Court (D. Del.): Byju’s Alpha v Raveendran order, 19 Mar 2026",
+      "u": "https://www.deb.uscourts.gov/sites/deb/files/opinions//BYJU%20Mem%20Order.pdf"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp5",
+   "data": {
+    "sources": [
+     {
+      "t": "Indian Kanoon: Companies Act, 2013 (ss. 164, 165, 166, 184, 188)",
+      "u": "https://indiankanoon.org/doc/172276913/"
+     },
+     {
+      "t": "PIB, 1 Feb 2026: buyback taxed as capital gains, extra tax for promoters",
+      "u": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2221416"
+     }
+    ],
+    "verified": "2026-11-27"
+   }
+  },
+  {
+   "c": "lessons",
+   "id": "fp6",
+   "data": {
+    "verified": "2026-11-27"
+   }
   }
  ]
 }

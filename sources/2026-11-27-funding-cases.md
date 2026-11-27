@@ -73,3 +73,12 @@ b4 | transfer restrictions bind only if in AoA | IK 140212 (Rangaraj, logged abo
 b5 | Art.141 SC binding; NCLT→NCLAT (s.421)→SC (s.423, question of law, 60 days) | IK 882644; IK 172276913 | confirmed
 b6 | GAAR = s.178 Income-tax Act 2025; losses carry forward | incometaxindia s.178; IT Act 2025 PDF | confirmed
 b7 | PN3 17 Apr 2020 govt route; 10 Mar 2026 Cabinet: ≤10% non-controlling LBC BO automatic; pricing reg 11; FC-GPR 30 days | PIB 2237806; RBI notif 11161 | ADDED 2026 change
+c1 | Rangaraj, Messer, TCS (logged above); NCLT Chandigarh refused s.8 reference of oppression petition (Utsav Soi, CA 201/2025) | LiveLaw Biz 27 May 2026 | confirmed (news for NCLT order)
+c2 | FIXED: post-term restraint void is A.P. Sen J.'s opinion (majority did not decide s.27); Percept interim | IK 1186410 | corrected
+c3 | PASL, Amazon, Interplay, Cox, Vijay Karia, Nagaraj (logged above) | — | confirmed
+fp1 | FIXED: dropped unsourced Uber line and unverified SR ratio/74%/coattail specifics; DVR 74% cap r.4(1)(c); SR 2019, 5+5 sunset, unused by 2021 | SEBI memo Oct 2021; IK 13427323 | corrected
+fp2 | FIXED: removed unverified "board becomes staggered" and "20 votes"; S-1 26 Oct 2026, Class F 50.1%, Class T board majority; FB withdrew 22 Sep 2017, ~60%; WeWork Ch.11 Nov 2023 | Fortune; law.com; TechCrunch | corrected
+fp3 | FEMA optionality: min 1-yr lock-in, no assured price; Nagaraj | RBI notif 11161; Khaitan | confirmed
+fp4 | FIXED: GoMechanic round not SoftBank-led, FIR claim removed; Zilingo forensic probe (commissioner disputed); Byju's default 20 Nov 2025, damages decided 19 Mar 2026; BharatPe settled 30 Sep 2024 | TechCrunch; Inc42; BS; deb.uscourts | corrected
+fp5 | s.164(2)(a) 3 yrs→5-yr bar; s.165 20/10; Budget 2026 promoter buyback tax 22%/30% | IK 172276913; PIB 2221416 | confirmed
+fp6 | signals list (concepts); BharatPe Feb 2022–Sep 2024 | BS | confirmed
